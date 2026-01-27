@@ -1,0 +1,621 @@
+fileFormatVersion: 2
+guid: 42824e2be905e9f47a060a0973181c89
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: b2a9591990af98743ba3ff7cf1000886, type: 3}
+  textureImporterSettings:
+    alphaSource: 1
+    mipMapMode: 0
+    enableMipMap: 1
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+    convertToNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    isReadable: 0
+    streamingMipmaps: 1
+    streamingMipmapsPriority: 0
+    vTOnly: 0
+    ignoreMasterTextureLimit: 0
+    nPOTScale: 1
+    sRGBTexture: 1
+    spriteMode: 2
+    spriteExtrude: 1
+    spriteMeshType: 1
+    alignment: 0
+    spritePivot: {x: 0.5, y: 0.5}
+    spritePixelsToUnits: 100
+    spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+    spriteGenerateFallbackPhysicsShape: 0
+    generateCubemap: 6
+    cubemapConvolution: 0
+    seamlessCubemap: 0
+    alphaIsTransparency: 1
+    spriteTessellationDetail: -1
+    textureType: 8
+    textureShape: 1
+    singleChannelComponent: 0
+    flipbookRows: 0
+    flipbookColumns: 0
+    ignorePngGamma: 0
+    cookieMode: 0
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 0
+    wrapV: 0
+    wrapW: 0
+    normalMap: 0
+    textureFormat: 0
+    maxTextureSize: 0
+    lightmap: 0
+    compressionQuality: 0
+    linearTexture: 0
+    grayScaleToAlpha: 0
+    rGBM: 0
+    cubemapConvolutionSteps: 0
+    cubemapConvolutionExponent: 0
+    maxTextureSizeSet: 0
+    compressionQualitySet: 0
+    textureFormatSet: 0
+    applyGammaDecoding: 0
+  spriteImportData:
+  - name: 
+    originalName: 
+    pivot: {x: 0, y: 0}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    spriteID: 
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 0, y: 0}
+    spritePosition: {x: 0, y: 0}
+  mosaicSpriteImportData: []
+  rigSpriteImportData:
+  - name: Timer/Img_Highlight
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1612
+      y: 4
+      width: 6
+      height: 176
+    spriteID: b69a2fc056792d84f83623250968d2db
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1612, y: 4}
+    spritePosition: {x: 522, y: 210}
+  - name: Timer/TimerUnit/Img_Frame
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1090
+      width: 1109
+      height: 49
+    spriteID: a501535f60f7bd8418662794cc142888
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1090}
+    spritePosition: {x: 220, y: 336}
+  - name: Timer/TimerUnit/Img_PointerIconFoe
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1772
+      y: 912
+      width: 34
+      height: 35
+    spriteID: 2468bd5c9038974439c7ad9d19bffd60
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1772, y: 912}
+    spritePosition: {x: 408, y: 342}
+  - name: Timer/TimerUnit/Img_PointerIconFoe
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1814
+      y: 912
+      width: 34
+      height: 35
+    spriteID: 540fcd5d6d858744cbc2ed54b4f37c1f
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1814, y: 912}
+    spritePosition: {x: 258, y: 342}
+  - name: Timer/TimerUnit/Img_DashedLine
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1295
+      width: 1002
+      height: 40
+    spriteID: f3c08c24424decd49bbe82f9429ea012
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1295}
+    spritePosition: {x: 325, y: 340}
+  - name: Timer/TimerUnit/Img_Lump
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 19, y: 0, z: 16, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1664
+      y: 912
+      width: 100
+      height: 36
+    spriteID: fb0cefc0e074c1f4988c0f90791f01b5
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1664, y: 912}
+    spritePosition: {x: 325, y: 342}
+  - name: Timer/TimerUnit/Img_Location
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1147
+      width: 1103
+      height: 44
+    spriteID: c81cfa8450882dd4ebee0c7941c4ba2f
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1147}
+    spritePosition: {x: 220, y: 338}
+  - name: Timer/TimerUnit/Img_TimerBase01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1199
+      width: 1100
+      height: 40
+    spriteID: 78013180c06a2b64abbb757f9f4c2991
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1199}
+    spritePosition: {x: 227, y: 340}
+  - name: Timer/TimerUnit/Img_TimerBase02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1247
+      width: 1100
+      height: 40
+    spriteID: ca28529fff279b14192d0555485dacd3
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1247}
+    spritePosition: {x: 227, y: 340}
+  - name: Timer/Foretell/Btn_Foretell/Img_Foretell
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1856
+      y: 912
+      width: 31
+      height: 33
+    spriteID: 8b27affacec41e342a858552bb161f4a
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1856, y: 912}
+    spritePosition: {x: 1343, y: 342}
+  - name: Timer/Foretell/Btn_Foretell/Txt_Foretell
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1664
+      y: 956
+      width: 30
+      height: 116
+    spriteID: 9d33db38d31da974e8462e1ec693827f
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1664, y: 956}
+    spritePosition: {x: 1344, y: 220}
+  - name: Timer/Foretell/Img_ForetellBase
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 1612
+      y: 912
+      width: 44
+      height: 168
+    spriteID: 2445f338e0555bf4abcf0eb3f9ad1e8b
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 1612, y: 912}
+    spritePosition: {x: 1336, y: 214}
+  - name: Timer/Img_TimerBase
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 912
+      width: 1600
+      height: 170
+    spriteID: 891cbb407b0f2bf44b7a6b371788f13f
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 912}
+    spritePosition: {x: 0, y: 212}
+  - name: "\u793A\u610F\u56FE_\u6218\u6597\u754C\u9762"
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 4
+      width: 1600
+      height: 900
+    spriteID: 1db570cb4bebb4b4bad16901fae77b60
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 4}
+    spritePosition: {x: 0, y: 0}
+  characterData:
+    bones: []
+    parts: []
+    dimension: {x: 0, y: 0}
+    characterGroups: []
+    boneReadOnly: 0
+  sharedRigSpriteImportData: []
+  sharedRigCharacterData:
+    bones: []
+    parts: []
+    dimension: {x: 0, y: 0}
+    characterGroups: []
+    boneReadOnly: 0
+  platformSettings: []
+  mosaicLayers: 1
+  characterMode: 1
+  documentPivot: {x: 0, y: 0}
+  documentAlignment: 7
+  importHiddenLayers: 0
+  layerMappingOption: 2
+  generatePhysicsShape: 0
+  paperDollMode: 0
+  keepDupilcateSpriteName: 1
+  skeletonAssetReferenceID: 
+  spriteCategoryList:
+    categories: []
+  spritePackingTag: 
+  resliceFromLayer: 0
+  mosaicPSDLayers: []
+  rigPSDLayers:
+  - name: Timer
+    spriteName: 
+    isGroup: 1
+    parentIndex: -1
+    spriteID: efa50334e3569cd4eaf8162bf7ee79a1
+    layerID: 23
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Timer/Img_Highlight
+    spriteName: Timer/Img_Highlight
+    isGroup: 0
+    parentIndex: 0
+    spriteID: b69a2fc056792d84f83623250968d2db
+    layerID: 22
+    mosaicPosition: {x: 1612, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: TimerUnit
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 9463805d5e70145418165b5e6df40c37
+    layerID: 21
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_Frame
+    spriteName: Timer/TimerUnit/Img_Frame
+    isGroup: 0
+    parentIndex: 2
+    spriteID: a501535f60f7bd8418662794cc142888
+    layerID: 20
+    mosaicPosition: {x: 4, y: 1090}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_PointerIconFoe
+    spriteName: Timer/TimerUnit/Img_PointerIconFoe
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 2468bd5c9038974439c7ad9d19bffd60
+    layerID: 19
+    mosaicPosition: {x: 1772, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_PointerIconFoe
+    spriteName: Timer/TimerUnit/Img_PointerIconFoe
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 540fcd5d6d858744cbc2ed54b4f37c1f
+    layerID: 18
+    mosaicPosition: {x: 1814, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_DashedLine
+    spriteName: Timer/TimerUnit/Img_DashedLine
+    isGroup: 0
+    parentIndex: 2
+    spriteID: f3c08c24424decd49bbe82f9429ea012
+    layerID: 17
+    mosaicPosition: {x: 4, y: 1295}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_Lump
+    spriteName: Timer/TimerUnit/Img_Lump
+    isGroup: 0
+    parentIndex: 2
+    spriteID: fb0cefc0e074c1f4988c0f90791f01b5
+    layerID: 16
+    mosaicPosition: {x: 1664, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_Location
+    spriteName: Timer/TimerUnit/Img_Location
+    isGroup: 0
+    parentIndex: 2
+    spriteID: c81cfa8450882dd4ebee0c7941c4ba2f
+    layerID: 15
+    mosaicPosition: {x: 4, y: 1147}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_TimerBase01
+    spriteName: Timer/TimerUnit/Img_TimerBase01
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 78013180c06a2b64abbb757f9f4c2991
+    layerID: 14
+    mosaicPosition: {x: 4, y: 1199}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/TimerUnit/Img_TimerBase02
+    spriteName: Timer/TimerUnit/Img_TimerBase02
+    isGroup: 0
+    parentIndex: 2
+    spriteID: ca28529fff279b14192d0555485dacd3
+    layerID: 13
+    mosaicPosition: {x: 4, y: 1247}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Foretell
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 83c41b1e419bc0d4f86e14c0f9f7e68e
+    layerID: 11
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Btn_Foretell
+    spriteName: 
+    isGroup: 1
+    parentIndex: 11
+    spriteID: b263b9361266ee64888eb998af162f6a
+    layerID: 10
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Timer/Foretell/Btn_Foretell/Img_Foretell
+    spriteName: Timer/Foretell/Btn_Foretell/Img_Foretell
+    isGroup: 0
+    parentIndex: 12
+    spriteID: 8b27affacec41e342a858552bb161f4a
+    layerID: 9
+    mosaicPosition: {x: 1856, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/Foretell/Btn_Foretell/Txt_Foretell
+    spriteName: Timer/Foretell/Btn_Foretell/Txt_Foretell
+    isGroup: 0
+    parentIndex: 12
+    spriteID: 9d33db38d31da974e8462e1ec693827f
+    layerID: 8
+    mosaicPosition: {x: 1664, y: 956}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/Foretell/Img_ForetellBase
+    spriteName: Timer/Foretell/Img_ForetellBase
+    isGroup: 0
+    parentIndex: 11
+    spriteID: 2445f338e0555bf4abcf0eb3f9ad1e8b
+    layerID: 5
+    mosaicPosition: {x: 1612, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Timer/Img_TimerBase
+    spriteName: Timer/Img_TimerBase
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 891cbb407b0f2bf44b7a6b371788f13f
+    layerID: 3
+    mosaicPosition: {x: 4, y: 912}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: "\u793A\u610F\u56FE_\u6218\u6597\u754C\u9762"
+    spriteName: "\u793A\u610F\u56FE_\u6218\u6597\u754C\u9762"
+    isGroup: 0
+    parentIndex: -1
+    spriteID: 1db570cb4bebb4b4bad16901fae77b60
+    layerID: 25
+    mosaicPosition: {x: 4, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  sharedRigPSDLayers: []
+  pSDLayerImportSetting: []
+  generateGOHierarchy: 0
+  textureAssetName: 
+  prefabAssetName: 
+  spriteLibAssetName: 
+  skeletonAssetName: 
+  secondarySpriteTextures: []

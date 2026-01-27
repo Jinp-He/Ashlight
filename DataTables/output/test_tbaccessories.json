@@ -1,0 +1,122 @@
+[
+  {
+    "id": "AC001",
+    "name": "雷击木",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "焦黑的木头，搓一搓能当临时电池。",
+    "OccupiedTiles": [],
+    "ImageName": "AC001"
+  },
+  {
+    "id": "AC002",
+    "name": "四叶草",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "好运的副作用是十米内会下青蛙雨。",
+    "OccupiedTiles": [],
+    "ImageName": "AC002"
+  },
+  {
+    "id": "AC003",
+    "name": "破旧宝图",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "标注的地方怎么好像是在我家里？",
+    "OccupiedTiles": [],
+    "ImageName": "AC003"
+  },
+  {
+    "id": "AC004",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC004"
+  },
+  {
+    "id": "AC005",
+    "name": "狗头人的蜡烛",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "我听说在艾尔文矿洞一带有很多狗头人...",
+    "OccupiedTiles": [],
+    "ImageName": "AC005"
+  },
+  {
+    "id": "AC006",
+    "name": "遗迹齿轮",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "工程师：这个齿轮又是哪里掉出来的？",
+    "OccupiedTiles": [],
+    "ImageName": "AC006"
+  },
+  {
+    "id": "AC007",
+    "name": "琥珀",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "这蚊子吸的不会是恐龙血吧。",
+    "OccupiedTiles": [],
+    "ImageName": "AC007"
+  },
+  {
+    "id": "AC008",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC008"
+  },
+  {
+    "id": "AC009",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC009"
+  },
+  {
+    "id": "AC010",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC010"
+  },
+  {
+    "id": "AC011",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC011"
+  },
+  {
+    "id": "AC012",
+    "name": "占位符",
+    "itemType": 1,
+    "Effect": "占位符",
+    "rarity": 4,
+    "Description": "占位符",
+    "OccupiedTiles": [],
+    "ImageName": "AC012"
+  }
+]

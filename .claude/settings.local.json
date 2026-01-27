@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"k:\\\\Ashlight\\\\Assets\\\\Scripts\" /s)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(cmd /c gen.bat)",
+      "Bash(dotnet:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

@@ -1,0 +1,867 @@
+[
+  {
+    "Id": "Rocket001",
+    "Name": "打击",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket002",
+    "Name": "迅猛打击",
+    "Description": "造成{A}点伤害。若目标处于[僵直]或[引导]中，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "conditions": "Channeling|Recoit",
+        "multiplier": 2
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket003",
+    "Name": "旋风斩",
+    "Description": "对所有敌人造成{A}点伤害，每造成一次伤害，获得{D}点护甲",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": true
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 3,
+        "per_hit": true
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket004",
+    "Name": "巨龙撞击",
+    "Description": "造成 {A} 点伤害并 [推迟] {T} 格。若撞上敌人的攻击意图，造成 [晕眩]。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "Stun"
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket005",
+    "Name": "守护",
+    "Description": "[迅捷]。[拦截] 指定队友受到的伤害，获得 {D} 点高额护甲。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 2
+      },
+      {
+        "$type": "InterceptEffect",
+        "EffectType": 1,
+        "shield_value": 30
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 0,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket006",
+    "Name": "挺身而出",
+    "Description": "[引导] 3。引导期间无法攻击，但 [嘲讽] 全体并大幅减伤。",
+    "Effects": [
+      {
+        "$type": "TauntEffect",
+        "EffectType": 4,
+        "target": "All"
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "ReduceDmg",
+        "value": 0.5
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket007",
+    "Name": "吞噬痛苦",
+    "Description": "[迅捷]。立刻清除自身所有 [僵直]，恢复 {H} 点生命。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 4
+      },
+      {
+        "$type": "ClearRecoilEffect",
+        "EffectType": 4
+      },
+      {
+        "$type": "HealEffect",
+        "EffectType": 3,
+        "value": 10
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket008",
+    "Name": "挫志怒吼",
+    "Description": "使所有敌人意图 [推迟] {T} 格。若敌人撞在一起，造成 [晕眩]。",
+    "Effects": [
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 1
+      },
+      {
+        "$type": "CollisionEffect",
+        "EffectType": 5,
+        "result": "Stun"
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Rocket009",
+    "Name": "交错打击",
+    "Description": "造成 {A} 点伤害，如果敌人正在攻击，额外造成 {A:1} 点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 6,
+        "condition_type": "IsAttacking"
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene001",
+    "Name": "火球术",
+    "Description": "造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 30,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene002",
+    "Name": "冰霜震击",
+    "Description": "造成 {A} 点伤害，并 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "None"
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene003",
+    "Name": "奥术飞弹",
+    "Description": "[迅捷]。造成 3 次 {A} 点伤害，目标随机。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene004",
+    "Name": "寒冰护甲",
+    "Description": "[迅捷]。获得 {D} 点护甲，并施加 [寒冷] (受击时 [推迟] 来源)。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 15,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Chill",
+        "value": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene005",
+    "Name": "炎爆术",
+    "Description": "[引导] {T}。造成 {A} 点巨额伤害。若目标 [燃烧]，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "ChannelEffect",
+        "EffectType": 2,
+        "duration": 3
+      },
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 80,
+        "conditions": "Burn",
+        "multiplier": 2
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene006",
+    "Name": "暴风雪",
+    "Description": "[引导] {T}。对所有敌人造成 {A} 点伤害并 [推迟] 1 格。",
+    "Effects": [
+      {
+        "$type": "ChannelEffect",
+        "EffectType": 2,
+        "duration": 2
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 20,
+        "is_aoe": true
+      },
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene007",
+    "Name": "深度冻结",
+    "Description": "使目标 [晕眩] 1 回合，且下一次受到的伤害增加 {F}%。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Stun",
+        "value": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene008",
+    "Name": "时间扭曲",
+    "Description": "[迅捷]。下一张 [引导] 卡牌的引导时间减少 {F} 格。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "ReduceChannel",
+        "value": 2
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene009",
+    "Name": "陨石灭世",
+    "Description": "[引导] {T}。对所有敌人造成 {A} 点伤害，场地变为 [火海]。",
+    "Effects": [
+      {
+        "$type": "ChannelEffect",
+        "EffectType": 2,
+        "duration": 4
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 100,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "TerrainFire",
+        "value": 3
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene010",
+    "Name": "黑洞",
+    "Description": "使所有敌人意图 [推迟] {T} 格。若敌人撞在一起，造成 [晕眩]。",
+    "Effects": [
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 3
+      },
+      {
+        "$type": "CollisionEffect",
+        "EffectType": 6,
+        "result": "Stun"
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene011",
+    "Name": "镜像实体",
+    "Description": "[迅捷]。[拦截] 下一次单体伤害，并反弹 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "InterceptEffect",
+        "EffectType": 1,
+        "shield_value": 0
+      },
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 20,
+        "conditions": "OnHit",
+        "multiplier": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Irene012",
+    "Name": "魔力超载",
+    "Description": "[迅捷]。本回合下一张法术生效两次。下回合自身 [僵直] {T} 格。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "DoubleCast",
+        "value": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 2,
+        "buff_id": "SelfStun",
+        "value": 2
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou001",
+    "Name": "快速射击",
+    "Description": "[迅捷]。造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 15,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou002",
+    "Name": "强力击",
+    "Description": "造成 {A} 点伤害并 [推迟] {T} 格。若发生碰撞，造成 [晕眩]。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 20,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 2,
+        "collision_result": "Stun"
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou003",
+    "Name": "二连矢",
+    "Description": "连续造成 2 次 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou004",
+    "Name": "多重射击",
+    "Description": "对所有敌人造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 15,
+        "is_aoe": true
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou005",
+    "Name": "狙击",
+    "Description": "[引导] {T}。造成 {A} 点致命伤害。若目标满血，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "ChannelEffect",
+        "EffectType": 2,
+        "duration": 2
+      },
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 60,
+        "conditions": "FullHP",
+        "multiplier": 2
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou006",
+    "Name": "后撤步",
+    "Description": "[迅捷]。造成 {A} 点伤害并使目标 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "None"
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou007",
+    "Name": "捕兽夹",
+    "Description": "造成 {A} 点伤害并施加 [定身] (无法移动)。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Root",
+        "value": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou008",
+    "Name": "致命射击",
+    "Description": "造成 {A} 点伤害。如果目标正在 [引导] 或 [攻击]，额外造成 {A:1} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 25,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 25,
+        "condition_type": "IsAttacking"
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou009",
+    "Name": "剑雨",
+    "Description": "[引导] {T}。对所有敌人造成 3 次 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "ChannelEffect",
+        "EffectType": 2,
+        "duration": 3
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou010",
+    "Name": "猎人印记",
+    "Description": "[迅捷]。使目标下一次受到的伤害增加 {F}%。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou011",
+    "Name": "急速装填",
+    "Description": "[迅捷]。立刻清除自身所有 [僵直]，并抽 1 张牌。",
+    "Effects": [
+      {
+        "$type": "SwiftEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "ClearRecoilEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "DrawCard",
+        "value": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false
+  },
+  {
+    "Id": "Zhouzhou012",
+    "Name": "穿云箭",
+    "Description": "造成 {A} 点伤害。本次攻击无视护甲，且无法被 [拦截]。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 40,
+        "conditions": "Pierce",
+        "multiplier": 1
+      }
+    ],
+    "Channeling": 1,
+    "Duration": 1,
+    "Recoil": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false
+  }
+]

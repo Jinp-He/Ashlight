@@ -1,0 +1,1341 @@
+fileFormatVersion: 2
+guid: d641ea442ef67304a94a61495545cc14
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: b2a9591990af98743ba3ff7cf1000886, type: 3}
+  textureImporterSettings:
+    alphaSource: 1
+    mipMapMode: 0
+    enableMipMap: 1
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+    convertToNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    isReadable: 0
+    streamingMipmaps: 1
+    streamingMipmapsPriority: 0
+    vTOnly: 0
+    ignoreMasterTextureLimit: 0
+    nPOTScale: 1
+    sRGBTexture: 1
+    spriteMode: 2
+    spriteExtrude: 1
+    spriteMeshType: 1
+    alignment: 0
+    spritePivot: {x: 0.5, y: 0.5}
+    spritePixelsToUnits: 100
+    spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+    spriteGenerateFallbackPhysicsShape: 0
+    generateCubemap: 6
+    cubemapConvolution: 0
+    seamlessCubemap: 0
+    alphaIsTransparency: 1
+    spriteTessellationDetail: -1
+    textureType: 8
+    textureShape: 1
+    singleChannelComponent: 0
+    flipbookRows: 0
+    flipbookColumns: 0
+    ignorePngGamma: 0
+    cookieMode: 0
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 0
+    wrapV: 0
+    wrapW: 0
+    normalMap: 0
+    textureFormat: 0
+    maxTextureSize: 0
+    lightmap: 0
+    compressionQuality: 0
+    linearTexture: 0
+    grayScaleToAlpha: 0
+    rGBM: 0
+    cubemapConvolutionSteps: 0
+    cubemapConvolutionExponent: 0
+    maxTextureSizeSet: 0
+    compressionQualitySet: 0
+    textureFormatSet: 0
+    applyGammaDecoding: 0
+  spriteImportData:
+  - name: 
+    originalName: 
+    pivot: {x: 0, y: 0}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 0
+      y: 0
+      width: 0
+      height: 0
+    spriteID: 
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 0, y: 0}
+    spritePosition: {x: 0, y: 0}
+  mosaicSpriteImportData:
+  - name: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 4
+      width: 374
+      height: 101
+    spriteID: 00519c4af51918c4d96584b7cf02050b
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 4}
+    spritePosition: {x: 32, y: 481}
+  - name: Card/Cost/Txt_Cost02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 316
+      y: 1665
+      width: 35
+      height: 57
+    spriteID: ff15627484390d64ab25f1934e55c693
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 316, y: 1665}
+    spritePosition: {x: 65, y: 502}
+  - name: Card/Cost/Txt_Cost01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 316
+      y: 1730
+      width: 35
+      height: 57
+    spriteID: f2f28562a436ec0498c5d0494ac1c748
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 316, y: 1730}
+    spritePosition: {x: 65, y: 502}
+  - name: Card/Cost/Img_Cost
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 405
+      width: 94
+      height: 95
+    spriteID: b03a0f0f89c92664998d00960c3ae375
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 405}
+    spritePosition: {x: 35, y: 484}
+  - name: Card/Rarity/Img_Rarity03
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 113
+      width: 137
+      height: 92
+    spriteID: 0576e22196a71754292eb028b98f5daf
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 113}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/Rarity/Img_Rarity02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 213
+      width: 137
+      height: 92
+    spriteID: 88cc840014dfc4442ba702b1d7ea6adf
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 213}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/Rarity/Img_Rarity01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 313
+      width: 122
+      height: 84
+    spriteID: 8af2fe5c44c908347ab86a6ae5b21ecb
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 313}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/CardTag/Txt_CardTag
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 508
+      width: 41
+      height: 25
+    spriteID: 4c958a31262d0f44c99ae0fc31c7542c
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 508}
+    spritePosition: {x: 199, y: 223}
+  - name: Card/CardTag/Img_CardTag
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 254
+      y: 1988
+      width: 53
+      height: 29
+    spriteID: f11f144344770fb47bdf6dd04c0ef0a5
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 254, y: 1988}
+    spritePosition: {x: 193, y: 221}
+  - name: Card/CardName/Txt_CardName
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 507
+      y: 113
+      width: 171
+      height: 37
+    spriteID: 7f15f209c4718ec489e3816c64691a6e
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 507, y: 113}
+    spritePosition: {x: 133, y: 258}
+  - name: Card/Txt_Effect
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1988
+      width: 242
+      height: 53
+    spriteID: 4ce0637c574aa024d88c7a10df20ff7d
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1988}
+    spritePosition: {x: 93, y: 160}
+  - name: Card/Txt_Comment
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 254
+      y: 2025
+      width: 74
+      height: 16
+    spriteID: 1baebdca1c352ac4ca38b37d9ff2ef48
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 254, y: 2025}
+    spritePosition: {x: 179, y: 73}
+  - name: Card/Frame/Img_CardFrame02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 567
+      width: 342
+      height: 541
+    spriteID: c07d6fa201f724e4bb41d97627db1902
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 567}
+    spritePosition: {x: 48, y: 46}
+  - name: Card/Frame/Img_CardFrame01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1116
+      width: 342
+      height: 541
+    spriteID: 2afc8cffdba7eca4497c9b6c91a66fc4
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1116}
+    spritePosition: {x: 48, y: 46}
+  - name: Card/Picture/Img_CardPicture
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1665
+      width: 304
+      height: 315
+    spriteID: 5cb20362a866d154fa97a6032a8e6597
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1665}
+    spritePosition: {x: 69, y: 249}
+  - name: Card/Img_CardBas
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 4
+      width: 350
+      height: 555
+    spriteID: a593844bdd56ea04db62cd4753cce230
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 4}
+    spritePosition: {x: 44, y: 38}
+  rigSpriteImportData:
+  - name: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 4
+      width: 374
+      height: 101
+    spriteID: 88b1b3459348db044bebd400fe5504c5
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 4}
+    spritePosition: {x: 32, y: 481}
+  - name: Card/Cost/Txt_Cost02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 316
+      y: 1665
+      width: 35
+      height: 57
+    spriteID: 11a4a6d4bd8239749a146280848da0b7
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 316, y: 1665}
+    spritePosition: {x: 65, y: 502}
+  - name: Card/Cost/Txt_Cost01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 316
+      y: 1730
+      width: 35
+      height: 57
+    spriteID: 8b115dbc8c06e77478fd0293f4c53f29
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 316, y: 1730}
+    spritePosition: {x: 65, y: 502}
+  - name: Card/Cost/Img_Cost
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 405
+      width: 94
+      height: 95
+    spriteID: 237d815d7de929e4c86010aabf35dcfd
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 405}
+    spritePosition: {x: 35, y: 484}
+  - name: Card/Rarity/Img_Rarity03
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 113
+      width: 137
+      height: 92
+    spriteID: 91f28c2097c7deb4b99ebb182bb44a52
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 113}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/Rarity/Img_Rarity02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 213
+      width: 137
+      height: 92
+    spriteID: 28b0e862961239b48958438439662465
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 213}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/Rarity/Img_Rarity01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 313
+      width: 122
+      height: 84
+    spriteID: 13a0ecc56e3dab8408639831fd9e625c
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 313}
+    spritePosition: {x: 34, y: 481}
+  - name: Card/CardTag/Txt_CardTag
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 362
+      y: 508
+      width: 41
+      height: 25
+    spriteID: 3f7ac6876ad52ba4d82a2e63bb40ae3d
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 362, y: 508}
+    spritePosition: {x: 199, y: 223}
+  - name: Card/CardTag/Img_CardTag
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 254
+      y: 1988
+      width: 53
+      height: 29
+    spriteID: fe6dae57877f62e469e4e5d7f4708b74
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 254, y: 1988}
+    spritePosition: {x: 193, y: 221}
+  - name: Card/CardName/Txt_CardName
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 507
+      y: 113
+      width: 171
+      height: 37
+    spriteID: 302093c1d4cc67e4caed116ce259bd35
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 507, y: 113}
+    spritePosition: {x: 133, y: 258}
+  - name: Card/Txt_Effect
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1988
+      width: 242
+      height: 53
+    spriteID: fcfc2044763b7194799755900b6f3ce2
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1988}
+    spritePosition: {x: 93, y: 160}
+  - name: Card/Txt_Comment
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 254
+      y: 2025
+      width: 74
+      height: 16
+    spriteID: ed35259cdfe820d428c608adc8843cc7
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 254, y: 2025}
+    spritePosition: {x: 179, y: 73}
+  - name: Card/Frame/Img_CardFrame02
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 567
+      width: 342
+      height: 541
+    spriteID: 9d098ba8137b2cc4db49af6631884ab0
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 567}
+    spritePosition: {x: 48, y: 46}
+  - name: Card/Frame/Img_CardFrame01
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1116
+      width: 342
+      height: 541
+    spriteID: d66e85d34b1bfa74fa5e41beb8657eda
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1116}
+    spritePosition: {x: 48, y: 46}
+  - name: Card/Picture/Img_CardPicture
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 1665
+      width: 304
+      height: 315
+    spriteID: e48fba369fdbf114d94c77985547b7cf
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 1665}
+    spritePosition: {x: 69, y: 249}
+  - name: Card/Img_CardBas
+    originalName: 
+    pivot: {x: 0.5, y: 0.5}
+    alignment: 0
+    border: {x: 0, y: 0, z: 0, w: 0}
+    rect:
+      serializedVersion: 2
+      x: 4
+      y: 4
+      width: 350
+      height: 555
+    spriteID: 0a1d839d3f2d29540a78da73b9a51b8b
+    spriteBone: []
+    spriteOutline: []
+    vertices: []
+    spritePhysicsOutline: []
+    indices: 
+    edges: []
+    tessellationDetail: 0
+    parentGroupIndex: -1
+    uvTransform: {x: 4, y: 4}
+    spritePosition: {x: 44, y: 38}
+  characterData:
+    bones: []
+    parts: []
+    dimension: {x: 0, y: 0}
+    characterGroups: []
+    boneReadOnly: 0
+  sharedRigSpriteImportData: []
+  sharedRigCharacterData:
+    bones: []
+    parts: []
+    dimension: {x: 0, y: 0}
+    characterGroups: []
+    boneReadOnly: 0
+  platformSettings:
+  - name: DefaultTexturePlatform
+    overridden: 0
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    androidETC2FallbackOverride: 0
+  - name: Standalone
+    overridden: 0
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    androidETC2FallbackOverride: 0
+  - name: Server
+    overridden: 0
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    androidETC2FallbackOverride: 0
+  - name: WebGL
+    overridden: 0
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    androidETC2FallbackOverride: 0
+  mosaicLayers: 1
+  characterMode: 1
+  documentPivot: {x: 0, y: 0}
+  documentAlignment: 7
+  importHiddenLayers: 1
+  layerMappingOption: 2
+  generatePhysicsShape: 0
+  paperDollMode: 0
+  keepDupilcateSpriteName: 1
+  skeletonAssetReferenceID: 
+  spriteCategoryList:
+    categories: []
+  spritePackingTag: 
+  resliceFromLayer: 0
+  mosaicPSDLayers:
+  - name: Card
+    spriteName: 
+    isGroup: 1
+    parentIndex: -1
+    spriteID: 89dfc9b1d56d66240b522fef5d670f2e
+    layerID: 149
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    spriteName: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 00519c4af51918c4d96584b7cf02050b
+    layerID: 116
+    mosaicPosition: {x: 362, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Cost
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 5255cea8098510541bbdc4ca58f79322
+    layerID: 117
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Cost/Txt_Cost02
+    spriteName: Card/Cost/Txt_Cost02
+    isGroup: 0
+    parentIndex: 2
+    spriteID: ff15627484390d64ab25f1934e55c693
+    layerID: 140
+    mosaicPosition: {x: 316, y: 1665}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Cost/Txt_Cost01
+    spriteName: Card/Cost/Txt_Cost01
+    isGroup: 0
+    parentIndex: 2
+    spriteID: f2f28562a436ec0498c5d0494ac1c748
+    layerID: 139
+    mosaicPosition: {x: 316, y: 1730}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Cost/Img_Cost
+    spriteName: Card/Cost/Img_Cost
+    isGroup: 0
+    parentIndex: 2
+    spriteID: b03a0f0f89c92664998d00960c3ae375
+    layerID: 138
+    mosaicPosition: {x: 362, y: 405}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Rarity
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 2bafad121453a9b4fa21813a0dfda902
+    layerID: 101
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity03
+    spriteName: Card/Rarity/Img_Rarity03
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 0576e22196a71754292eb028b98f5daf
+    layerID: 100
+    mosaicPosition: {x: 362, y: 113}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity02
+    spriteName: Card/Rarity/Img_Rarity02
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 88cc840014dfc4442ba702b1d7ea6adf
+    layerID: 99
+    mosaicPosition: {x: 362, y: 213}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity01
+    spriteName: Card/Rarity/Img_Rarity01
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 8af2fe5c44c908347ab86a6ae5b21ecb
+    layerID: 98
+    mosaicPosition: {x: 362, y: 313}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: CardTag
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 142a91b629602044e8e984651363624e
+    layerID: 107
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/CardTag/Txt_CardTag
+    spriteName: Card/CardTag/Txt_CardTag
+    isGroup: 0
+    parentIndex: 10
+    spriteID: 4c958a31262d0f44c99ae0fc31c7542c
+    layerID: 106
+    mosaicPosition: {x: 362, y: 508}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/CardTag/Img_CardTag
+    spriteName: Card/CardTag/Img_CardTag
+    isGroup: 0
+    parentIndex: 10
+    spriteID: f11f144344770fb47bdf6dd04c0ef0a5
+    layerID: 105
+    mosaicPosition: {x: 254, y: 1988}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: CardName
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 1c96128f3d776544fb9c25131b770cbe
+    layerID: 109
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/CardName/Txt_CardName
+    spriteName: Card/CardName/Txt_CardName
+    isGroup: 0
+    parentIndex: 13
+    spriteID: 7f15f209c4718ec489e3816c64691a6e
+    layerID: 108
+    mosaicPosition: {x: 507, y: 113}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Txt_Effect
+    spriteName: Card/Txt_Effect
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 4ce0637c574aa024d88c7a10df20ff7d
+    layerID: 102
+    mosaicPosition: {x: 4, y: 1988}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Txt_Comment
+    spriteName: Card/Txt_Comment
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 1baebdca1c352ac4ca38b37d9ff2ef48
+    layerID: 103
+    mosaicPosition: {x: 254, y: 2025}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Frame
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 7c3f57e3892ef8a4ba7c47fc47911584
+    layerID: 141
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Frame/Img_CardFrame02
+    spriteName: Card/Frame/Img_CardFrame02
+    isGroup: 0
+    parentIndex: 17
+    spriteID: c07d6fa201f724e4bb41d97627db1902
+    layerID: 10
+    mosaicPosition: {x: 4, y: 567}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Frame/Img_CardFrame01
+    spriteName: Card/Frame/Img_CardFrame01
+    isGroup: 0
+    parentIndex: 17
+    spriteID: 2afc8cffdba7eca4497c9b6c91a66fc4
+    layerID: 135
+    mosaicPosition: {x: 4, y: 1116}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Picture
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 089bfe18cccea3e43b6e62d21ab39ddb
+    layerID: 143
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Picture/Img_CardPicture
+    spriteName: Card/Picture/Img_CardPicture
+    isGroup: 0
+    parentIndex: 20
+    spriteID: 5cb20362a866d154fa97a6032a8e6597
+    layerID: 6
+    mosaicPosition: {x: 4, y: 1665}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Img_CardBas
+    spriteName: Card/Img_CardBas
+    isGroup: 0
+    parentIndex: 0
+    spriteID: a593844bdd56ea04db62cd4753cce230
+    layerID: 5
+    mosaicPosition: {x: 4, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  rigPSDLayers:
+  - name: Card
+    spriteName: 
+    isGroup: 1
+    parentIndex: -1
+    spriteID: ef2fe8ee13a342248936e3f45a80f28d
+    layerID: 149
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    spriteName: "Card/\u8D39\u7528\u793A\u610F\u56FE"
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 88b1b3459348db044bebd400fe5504c5
+    layerID: 116
+    mosaicPosition: {x: 362, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Cost
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 341fb00e8b1689043b1b3f3482d86610
+    layerID: 117
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Cost/Txt_Cost02
+    spriteName: Card/Cost/Txt_Cost02
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 11a4a6d4bd8239749a146280848da0b7
+    layerID: 140
+    mosaicPosition: {x: 316, y: 1665}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Cost/Txt_Cost01
+    spriteName: Card/Cost/Txt_Cost01
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 8b115dbc8c06e77478fd0293f4c53f29
+    layerID: 139
+    mosaicPosition: {x: 316, y: 1730}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Cost/Img_Cost
+    spriteName: Card/Cost/Img_Cost
+    isGroup: 0
+    parentIndex: 2
+    spriteID: 237d815d7de929e4c86010aabf35dcfd
+    layerID: 138
+    mosaicPosition: {x: 362, y: 405}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Rarity
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 6618dab4bddabf9419e91eebae882a87
+    layerID: 101
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity03
+    spriteName: Card/Rarity/Img_Rarity03
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 91f28c2097c7deb4b99ebb182bb44a52
+    layerID: 100
+    mosaicPosition: {x: 362, y: 113}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity02
+    spriteName: Card/Rarity/Img_Rarity02
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 28b0e862961239b48958438439662465
+    layerID: 99
+    mosaicPosition: {x: 362, y: 213}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Rarity/Img_Rarity01
+    spriteName: Card/Rarity/Img_Rarity01
+    isGroup: 0
+    parentIndex: 6
+    spriteID: 13a0ecc56e3dab8408639831fd9e625c
+    layerID: 98
+    mosaicPosition: {x: 362, y: 313}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: CardTag
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 786ffd49b2bcea84b84de59132d844a5
+    layerID: 107
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/CardTag/Txt_CardTag
+    spriteName: Card/CardTag/Txt_CardTag
+    isGroup: 0
+    parentIndex: 10
+    spriteID: 3f7ac6876ad52ba4d82a2e63bb40ae3d
+    layerID: 106
+    mosaicPosition: {x: 362, y: 508}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/CardTag/Img_CardTag
+    spriteName: Card/CardTag/Img_CardTag
+    isGroup: 0
+    parentIndex: 10
+    spriteID: fe6dae57877f62e469e4e5d7f4708b74
+    layerID: 105
+    mosaicPosition: {x: 254, y: 1988}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: CardName
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 56d07ab2bb0d10748b1f630b5e10124d
+    layerID: 109
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/CardName/Txt_CardName
+    spriteName: Card/CardName/Txt_CardName
+    isGroup: 0
+    parentIndex: 13
+    spriteID: 302093c1d4cc67e4caed116ce259bd35
+    layerID: 108
+    mosaicPosition: {x: 507, y: 113}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Txt_Effect
+    spriteName: Card/Txt_Effect
+    isGroup: 0
+    parentIndex: 0
+    spriteID: fcfc2044763b7194799755900b6f3ce2
+    layerID: 102
+    mosaicPosition: {x: 4, y: 1988}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Txt_Comment
+    spriteName: Card/Txt_Comment
+    isGroup: 0
+    parentIndex: 0
+    spriteID: ed35259cdfe820d428c608adc8843cc7
+    layerID: 103
+    mosaicPosition: {x: 254, y: 2025}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Frame
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: af5a0b2af7ad95e429acb8d3b032393e
+    layerID: 141
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Frame/Img_CardFrame02
+    spriteName: Card/Frame/Img_CardFrame02
+    isGroup: 0
+    parentIndex: 17
+    spriteID: 9d098ba8137b2cc4db49af6631884ab0
+    layerID: 10
+    mosaicPosition: {x: 4, y: 567}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Frame/Img_CardFrame01
+    spriteName: Card/Frame/Img_CardFrame01
+    isGroup: 0
+    parentIndex: 17
+    spriteID: d66e85d34b1bfa74fa5e41beb8657eda
+    layerID: 135
+    mosaicPosition: {x: 4, y: 1116}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Picture
+    spriteName: 
+    isGroup: 1
+    parentIndex: 0
+    spriteID: 5f18a16477291ed45935849b9a62e39e
+    layerID: 143
+    mosaicPosition: {x: 0, y: 0}
+    flatten: 0
+    isImported: 0
+    isVisible: 1
+  - name: Card/Picture/Img_CardPicture
+    spriteName: Card/Picture/Img_CardPicture
+    isGroup: 0
+    parentIndex: 20
+    spriteID: e48fba369fdbf114d94c77985547b7cf
+    layerID: 6
+    mosaicPosition: {x: 4, y: 1665}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  - name: Card/Img_CardBas
+    spriteName: Card/Img_CardBas
+    isGroup: 0
+    parentIndex: 0
+    spriteID: 0a1d839d3f2d29540a78da73b9a51b8b
+    layerID: 5
+    mosaicPosition: {x: 4, y: 4}
+    flatten: 0
+    isImported: 1
+    isVisible: 1
+  sharedRigPSDLayers: []
+  pSDLayerImportSetting: []
+  generateGOHierarchy: 0
+  textureAssetName: 
+  prefabAssetName: 
+  spriteLibAssetName: 
+  skeletonAssetName: 
+  secondarySpriteTextures: []

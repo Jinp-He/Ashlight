@@ -1,0 +1,36 @@
+[
+  {
+    "Id": "Enemy001",
+    "Name": "小兵",
+    "AlternativePath": "DogKnight",
+    "Hp": 50,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES001",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "Enemy002",
+    "Name": "小兵2",
+    "AlternativePath": "DogKnight",
+    "Hp": 30,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES002",
+            "TimeSlot": 6
+          }
+        ]
+      }
+    ]
+  }
+]

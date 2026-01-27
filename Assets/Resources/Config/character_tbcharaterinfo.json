@@ -1,0 +1,38 @@
+[
+  {
+    "Character": 1,
+    "Name": "战士",
+    "BaseHp": 100,
+    "BaseDeck": [
+      "Rocket001",
+      "Rocket002",
+      "Rocket003",
+      "Rocket004",
+      "Rocket005"
+    ]
+  },
+  {
+    "Character": 0,
+    "Name": "法师",
+    "BaseHp": 100,
+    "BaseDeck": [
+      "Irene001",
+      "Irene002",
+      "Irene003",
+      "Irene004",
+      "Irene005"
+    ]
+  },
+  {
+    "Character": 2,
+    "Name": "游侠",
+    "BaseHp": 100,
+    "BaseDeck": [
+      "Zhouzhou001",
+      "Zhouzhou002",
+      "Zhouzhou003",
+      "Zhouzhou004",
+      "Zhouzhou005"
+    ]
+  }
+]

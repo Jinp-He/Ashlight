@@ -1,0 +1,72 @@
+<module name="">
+
+    <bean name="Effect" sep=",">
+    <var name="EffectType" type="EffectEnum" comment="状态效果"/>
+        </bean>
+
+
+    <bean name="AttackEffect" parent="Effect">
+        <var name="damage" type="int" comment="基础伤害数值 {A}"/>
+        <var name="is_aoe" type="bool" comment="是否为群体攻击 (false=单体, true=全体)"/>
+    </bean>
+
+    <bean name="AttackExtraEffect" parent="Effect">
+        <var name="damage" type="int" comment="基础伤害"/>
+        <var name="conditions" type="string" comment="触发增伤的状态需求，如 'Recoil|Channel'"/>
+        <var name="multiplier" type="float" comment="满足条件时的伤害倍率"/>
+    </bean>
+
+    <bean name="AttackConditionalEffect" parent="Effect">
+        <var name="bonus_damage" type="int" comment="额外伤害数值 {A:1}"/>
+        <var name="condition_type" type="string" comment="触发条件，如 'IsAttacking'"/>
+    </bean>
+
+
+    <bean name="DefenseEffect" parent="Effect">
+        <var name="value" type="int" comment="护甲数值 {D}"/>
+        <var name="per_hit" type="bool" comment="是否按命中次数叠加 (true=每击中一次加一次)"/>
+    </bean>
+
+    <bean name="InterceptEffect" parent="Effect">
+        <var name="shield_value" type="int" comment="拦截护甲值 {D}"/>
+    </bean>
+
+    <bean name="HealEffect" parent="Effect">
+        <var name="value" type="int" comment="治疗数值 {H}"/>
+    </bean>
+
+    <bean name="ClearRecoilEffect" parent="Effect">
+        </bean>
+
+
+    <bean name="PushCollisionEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="推迟格数 {T}"/>
+        <var name="collision_result" type="string" comment="碰撞后的效果，如 'Stun'"/>
+    </bean>
+
+    <bean name="TimeShiftAllEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="全体推迟格数 {T}"/>
+    </bean>
+
+    <bean name="CollisionEffect" parent="Effect">
+        <var name="result" type="string" comment="独立碰撞效果"/>
+    </bean>
+
+
+    <bean name="SwiftEffect" parent="Effect">
+        </bean>
+
+    <bean name="ChannelEffect" parent="Effect">
+        <var name="duration" type="int" comment="引导持续时间"/>
+    </bean>
+
+    <bean name="TauntEffect" parent="Effect">
+        <var name="target" type="string" comment="嘲讽目标，如 'All'"/>
+    </bean>
+
+    <bean name="BuffEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="Buff ID"/>
+        <var name="value" type="float" comment="Buff参数/数值"/>
+    </bean>
+
+</module>

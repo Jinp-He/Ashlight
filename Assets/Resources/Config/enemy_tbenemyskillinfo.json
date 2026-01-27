@@ -1,0 +1,36 @@
+[
+  {
+    "Id": "ES001",
+    "Name": "爪子攻击！",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 1,
+    "TargetType": 3
+  },
+  {
+    "Id": "ES002",
+    "Name": "射箭",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      }
+    ],
+    "Channeling": 0,
+    "Duration": 1,
+    "Recoil": 2,
+    "TargetType": 3
+  }
+]

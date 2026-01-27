@@ -1,0 +1,122 @@
+[
+  {
+    "Id": "CP001",
+    "name": "铁片",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "如果你确定确定的话，这个东西也不是不可以放在商店里面卖",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP001"
+  },
+  {
+    "Id": "CP002",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP002"
+  },
+  {
+    "Id": "CP003",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP003"
+  },
+  {
+    "Id": "CP004",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP004"
+  },
+  {
+    "Id": "CP005",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP005"
+  },
+  {
+    "Id": "CP006",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP006"
+  },
+  {
+    "Id": "CP007",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP007"
+  },
+  {
+    "Id": "CP008",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP008"
+  },
+  {
+    "Id": "CP009",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP009"
+  },
+  {
+    "Id": "CP010",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP010"
+  },
+  {
+    "Id": "CP011",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP011"
+  },
+  {
+    "Id": "CP012",
+    "name": "占位符",
+    "type": "原材料|金属",
+    "price": 1,
+    "description": "占位符",
+    "sellTime": 1,
+    "occupiedTiles": [],
+    "ImageName": "CP012"
+  }
+]

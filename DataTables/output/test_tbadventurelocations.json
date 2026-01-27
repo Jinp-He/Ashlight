@@ -1,0 +1,88 @@
+[
+  {
+    "Id": "LC001",
+    "Name": "森林",
+    "Description": "村落旁边的森林，是新手冒险的好地方.",
+    "PossibleOutcome": [
+      "CP001,AC001,AC002"
+    ],
+    "ImageName": "LC001"
+  },
+  {
+    "Id": "LC002",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC002"
+  },
+  {
+    "Id": "LC003",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC003"
+  },
+  {
+    "Id": "LC004",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC004"
+  },
+  {
+    "Id": "LC005",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC005"
+  },
+  {
+    "Id": "LC006",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC006"
+  },
+  {
+    "Id": "LC007",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC007"
+  },
+  {
+    "Id": "LC008",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC008"
+  },
+  {
+    "Id": "LC009",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC009"
+  },
+  {
+    "Id": "LC010",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC010"
+  },
+  {
+    "Id": "LC011",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC011"
+  },
+  {
+    "Id": "LC012",
+    "Name": "占位符",
+    "Description": "占位符",
+    "PossibleOutcome": [],
+    "ImageName": "LC012"
+  }
+]

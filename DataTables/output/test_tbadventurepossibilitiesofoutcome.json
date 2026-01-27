@@ -1,0 +1,25 @@
+[
+  {
+    "Id": "LC001",
+    "OutcomePossibilities": [
+      [
+        "AC001",
+        0.1
+      ],
+      [
+        "AC002",
+        0.1
+      ],
+      [
+        "CP001",
+        0.2
+      ]
+    ],
+    "ImageName": "LC001"
+  },
+  {
+    "Id": "s",
+    "OutcomePossibilities": [],
+    "ImageName": ""
+  }
+]
