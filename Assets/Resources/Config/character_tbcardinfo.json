@@ -566,7 +566,7 @@
         "is_aoe": false
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -592,7 +592,7 @@
         "collision_result": "Stun"
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -618,7 +618,7 @@
         "is_aoe": false
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -638,7 +638,7 @@
         "is_aoe": true
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -664,7 +664,7 @@
         "multiplier": 2
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -694,7 +694,7 @@
         "collision_result": "None"
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -720,7 +720,7 @@
         "value": 1
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -746,7 +746,7 @@
         "condition_type": "IsAttacking"
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -783,7 +783,7 @@
         "is_aoe": true
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -807,7 +807,7 @@
         "value": 50
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -835,7 +835,7 @@
         "value": 1
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,
@@ -856,7 +856,7 @@
         "multiplier": 1
       }
     ],
-    "Channeling": 1,
+    "Channeling": 0,
     "Duration": 1,
     "Recoil": 1,
     "BelongTo": 2,

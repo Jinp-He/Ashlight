@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Ashlight.Battle.Core.Commands;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
@@ -367,6 +368,110 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
+        /// 立即执行卡牌（不进入玩家时间轴）
+        /// 保留 ICommand 系统：仍通过 CardToTimelineConverter 生成并执行 Commands。
+        /// </summary>
+        /// <param name="cardInfo">卡牌配置</param>
+        /// <param name="ownerId">施法者单位ID（如 player_0）</param>
+        /// <param name="targetId">目标单位ID</param>
+        /// <param name="instanceId">卡牌实例ID（用于从手牌精确移除）</param>
+        /// <returns>是否执行成功</returns>
+        public bool TryPlayCardImmediately(cfg.Character.CardInfo cardInfo, string ownerId, string targetId, string instanceId)
+        {
+            if (CurrentState == null)
+            {
+                Debug.LogError("[BattleManager] 无法立即执行卡牌：CurrentState 为 null");
+                return false;
+            }
+
+            if (cardInfo == null)
+            {
+                Debug.LogError("[BattleManager] 无法立即执行卡牌：cardInfo 为 null");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                Debug.LogError("[BattleManager] 无法立即执行卡牌：ownerId 为空");
+                return false;
+            }
+
+            var owner = CurrentState.GetUnitById(ownerId);
+            if (owner == null || owner.IsDead)
+            {
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：施法者无效或已死亡 ownerId={ownerId}");
+                return false;
+            }
+
+            var converter = new CardToTimelineConverter();
+            var blocks = converter.ConvertCard(cardInfo, ownerId, targetId);
+            if (blocks == null || blocks.Count == 0)
+            {
+                Debug.LogWarning($"[BattleManager] 卡牌转换失败，无法执行: {cardInfo.Id}");
+                return false;
+            }
+
+            // 立即执行只取 Active 阶段携带命令的 Block（与原时间轴触发点一致）。
+            var activeBlock = blocks.FirstOrDefault(b => b != null && b.Phase == PhaseEnum.Active && b.Commands != null && b.Commands.Count > 0);
+            if (activeBlock == null)
+            {
+                Debug.LogWarning($"[BattleManager] 卡牌没有可执行命令: {cardInfo.Id}");
+                return false;
+            }
+
+            bool isAttackCard = activeBlock.Commands.Any(c => c is DamageCommand);
+            GameEvent.Publish(new CardExecutedEvent
+            {
+                CasterId = ownerId,
+                TargetId = targetId,
+                CardId = cardInfo.Id,
+                IsAttackCard = isAttackCard,
+                IsPrediction = false
+            });
+
+            foreach (var command in activeBlock.Commands)
+            {
+                if (command == null)
+                {
+                    continue;
+                }
+
+                command.Execute(CurrentState, ownerId, targetId);
+                if (CurrentState.IsBattleEnded)
+                {
+                    break;
+                }
+            }
+
+            // 从手牌消费这张卡（立即进入弃牌堆）。
+            bool consumed = false;
+            if (!string.IsNullOrEmpty(instanceId))
+            {
+                consumed = CurrentState.DeckSystem.UseCardByInstanceId(instanceId);
+            }
+
+            if (!consumed)
+            {
+                consumed = CurrentState.DeckSystem.UseCardByCardId(cardInfo.Id);
+            }
+
+            if (!consumed)
+            {
+                Debug.LogWarning($"[BattleManager] 卡牌执行成功但手牌消费失败: cardId={cardInfo.Id}, instanceId={instanceId}");
+            }
+
+            CurrentState.CheckBattleEnd();
+
+            // 即时出牌后刷新下一步预测，保持UI提示与当前状态一致。
+            if (PredictionManager != null)
+            {
+                PredictionManager.TriggerPrediction("卡牌立即执行");
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// 开始玩家回合
         /// 玩家回合开始时，每个敌人从他的IntentionList中选择一个并将其放在EnemySharedTimeTrack中
         /// </summary>
@@ -380,15 +485,12 @@ namespace Ashlight.Battle
 
             CurrentRound++;
 
-            // 清空敌人共享时间轴（准备放置新的意图）- 使用Clear而不是创建新对象，保持UI引用有效
-            if (CurrentState.SharedEnemyTrack != null)
-            {
-                CurrentState.SharedEnemyTrack.Clear();
-            }
-            else
+            // 确保敌人共享时间轴存在（不清空，保留上回合未执行完的技能）
+            if (CurrentState.SharedEnemyTrack == null)
             {
                 CurrentState.SharedEnemyTrack = new TimelineTrack();
             }
+            // 注意：不再调用 Clear()，让已放置的敌人技能继续在时间轴上推进直到执行完毕
 
             // 敌人技能转换器
             var converter = new EnemySkillToTimelineConverter();

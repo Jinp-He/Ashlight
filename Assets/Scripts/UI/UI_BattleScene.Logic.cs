@@ -72,40 +72,42 @@ namespace Scripts.UI
 
         #region 私有字段
 
-        private List<CardViewController> _handCards = new List<CardViewController>();
         private int _currentMoney = 0;
         private BattleManager _battleManager;
 
-        #region 卡牌对象池
-
         /// <summary>
-        /// 卡牌对象池：InstanceId -> CardViewController 的映射
+        /// 卡牌对象池管理器
         /// </summary>
-        private Dictionary<string, CardViewController> _cardPool = new Dictionary<string, CardViewController>();
-
-        /// <summary>
-        /// 抽牌堆中的卡牌 UI（SetActive false）
-        /// </summary>
-        private List<CardViewController> _deckCards = new List<CardViewController>();
-
-        /// <summary>
-        /// 弃牌堆中的卡牌 UI（SetActive false）
-        /// </summary>
-        private List<CardViewController> _discardCards = new List<CardViewController>();
-
-        #endregion
+        private BattleCardPoolManager _cardPoolManager = new BattleCardPoolManager();
         
-        // 玩家角色UI列表
-        private List<Character> _playerCharacters = new List<Character>();
+        /// <summary>
+        /// 手牌列表的快捷访问（委托给 _cardPoolManager.HandCards）
+        /// </summary>
+        private IReadOnlyList<CardViewController> _handCards => _cardPoolManager.HandCards;
+
+        /// <summary>
+        /// 单位UI管理器
+        /// </summary>
+        private BattleUnitUIManager _unitUIManager = new BattleUnitUIManager();
         
-        // 敌人UI列表
-        private List<Enemy> _enemies = new List<Enemy>();
+        /// <summary>
+        /// 玩家角色UI列表的快捷访问（委托给 _unitUIManager.PlayerCharacters）
+        /// </summary>
+        private IReadOnlyList<Character> _playerCharacters => _unitUIManager.PlayerCharacters;
+        
+        /// <summary>
+        /// 敌人UI列表的快捷访问（委托给 _unitUIManager.Enemies）
+        /// </summary>
+        private IReadOnlyList<Enemy> _enemies => _unitUIManager.Enemies;
         
         // 时间轴UI列表
         private List<Timeline.TimelineTrackView> _playerTimelines = new List<Timeline.TimelineTrackView>();
         private Timeline.TimelineTrackView _enemyTimeline;
 
-        private Dictionary<string, int> _pendingDamageByPair = new Dictionary<string, int>();
+        /// <summary>
+        /// 动画处理器
+        /// </summary>
+        private BattleAnimationHandler _animationHandler;
 
         #endregion
 
@@ -121,6 +123,13 @@ namespace Scripts.UI
 
             // 加载CardViewController预制体（如果未在Inspector中设置）
             LoadCardViewControllerPrefab();
+
+            // 获取或创建动画处理器
+            _animationHandler = GetComponent<BattleAnimationHandler>();
+            if (_animationHandler == null)
+            {
+                _animationHandler = gameObject.AddComponent<BattleAnimationHandler>();
+            }
 
             // 设置按钮监听
             SetupButtonListeners();
@@ -181,8 +190,8 @@ namespace Scripts.UI
             // 移除按钮监听
             RemoveButtonListeners();
 
-            // 清理手牌
-            ClearHandCards();
+            // 清理卡牌池（包括所有手牌、抽牌堆、弃牌堆的卡牌）
+            _cardPoolManager.Clear();
 
             // 清理战斗单位
             ClearBattleUnits();
@@ -203,9 +212,6 @@ namespace Scripts.UI
             // 初始化金钱显示
             UpdateMoneyDisplay();
 
-            // 清空手牌
-            ClearHandCards();
-
             // 获取或创建BattleManager
             _battleManager = BattleManager.Instance;
             if (_battleManager == null)
@@ -214,6 +220,17 @@ namespace Scripts.UI
                 _battleManager = battleManagerObj.AddComponent<BattleManager>();
                 Debug.Log("[UI_BattleScene] BattleManager已创建");
             }
+
+            // 设置单位UI管理器的BattleManager引用
+            _unitUIManager.SetBattleManager(_battleManager);
+
+            // 初始化动画处理器
+            _animationHandler.Initialize(
+                _battleManager,
+                _unitUIManager,
+                BattleAnimation,
+                UpdateAllUnitsDisplay);
+            _animationHandler.SetDamageTextPrefab(damageTextPrefab);
 
             // 创建战斗信息并初始化战斗
             InitializeBattle();
@@ -266,8 +283,14 @@ namespace Scripts.UI
             // 初始化战斗
             _battleManager.InitializeBattle(battleInfo);
 
-            // 初始化卡牌对象池（在 DisplayHandCards 之前）
-            InitializeCardPool();
+            // 初始化卡牌对象池管理器并创建卡牌池
+            _cardPoolManager.Initialize(
+                _battleManager,
+                cardViewControllerPrefab,
+                CardDeck,
+                CardBin,
+                CardContainer.transform);
+            _cardPoolManager.InitializePool();
 
             // 显示初始手牌到UI
             DisplayHandCards();
@@ -295,8 +318,14 @@ namespace Scripts.UI
             // 初始化战斗
             _battleManager.InitializeBattle(battleInfo);
 
-            // 初始化卡牌对象池（在 DisplayHandCards 之前）
-            InitializeCardPool();
+            // 初始化卡牌对象池管理器并创建卡牌池
+            _cardPoolManager.Initialize(
+                _battleManager,
+                cardViewControllerPrefab,
+                CardDeck,
+                CardBin,
+                CardContainer.transform);
+            _cardPoolManager.InitializePool();
 
             // 显示初始手牌到UI
             DisplayHandCards();
@@ -314,10 +343,7 @@ namespace Scripts.UI
             }
 
             // 1. 将当前 UI 层手牌移到弃牌堆（而非销毁）
-            foreach (var card in _handCards.ToList())
-            {
-                MoveCardToDiscard(card);
-            }
+            _cardPoolManager.ClearHandCards();
 
             // 2. 从数据层获取当前手牌
             var handCards = _battleManager.CurrentState.DeckSystem.Hand;
@@ -336,16 +362,19 @@ namespace Scripts.UI
                     continue;
                 }
 
-                var cardView = GetCardFromPool(cardState.InstanceId);
+                var cardView = _cardPoolManager.GetCard(cardState.InstanceId);
                 if (cardView != null)
                 {
-                    MoveCardToHand(cardView);
+                    _cardPoolManager.MoveToHand(cardView);
                 }
                 else
                 {
                     Debug.LogWarning($"[UI_BattleScene] 池中未找到卡牌: {cardState.InstanceId} (CardId: {cardState.CardId})");
                 }
             }
+
+            // 更新手牌布局
+            UpdateHandLayout();
 
             Debug.Log($"[UI_BattleScene] 显示手牌完成: {_handCards.Count} 张");
         }
@@ -420,7 +449,7 @@ namespace Scripts.UI
                     rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
                 }
 
-                _playerCharacters.Add(character);
+                _unitUIManager.RegisterCharacter(character);
                 Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId})");
             }
         }
@@ -474,7 +503,7 @@ namespace Scripts.UI
                     rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
                 }
 
-                _enemies.Add(enemy);
+                _unitUIManager.RegisterEnemy(enemy);
                 Debug.Log($"[UI_BattleScene] 创建敌人: {unitState.UnitId} ({unitState.ConfigId})");
             }
         }
@@ -484,27 +513,7 @@ namespace Scripts.UI
         /// </summary>
         private void ClearBattleUnits()
         {
-            // 清空玩家角色
-            foreach (var character in _playerCharacters)
-            {
-                if (character != null)
-                {
-                    Destroy(character.gameObject);
-                }
-            }
-            _playerCharacters.Clear();
-
-            // 清空敌人
-            foreach (var enemy in _enemies)
-            {
-                if (enemy != null)
-                {
-                    Destroy(enemy.gameObject);
-                }
-            }
-            _enemies.Clear();
-
-            Debug.Log("[UI_BattleScene] 已清空所有战斗单位UI");
+            _unitUIManager.ClearAll();
         }
 
         /// <summary>
@@ -665,12 +674,12 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 添加卡牌到手牌
+        /// 添加卡牌到手牌（注意：此方法创建新的卡牌UI，不使用对象池）
+        /// 推荐使用 DisplayHandCards() 从对象池获取卡牌
         /// </summary>
         /// <param name="cardInfo">卡牌信息</param>
         public void AddCardToHand(CardInfo cardInfo)
         {
-            
             if (cardInfo == null)
             {
                 Debug.LogError("[UI_BattleScene] 卡牌信息为空");
@@ -709,8 +718,9 @@ namespace Scripts.UI
             // 初始化卡牌（战斗模式）
             cardView.Initialize(cardInfo, DescriptionMode.Battle);
             
-            // 添加到手牌列表
-            _handCards.Add(cardView);
+            // 注意：这里创建的卡牌不在对象池中，需要手动管理
+            // 将卡牌移到手牌（通过管理器管理状态）
+            _cardPoolManager.MoveToHand(cardView);
 
             // 更新手牌布局
             UpdateHandLayout();
@@ -726,12 +736,13 @@ namespace Scripts.UI
         {
             if (cardView == null) return;
 
-            if (_handCards.Remove(cardView))
-            {
-                Destroy(cardView.gameObject);
-                UpdateHandLayout();
-                Debug.Log("[UI_BattleScene] 从手牌移除卡牌");
-            }
+            // 从管理器的手牌列表中移除
+            _cardPoolManager.RemoveFromHandList(cardView);
+            
+            // 销毁卡牌对象
+            Destroy(cardView.gameObject);
+            UpdateHandLayout();
+            Debug.Log("[UI_BattleScene] 从手牌移除卡牌");
         }
 
         /// <summary>
@@ -832,166 +843,41 @@ namespace Scripts.UI
 
         #region 私有方法
 
-        #region 卡牌对象池管理
+        #region 卡牌池委托方法（委托给 BattleCardPoolManager）
 
         /// <summary>
-        /// 初始化卡牌对象池（战斗开始时调用）
-        /// 为牌组中的每张卡牌创建一个 CardViewController
-        /// </summary>
-        private void InitializeCardPool()
-        {
-            ClearCardPool();
-
-            if (_battleManager?.CurrentState?.DeckSystem == null)
-            {
-                Debug.LogError("[UI_BattleScene] 初始化卡牌池失败：BattleManager 或 DeckSystem 为空");
-                return;
-            }
-
-            var deckSystem = _battleManager.CurrentState.DeckSystem;
-
-            // 收集所有卡牌（抽牌堆 + 弃牌堆 + 手牌 + 使用中）
-            var allCards = new List<CardRuntimeState>();
-            allCards.AddRange(deckSystem.DrawPile);
-            allCards.AddRange(deckSystem.DiscardPile);
-            allCards.AddRange(deckSystem.Hand);
-            allCards.AddRange(deckSystem.InPlayPile);
-
-            Debug.Log($"[UI_BattleScene] 开始初始化卡牌池，共 {allCards.Count} 张卡牌");
-
-            foreach (var cardState in allCards)
-            {
-                var cardInfo = ConfigLoader.Tables.TbCardInfo.GetOrDefault(cardState.CardId);
-                if (cardInfo == null)
-                {
-                    Debug.LogWarning($"[UI_BattleScene] 未找到卡牌配置: {cardState.CardId}");
-                    continue;
-                }
-
-                // 实例化到 CardDeck 容器
-                GameObject cardObj = Instantiate(cardViewControllerPrefab, CardDeck);
-                CardViewController cardView = cardObj.GetComponent<CardViewController>();
-
-                if (cardView != null)
-                {
-                    // 使用 Reinitialize 初始化
-                    cardView.Reinitialize(cardInfo, cardState.InstanceId, DescriptionMode.Battle);
-                    cardView.Hide(); // 初始隐藏
-
-                    _cardPool[cardState.InstanceId] = cardView;
-                    _deckCards.Add(cardView);
-                }
-            }
-
-            Debug.Log($"[UI_BattleScene] 卡牌池初始化完成，共 {_cardPool.Count} 张卡牌 UI");
-        }
-
-        /// <summary>
-        /// 根据 InstanceId 从池中获取 CardViewController
-        /// </summary>
-        private CardViewController GetCardFromPool(string instanceId)
-        {
-            if (string.IsNullOrEmpty(instanceId))
-            {
-                Debug.LogWarning("[UI_BattleScene] GetCardFromPool: instanceId 为空");
-                return null;
-            }
-            return _cardPool.TryGetValue(instanceId, out var card) ? card : null;
-        }
-
-        /// <summary>
-        /// 将卡牌移到手牌区
-        /// </summary>
-        private void MoveCardToHand(CardViewController card)
-        {
-            if (card == null) return;
-
-            card.transform.SetParent(CardContainer.transform);
-            card.ResetForReuse();
-            card.Show();
-
-            _deckCards.Remove(card);
-            _discardCards.Remove(card);
-
-            if (!_handCards.Contains(card))
-                _handCards.Add(card);
-
-            UpdateHandLayout();
-        }
-
-        /// <summary>
-        /// 将卡牌移到弃牌堆
+        /// 将卡牌移到弃牌堆（委托给管理器）
         /// </summary>
         private void MoveCardToDiscard(CardViewController card)
         {
-            if (card == null) return;
-
-            card.transform.SetParent(CardBin);
-            card.Hide();
-
-            _handCards.Remove(card);
-            _deckCards.Remove(card);
-
-            if (!_discardCards.Contains(card))
-                _discardCards.Add(card);
+            _cardPoolManager.MoveToDiscard(card);
         }
 
         /// <summary>
-        /// 将卡牌移到抽牌堆
-        /// </summary>
-        private void MoveCardToDeck(CardViewController card)
-        {
-            if (card == null) return;
-
-            card.transform.SetParent(CardDeck);
-            card.Hide();
-
-            _handCards.Remove(card);
-            _discardCards.Remove(card);
-
-            if (!_deckCards.Contains(card))
-                _deckCards.Add(card);
-        }
-
-        /// <summary>
-        /// 从 _handCards 中移除卡牌引用（不销毁，不隐藏）
+        /// 从手牌列表中移除卡牌引用（不销毁，不隐藏）
         /// 用于卡牌放到时间轴时
         /// </summary>
         public void RemoveCardFromHandList(CardViewController card)
         {
             if (card == null) return;
-            _handCards.Remove(card);
+            _cardPoolManager.RemoveFromHandList(card);
             UpdateHandLayout();
             Debug.Log($"[UI_BattleScene] 从手牌列表移除卡牌: {card.GetCurrentCard()?.Name}");
         }
 
         /// <summary>
-        /// UI 层洗牌：弃牌堆 -> 抽牌堆
+        /// 立即出牌后消费手牌UI（移入弃牌堆）
         /// </summary>
-        private void ReshuffleDiscardToDeckUI()
+        public void ConsumeHandCard(CardViewController card)
         {
-            foreach (var card in _discardCards.ToList())
+            if (card == null)
             {
-                MoveCardToDeck(card);
+                return;
             }
-            Debug.Log($"[UI_BattleScene] UI层洗牌完成，抽牌堆: {_deckCards.Count} 张");
-        }
 
-        /// <summary>
-        /// 清空卡牌池（战斗结束时调用）
-        /// </summary>
-        private void ClearCardPool()
-        {
-            foreach (var card in _cardPool.Values)
-            {
-                if (card != null)
-                    Destroy(card.gameObject);
-            }
-            _cardPool.Clear();
-            _deckCards.Clear();
-            _handCards.Clear();
-            _discardCards.Clear();
-            Debug.Log("[UI_BattleScene] 卡牌池已清空");
+            _cardPoolManager.MoveToDiscard(card);
+            UpdateHandLayout();
+            Debug.Log($"[UI_BattleScene] 立即出牌后移入弃牌堆: {card.GetCurrentCard()?.Name}");
         }
 
         #endregion
@@ -1106,11 +992,7 @@ namespace Scripts.UI
         /// </summary>
         private void ClearHandCards()
         {
-            foreach (var card in _handCards.ToList())
-            {
-                MoveCardToDiscard(card);
-            }
-            _handCards.Clear();
+            _cardPoolManager.ClearHandCards();
         }
 
         #endregion
@@ -1350,63 +1232,19 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 根据UnitId查找敌人UI
+        /// 根据UnitId查找敌人UI（委托给管理器）
         /// </summary>
-        private Enemy FindEnemyByUnitId(string unitId)
-        {
-            if (string.IsNullOrEmpty(unitId))
-                return null;
-
-            foreach (var enemy in _enemies)
-            {
-                if (enemy != null && enemy.GetUnitState()?.UnitId == unitId)
-                {
-                    return enemy;
-                }
-            }
-
-            return null;
-        }
+        private Enemy FindEnemyByUnitId(string unitId) => _unitUIManager.FindEnemy(unitId);
 
         /// <summary>
-        /// 根据UnitId查找角色UI
+        /// 根据UnitId查找角色UI（委托给管理器）
         /// </summary>
-        private Character FindCharacterByUnitId(string unitId)
-        {
-            if (string.IsNullOrEmpty(unitId))
-                return null;
-
-            foreach (var character in _playerCharacters)
-            {
-                if (character != null && character.GetUnitState()?.UnitId == unitId)
-                {
-                    return character;
-                }
-            }
-
-            return null;
-        }
+        private Character FindCharacterByUnitId(string unitId) => _unitUIManager.FindCharacter(unitId);
 
         /// <summary>
-        /// 根据UnitId查找对应的UI GameObject
+        /// 根据UnitId查找对应的UI GameObject（委托给管理器）
         /// </summary>
-        private GameObject FindUnitUIObject(string unitId)
-        {
-            if (string.IsNullOrEmpty(unitId))
-                return null;
-
-            // 先在玩家角色中查找
-            var character = FindCharacterByUnitId(unitId);
-            if (character != null)
-                return character.gameObject;
-
-            // 再在敌人中查找
-            var enemy = FindEnemyByUnitId(unitId);
-            if (enemy != null)
-                return enemy.gameObject;
-
-            return null;
-        }
+        private GameObject FindUnitUIObject(string unitId) => _unitUIManager.FindUnitObject(unitId);
 
         /// <summary>
         /// 处理攻击执行事件 - 缓存伤害用于演出阶段显示
@@ -1421,35 +1259,8 @@ namespace Scripts.UI
                 return;
             }
 
-            string key = GetAttackPairKey(evt.AttackerId, evt.TargetId);
-            if (_pendingDamageByPair.ContainsKey(key))
-            {
-                _pendingDamageByPair[key] += evt.ActualDamage;
-            }
-            else
-            {
-                _pendingDamageByPair[key] = evt.ActualDamage;
-            }
-
-            Debug.Log($"[UI_BattleScene] 缓存伤害: {evt.AttackerId} -> {evt.TargetId}, 伤害: {evt.ActualDamage}");
-        }
-
-        private string GetAttackPairKey(string attackerId, string targetId)
-        {
-            return $"{attackerId}->{targetId}";
-        }
-
-        private bool TryConsumePendingDamage(string attackerId, string targetId, out int damage)
-        {
-            string key = GetAttackPairKey(attackerId, targetId);
-            if (_pendingDamageByPair.TryGetValue(key, out damage))
-            {
-                _pendingDamageByPair.Remove(key);
-                return true;
-            }
-
-            damage = 0;
-            return false;
+            // 委托给动画处理器缓存伤害
+            _animationHandler.CacheDamage(evt.AttackerId, evt.TargetId, evt.ActualDamage);
         }
 
         /// <summary>
@@ -1466,166 +1277,8 @@ namespace Scripts.UI
 
             Debug.Log($"[UI_BattleScene] 卡片执行: {evt.CasterId} -> {evt.TargetId}, 攻击卡片={evt.IsAttackCard}");
 
-            // 启动战斗演出动画协程
-            StartCoroutine(PlayBattleAnimationWithBattleAnimation(evt));
-        }
-
-        /// <summary>
-        /// 使用BattleAnimation组件播放战斗演出
-        /// </summary>
-        private IEnumerator PlayBattleAnimationWithBattleAnimation(CardExecutedEvent evt)
-        {
-            // 获取BattleAnimation组件
-            if (BattleAnimation == null)
-            {
-                Debug.LogError("[UI_BattleScene] BattleAnimation RectTransform未绑定");
-                SignalAnimationCompleteToResolver();
-                yield break;
-            }
-
-            var battleAnimComponent = BattleAnimation.GetComponent<BattleAnimation>();
-            if (battleAnimComponent == null)
-            {
-                Debug.LogError("[UI_BattleScene] BattleAnimation组件未找到");
-                SignalAnimationCompleteToResolver();
-                yield break;
-            }
-
-            // 获取施法者和目标的UnitState
-            UnitState casterState = FindUnitStateById(evt.CasterId);
-            UnitState targetState = FindUnitStateById(evt.TargetId);
-
-            if (casterState == null || targetState == null)
-            {
-                Debug.LogError($"[UI_BattleScene] 无法找到UnitState: {evt.CasterId} 或 {evt.TargetId}");
-                SignalAnimationCompleteToResolver();
-                yield break;
-            }
-
-            // 获取对应的UI组件
-            MonoBehaviour casterUI = FindUnitUIComponent(evt.CasterId);
-            MonoBehaviour targetUI = FindUnitUIComponent(evt.TargetId);
-
-            if (casterUI == null || targetUI == null)
-            {
-                Debug.LogWarning($"[UI_BattleScene] 无法找到UI组件: {evt.CasterId} 或 {evt.TargetId}");
-                SignalAnimationCompleteToResolver();
-                yield break;
-            }
-
-            // 获取缓存的伤害值
-            int damage = 0;
-            if (TryConsumePendingDamage(evt.CasterId, evt.TargetId, out damage))
-            {
-                Debug.Log($"[UI_BattleScene] 获取到缓存的伤害值: {damage}");
-            }
-
-            // 播放战斗演出动画
-            yield return battleAnimComponent.PlayBattleAnimation(
-                casterState,
-                targetState,
-                casterUI,
-                targetUI,
-                evt.IsAttackCard,
-                damage,
-                () => {
-                    // 受击回调：更新目标血量显示
-                    if (targetUI != null)
-                    {
-                        var character = targetUI.GetComponent<Character>();
-                        var enemy = targetUI.GetComponent<Enemy>();
-
-                        if (character != null)
-                        {
-                            var unitState = character.GetUnitState();
-                            if (unitState != null)
-                            {
-                                character.UpdateHp(unitState.CurrentHp, unitState.MaxHp);
-                                character.UpdateShield(unitState.Defense);
-                            }
-                        }
-                        else if (enemy != null)
-                        {
-                            var unitState = enemy.GetUnitState();
-                            if (unitState != null)
-                            {
-                                enemy.UpdateHp(unitState.CurrentHp, unitState.MaxHp);
-                                enemy.UpdateShield(unitState.Defense);
-                            }
-                        }
-                    }
-                }
-            );
-
-            // 更新所有单位的UI显示
-            UpdateAllUnitsDisplay();
-
-            // 通知TimelineResolver动画完成
-            SignalAnimationCompleteToResolver();
-        }
-
-        /// <summary>
-        /// 根据UnitId查找UnitState
-        /// </summary>
-        private UnitState FindUnitStateById(string unitId)
-        {
-            if (_battleManager?.CurrentState == null) return null;
-
-            // 在玩家单位中查找
-            foreach (var unit in _battleManager.CurrentState.PlayerUnits)
-            {
-                if (unit.UnitId == unitId) return unit;
-            }
-
-            // 在敌人单位中查找
-            foreach (var unit in _battleManager.CurrentState.EnemyUnits)
-            {
-                if (unit.UnitId == unitId) return unit;
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// 根据UnitId查找对应的UI组件（Character或Enemy）
-        /// </summary>
-        private MonoBehaviour FindUnitUIComponent(string unitId)
-        {
-            // 在玩家角色中查找
-            foreach (var character in _playerCharacters)
-            {
-                if (character == null) continue;
-                var unitState = character.GetUnitState();
-                if (unitState != null && unitState.UnitId == unitId)
-                {
-                    return character;
-                }
-            }
-
-            // 在敌人中查找
-            foreach (var enemy in _enemies)
-            {
-                if (enemy == null) continue;
-                var unitState = enemy.GetUnitState();
-                if (unitState != null && unitState.UnitId == unitId)
-                {
-                    return enemy;
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// 通知TimelineResolver动画完成
-        /// </summary>
-        private void SignalAnimationCompleteToResolver()
-        {
-            if (_battleManager != null)
-            {
-                _battleManager.SignalAnimationComplete();
-                Debug.Log("[UI_BattleScene] 已发送动画完成信号");
-            }
+            // 委托给动画处理器播放动画
+            StartCoroutine(_animationHandler.PlayBattleAnimation(evt));
         }
 
         /// <summary>
@@ -1865,267 +1518,7 @@ namespace Scripts.UI
             Debug.Log("<color=magenta>========== 【统一移除已完成的TimeSlot】完成 ==========</color>");
         }
 
-        /// <summary>
-        /// 播放攻击动画序列（攻击和受击动画同时播放）
-        /// </summary>
-        private IEnumerator PlayAttackAnimationSequence(AttackExecutedEvent evt)
-        {
-            // 1. 找到攻击者和目标UI对象
-            GameObject attackerObj = FindUnitUIObject(evt.AttackerId);
-            GameObject targetObj = FindUnitUIObject(evt.TargetId);
-
-            float maxDuration = 1.0f;
-
-            // 2. 应用攻击演出效果：无关角色变暗，有关角色放大
-            ApplyAttackPerformanceEffect(attackerObj, targetObj);
-
-            // 3. 同时播放攻击者attack动画和目标shouji动画
-            if (attackerObj != null)
-            {
-                var character = attackerObj.GetComponent<Character>();
-                var enemy = attackerObj.GetComponent<Enemy>();
-
-                if (character != null)
-                {
-                    character.PlayAttackAnimation();
-                    Debug.Log("[UI_BattleScene] 播放角色攻击动画");
-                }
-                else if (enemy != null)
-                {
-                    enemy.PlayAttackAnimation();
-                    Debug.Log("[UI_BattleScene] 播放敌人攻击动画");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[UI_BattleScene] 未找到攻击者UI对象: {evt.AttackerId}");
-            }
-
-            // 4. 同时播放目标shouji动画 + 伤害数字 + 实时更新血量显示
-            if (targetObj != null)
-            {
-                var character = targetObj.GetComponent<Character>();
-                var enemy = targetObj.GetComponent<Enemy>();
-
-                if (character != null)
-                {
-                    character.PlayShoujiAnimation();
-                    ShowDamageNumber(targetObj.transform.position, evt.ActualDamage);
-                    
-                    // 实时更新血量显示（从UnitState获取最新值）
-                    var unitState = character.GetUnitState();
-                    if (unitState != null)
-                    {
-                        character.UpdateHp(unitState.CurrentHp, unitState.MaxHp);
-                        character.UpdateShield(unitState.Defense);
-                        Debug.Log($"[UI_BattleScene] 实时更新角色血量: {unitState.CurrentHp}/{unitState.MaxHp}");
-                    }
-                    
-                    Debug.Log("[UI_BattleScene] 播放角色受击动画");
-                }
-                else if (enemy != null)
-                {
-                    enemy.PlayShoujiAnimation();
-                    ShowDamageNumber(targetObj.transform.position, evt.ActualDamage);
-                    
-                    // 实时更新血量显示（从UnitState获取最新值）
-                    var unitState = enemy.GetUnitState();
-                    if (unitState != null)
-                    {
-                        enemy.UpdateHp(unitState.CurrentHp, unitState.MaxHp);
-                        enemy.UpdateShield(unitState.Defense);
-                        Debug.Log($"[UI_BattleScene] 实时更新敌人血量: {unitState.CurrentHp}/{unitState.MaxHp}");
-                    }
-                    
-                    Debug.Log("[UI_BattleScene] 播放敌人受击动画");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[UI_BattleScene] 未找到目标UI对象: {evt.TargetId}");
-            }
-
-            // 5. 等待所有动画完成（取较大值：0.5秒动画 + 1.0秒伤害数字）
-            yield return new WaitForSeconds(Mathf.Max(maxDuration, 1.0f));
-
-            // 6. 恢复所有角色的视觉效果
-            RestoreAllUnitsVisualEffect();
-
-            // 7. 通知TimelineResolver动画完成
-            if (_battleManager != null)
-            {
-                _battleManager.SignalAnimationComplete();
-                Debug.Log("[UI_BattleScene] 攻击动画序列完成，已发送完成信号");
-            }
-        }
-
-        /// <summary>
-        /// 应用攻击演出效果（无关角色变黑，有关角色放大）
-        /// </summary>
-        /// <param name="attackerObj">攻击者对象</param>
-        /// <param name="targetObj">目标对象</param>
-        private void ApplyAttackPerformanceEffect(GameObject attackerObj, GameObject targetObj)
-        {
-            // 遍历所有玩家角色
-            foreach (var character in _playerCharacters)
-            {
-                if (character == null || character.gameObject == null) continue;
-
-                // 判断是否为有关角色（攻击者或受击者）
-                bool isRelated = (attackerObj != null && character.gameObject == attackerObj) ||
-                                 (targetObj != null && character.gameObject == targetObj);
-
-                if (isRelated)
-                {
-                    // 有关角色：放大，保持白色
-                    character.SetScale(1.2f);
-                    character.SetColor(Color.white);
-                }
-                else
-                {
-                    // 无关角色：变黑
-                    character.SetColor(Color.black);
-                    character.SetScale(1.0f);
-                }
-            }
-
-            // 遍历所有敌人
-            foreach (var enemy in _enemies)
-            {
-                if (enemy == null || enemy.gameObject == null) continue;
-
-                // 判断是否为有关角色（攻击者或受击者）
-                bool isRelated = (attackerObj != null && enemy.gameObject == attackerObj) ||
-                                 (targetObj != null && enemy.gameObject == targetObj);
-
-                if (isRelated)
-                {
-                    // 有关角色：放大，保持白色
-                    enemy.SetScale(1.2f);
-                    enemy.SetColor(Color.white);
-                }
-                else
-                {
-                    // 无关角色：变黑
-                    enemy.SetColor(Color.black);
-                    enemy.SetScale(1.0f);
-                }
-            }
-
-            Debug.Log("[UI_BattleScene] 应用攻击演出效果：无关角色变黑，有关角色scale=1.2");
-        }
-
-        /// <summary>
-        /// 恢复所有单位的视觉效果（颜色和缩放）
-        /// </summary>
-        private void RestoreAllUnitsVisualEffect()
-        {
-            // 恢复所有玩家角色
-            foreach (var character in _playerCharacters)
-            {
-                if (character != null)
-                {
-                    character.SetColor(Color.white);
-                    character.SetScale(1.0f);
-                }
-            }
-
-            // 恢复所有敌人
-            foreach (var enemy in _enemies)
-            {
-                if (enemy != null)
-                {
-                    enemy.SetColor(Color.white);
-                    enemy.SetScale(1.0f);
-                }
-            }
-
-            Debug.Log("[UI_BattleScene] 恢复所有单位视觉效果：颜色=白色，scale=1.0");
-        }
-
-        /// <summary>
-        /// 显示伤害数字（使用DOTween动画）
-        /// </summary>
-        private void ShowDamageNumber(Vector3 targetPosition, int damage)
-        {
-            if (damage <= 0)
-            {
-                Debug.Log("[UI_BattleScene] 伤害为0，不显示伤害数字");
-                return;
-            }
-
-            GameObject damageTextObj = null;
-            TMPro.TextMeshProUGUI textMesh = null;
-            RectTransform rectTransform = null;
-
-            // 优先使用prefab，如果prefab为空则使用动态创建（向后兼容）
-            if (damageTextPrefab != null)
-            {
-                // 使用prefab实例化
-                damageTextObj = Instantiate(damageTextPrefab, transform);
-                damageTextObj.transform.position = targetPosition;
-                damageTextObj.name = "DamageText";
-
-                // 获取TextMeshPro组件
-                textMesh = damageTextObj.GetComponent<TMPro.TextMeshProUGUI>();
-                if (textMesh == null)
-                {
-                    Debug.LogWarning("[UI_BattleScene] 伤害数字prefab缺少TextMeshProUGUI组件，尝试添加");
-                    textMesh = damageTextObj.AddComponent<TMPro.TextMeshProUGUI>();
-                }
-
-                // 获取RectTransform
-                rectTransform = damageTextObj.GetComponent<RectTransform>();
-                if (rectTransform == null)
-                {
-                    rectTransform = damageTextObj.AddComponent<RectTransform>();
-                }
-            }
-            else
-            {
-                // 回退到动态创建（向后兼容）
-                damageTextObj = new GameObject("DamageText");
-                damageTextObj.transform.SetParent(transform);
-                damageTextObj.transform.position = targetPosition;
-
-                // 添加TextMeshPro组件
-                textMesh = damageTextObj.AddComponent<TMPro.TextMeshProUGUI>();
-                textMesh.fontSize = 48;
-                textMesh.color = Color.red;
-                textMesh.alignment = TMPro.TextAlignmentOptions.Center;
-
-                // 设置RectTransform
-                rectTransform = damageTextObj.GetComponent<RectTransform>();
-                rectTransform.sizeDelta = new Vector2(200, 100);
-            }
-
-            // 设置伤害数值
-            if (textMesh != null)
-            {
-                textMesh.text = damage.ToString();
-            }
-
-            // DOTween动画：向上飘动 + 淡出
-            Sequence damageSequence = DOTween.Sequence();
-            damageSequence.Append(
-                rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, 1.0f)
-                    .SetEase(Ease.OutQuad)
-            );
-            if (textMesh != null)
-            {
-                damageSequence.Join(
-                    textMesh.DOFade(0f, 1.0f).SetEase(Ease.InQuad)
-                );
-            }
-            damageSequence.OnComplete(() => Destroy(damageTextObj));
-
-            Debug.Log($"[UI_BattleScene] 显示伤害数字: {damage} (使用{(damageTextPrefab != null ? "Prefab" : "动态创建")})");
-        }
-
         #endregion
-
-
-    
     }
 }
 

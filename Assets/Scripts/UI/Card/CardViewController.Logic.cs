@@ -540,7 +540,7 @@ namespace Scripts.UI
             // 设置左侧消耗（引导时间）
             if (Txt_LeftCost != null)
             {
-                Txt_LeftCost.text = _currentCard.Channeling.ToString();
+                Txt_LeftCost.text = _currentCard.Duration.ToString();
             }
 
             // 设置右侧消耗（后摇）
@@ -2698,53 +2698,34 @@ namespace Scripts.UI
                 return;
             }
 
-            // 查找施法者时间轴（放置到打出者的时间轴）
-            Timeline.TimelineTrackView targetTimeline = null;
-            if (!string.IsNullOrEmpty(ownerId))
+            string ownerUnitId = ResolveOwnerUnitId(ownerId);
+            if (string.IsNullOrEmpty(ownerUnitId))
             {
-                var battleScene = FindObjectOfType<UI_BattleScene>();
-                if (battleScene != null)
-                {
-                    targetTimeline = battleScene.FindTimelineByUnitId(ownerId);
-                }
-            }
-            if (targetTimeline == null)
-            {
-                Debug.LogWarning("[CardViewController] 无法找到施法者时间轴");
+                Debug.LogWarning($"[CardViewController] 无法解析施法者单位ID: ownerId={ownerId}");
                 RestoreCardToHandState();
                 return;
             }
 
-            // 获取正确的UnitId（用于解算系统），而不是CharacterEnum字符串
-            string unitIdForResolver = targetTimeline.GetUnitId();
-            if (string.IsNullOrEmpty(unitIdForResolver))
+            var battleManager = Ashlight.Battle.BattleManager.Instance;
+            if (battleManager == null)
             {
-                // 如果无法获取UnitId，回退到使用ownerId（兼容旧代码）
-                unitIdForResolver = ownerId;
-                Debug.LogWarning($"[CardViewController] 无法获取UnitId，使用ownerId: {ownerId}");
+                Debug.LogWarning("[CardViewController] BattleManager 不存在，无法立即执行卡牌");
+                RestoreCardToHandState();
+                return;
             }
 
-            // 检查slot 0是否可用
-            int slotIndex = 0;
-            int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
-
-            if (!targetTimeline.GetTrack().CanPlaceCard(slotIndex, totalSlots))
+            bool success = battleManager.TryPlayCardImmediately(_currentCard, ownerUnitId, targetId, InstanceId);
+            if (!success)
             {
-                // slot 0被占用,查找下一个可用slot
-                slotIndex = FindNextAvailableSlot(targetTimeline, totalSlots);
-                if (slotIndex < 0)
-                {
-                    Debug.LogWarning("[CardViewController] 时间轴已满,无可用位置");
-                    RestoreCardToHandState();
-                    return;
-                }
-                Debug.Log($"[CardViewController] Slot 0已被占用,使用slot {slotIndex}");
+                Debug.LogWarning("[CardViewController] 立即执行卡牌失败，恢复手牌状态");
+                RestoreCardToHandState();
+                return;
             }
 
-            // 放置卡牌（使用UnitId而不是CharacterEnum字符串，确保解算系统能正确找到单位）
-            targetTimeline.OnCardDropped(_currentCard.Id, slotIndex, unitIdForResolver, targetId, this);
+            var battleScene = FindObjectOfType<UI_BattleScene>();
+            battleScene?.ConsumeHandCard(this);
 
-            Debug.Log($"[CardViewController] 放置卡牌完成: card={_currentCard?.Name}, ownerId={unitIdForResolver}, targetId={targetId}, track={targetTimeline?.name}, slot={slotIndex}");
+            Debug.Log($"[CardViewController] 立即执行卡牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}");
         }
 
         /// <summary>
@@ -2820,6 +2801,50 @@ namespace Scripts.UI
                 }
             }
             return -1;
+        }
+
+        /// <summary>
+        /// 解析施法者单位ID（优先返回 player_x）
+        /// </summary>
+        private string ResolveOwnerUnitId(string ownerId)
+        {
+            if (string.IsNullOrEmpty(ownerId))
+            {
+                return null;
+            }
+
+            if (ownerId.StartsWith("player_"))
+            {
+                return ownerId;
+            }
+
+            var battleScene = FindObjectOfType<UI_BattleScene>();
+            if (battleScene == null)
+            {
+                return ownerId;
+            }
+
+            var characters = battleScene.GetAllPlayerCharacters();
+            foreach (var character in characters)
+            {
+                if (character == null)
+                {
+                    continue;
+                }
+
+                var unitState = character.GetUnitState();
+                if (unitState == null)
+                {
+                    continue;
+                }
+
+                if (unitState.ConfigId == ownerId)
+                {
+                    return unitState.UnitId;
+                }
+            }
+
+            return ownerId;
         }
 
         /// <summary>

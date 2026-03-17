@@ -202,6 +202,42 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
+        /// 使用卡牌（通过 InstanceId）
+        /// </summary>
+        /// <param name="instanceId">卡牌实例ID</param>
+        /// <param name="isExhaust">是否为消耗型卡牌</param>
+        /// <returns>是否成功使用</returns>
+        public bool UseCardByInstanceId(string instanceId, bool isExhaust = false)
+        {
+            var card = Hand.FirstOrDefault(c => c.InstanceId == instanceId);
+            if (card == null)
+            {
+                Debug.LogWarning($"[BattleDeckSystem] 使用卡牌失败：手牌中不存在 InstanceId={instanceId}");
+                return false;
+            }
+
+            return UseCard(card, isExhaust);
+        }
+
+        /// <summary>
+        /// 使用卡牌（通过 CardId，兼容旧逻辑）
+        /// </summary>
+        /// <param name="cardId">卡牌ID</param>
+        /// <param name="isExhaust">是否为消耗型卡牌</param>
+        /// <returns>是否成功使用</returns>
+        public bool UseCardByCardId(string cardId, bool isExhaust = false)
+        {
+            var card = Hand.FirstOrDefault(c => c.CardId == cardId);
+            if (card == null)
+            {
+                Debug.LogWarning($"[BattleDeckSystem] 使用卡牌失败：手牌中不存在 CardId={cardId}");
+                return false;
+            }
+
+            return UseCard(card, isExhaust);
+        }
+
+        /// <summary>
         /// 将卡牌放置到时间轴（从手牌移到InPlayPile）
         /// </summary>
         /// <param name="card">要放置的卡牌</param>
