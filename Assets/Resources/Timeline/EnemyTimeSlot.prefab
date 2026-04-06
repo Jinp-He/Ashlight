@@ -130,6 +130,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b21de3d2564fd91408a67d31788cbb0e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _slotIndex: -1
   descriptionOffset: {x: 50, y: 50}
   DescriptionViewController: {fileID: 29765451564651926}
   Channeling: {fileID: 6385890473927227244}

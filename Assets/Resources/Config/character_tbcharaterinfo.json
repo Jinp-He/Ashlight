@@ -4,35 +4,39 @@
     "Name": "战士",
     "BaseHp": 100,
     "BaseDeck": [
-      "Rocket001",
-      "Rocket002",
-      "Rocket003",
-      "Rocket004",
-      "Rocket005"
-    ]
+      "Rocket010",
+      "Rocket011",
+      "Rocket012"
+    ],
+    "Speed": 5,
+    "Draw": 4,
+    "Energy": 5
   },
   {
     "Character": 0,
     "Name": "法师",
     "BaseHp": 100,
     "BaseDeck": [
-      "Irene001",
-      "Irene002",
-      "Irene003",
-      "Irene004",
-      "Irene005"
-    ]
+      "Irene013",
+      "Irene014",
+      "Irene015",
+      "Irene016"
+    ],
+    "Speed": 4,
+    "Draw": 4,
+    "Energy": 4
   },
   {
     "Character": 2,
     "Name": "游侠",
     "BaseHp": 100,
     "BaseDeck": [
-      "Zhouzhou001",
-      "Zhouzhou002",
-      "Zhouzhou003",
-      "Zhouzhou004",
-      "Zhouzhou005"
-    ]
+      "Zhouzhou013",
+      "Zhouzhou014",
+      "Zhouzhou015"
+    ],
+    "Speed": 3,
+    "Draw": 4,
+    "Energy": 3
   }
 ]

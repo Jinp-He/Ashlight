@@ -160,6 +160,11 @@ namespace Ashlight.Common.Events
         /// 是否为预解算模式（预解算时不播放动画）
         /// </summary>
         public bool IsPrediction;
+
+        /// <summary>
+        /// 为 true 时不播放战斗演出（例如 ATB 下打出执行牌仅宣告出牌，效果在执行轨再结算）
+        /// </summary>
+        public bool SkipBattleAnimation;
     }
 
     /// <summary>

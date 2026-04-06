@@ -55,11 +55,49 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public string ConfigId { get; set; }
 
+        // ========== ATB 系统新增字段 ==========
+
+        /// <summary>
+        /// 单位速度，决定行动条推进效率
+        /// </summary>
+        public int Speed { get; set; }
+
+        /// <summary>
+        /// 基础能量（每回合刷新值）
+        /// </summary>
+        public int BaseEnergy { get; set; }
+
+        /// <summary>
+        /// 基础抽牌数（每回合抽牌值）
+        /// </summary>
+        public int BaseDrawCount { get; set; }
+
+        /// <summary>
+        /// 当前回合剩余能量
+        /// </summary>
+        public int CurrentEnergy { get; set; }
+
+        /// <summary>
+        /// 行动条状态
+        /// </summary>
+        public ActionBarState ActionBar { get; set; }
+
+        /// <summary>
+        /// 过载状态
+        /// </summary>
+        public OverloadState Overload { get; set; }
+
         public UnitState()
         {
             Buffs = new List<BuffState>();
             Track = new TimelineTrack();
+            ActionBar = new ActionBarState();
+            Overload = new OverloadState();
             IsDead = false;
+            Speed = 10;
+            BaseEnergy = 3;
+            BaseDrawCount = 5;
+            CurrentEnergy = 0;
         }
 
         /// <summary>
@@ -224,11 +262,16 @@ namespace Ashlight.Battle.Core.Data
                 IsDead = this.IsDead,
                 IsPlayerUnit = this.IsPlayerUnit,
                 ConfigId = this.ConfigId,
+                Speed = this.Speed,
+                BaseEnergy = this.BaseEnergy,
+                BaseDrawCount = this.BaseDrawCount,
+                CurrentEnergy = this.CurrentEnergy,
                 Buffs = new List<BuffState>(),
-                Track = this.Track?.Clone()
+                Track = this.Track?.Clone(),
+                ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
+                Overload = this.Overload?.Clone() ?? new OverloadState()
             };
 
-            // 深拷贝Buffs列表
             if (this.Buffs != null)
             {
                 foreach (var buff in this.Buffs)

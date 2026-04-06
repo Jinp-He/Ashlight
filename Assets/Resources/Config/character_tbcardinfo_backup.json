@@ -28,7 +28,7 @@
         "$type": "AttackExtraEffect",
         "EffectType": 0,
         "damage": 6,
-        "conditions": "Channeling|Recoit",
+        "conditions": "Channeling|Recoil",
         "multiplier": 2
       }
     ],

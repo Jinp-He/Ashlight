@@ -227,7 +227,7 @@ namespace Scripts.UI.Timeline
             }
             
             // 检查是否可以放置
-            int totalSlots = cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil;
+            int totalSlots = 1;
             
             // 检查位置
             bool canPlaceByPosition = _track.CanPlaceCard(slotIndex, totalSlots);
@@ -387,7 +387,7 @@ namespace Scripts.UI.Timeline
                 return false;
             }
             
-            int totalSlots = cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil;
+            int totalSlots = 1;
             // Debug.Log($"[TimelineTrackView] 卡牌 {cardInfo.Name} 需要 {totalSlots} 个格子");
             
             // 如果是同一轨道
@@ -465,7 +465,7 @@ namespace Scripts.UI.Timeline
             
             // Debug.Log($"[TimelineTrackView] 准备撤回卡牌: {cardInfo.Name}");
             
-            int totalSlots = cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil;
+            int totalSlots = 1;
             
             // 从时间轴数据中移除
             _track.RemoveCard(slotIndex, totalSlots);
@@ -618,7 +618,7 @@ namespace Scripts.UI.Timeline
             }
 
             // 检查位置是否有效
-            int totalSlots = skillInfo.Channeling + skillInfo.Duration + skillInfo.Recoil;
+            int totalSlots = skillInfo.ExecutingCost;
             if (slotIndex < 0 || slotIndex + totalSlots > TimelineTrack.TrackLength)
             {
                 Debug.LogWarning($"[TimelineTrackView] 位置 {slotIndex} 超出范围（需要 {totalSlots} 个格子）");
@@ -832,7 +832,7 @@ namespace Scripts.UI.Timeline
             float startX = startIndex * (slotWidth + slotSpacing);
             rect.anchoredPosition = new Vector2(startX, 0);
             
-            // CardTimeSlot 自身已经根据 Channeling/Duration/Recoil 处理了显示
+            // CardTimeSlot 自身已经处理了显示
             // 不需要在这里设置 sizeDelta
             
             // Debug.Log($"[TimelineTrackView] 设置CardTimeSlot位置: 起始索引={startIndex}, X={startX}");
@@ -847,7 +847,7 @@ namespace Scripts.UI.Timeline
             var cardInfo = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(id);
             if (cardInfo != null)
             {
-                return cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil;
+                return 1;
             }
             
             // 如果不是卡牌，尝试作为敌人技能ID查找（用于敌人时间轴）
@@ -856,7 +856,7 @@ namespace Scripts.UI.Timeline
                 var skillInfo = ConfigLoader.Tables?.TbEnemySkillInfo?.GetOrDefault(id);
                 if (skillInfo != null)
                 {
-                    return skillInfo.Channeling + skillInfo.Duration + skillInfo.Recoil;
+                    return skillInfo.ExecutingCost;
                 }
             }
             
@@ -1060,7 +1060,7 @@ namespace Scripts.UI.Timeline
                         }
                         
                         // 跳过这个技能占用的所有格子
-                        int totalSlots = skillInfo.Channeling + skillInfo.Duration + skillInfo.Recoil;
+                        int totalSlots = skillInfo.ExecutingCost;
                         i += totalSlots;
                     }
                     else
@@ -1149,7 +1149,7 @@ namespace Scripts.UI.Timeline
                         else
                         {
                             // 也可能卡牌跨越多个格子，检查相邻位置
-                            int totalSlots = cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil;
+                            int totalSlots = 1;
                             for (int i = 0; i < totalSlots && newSlotIndex + i < TimelineTrack.TrackLength; i++)
                             {
                                 var checkBlock = _track.GetBlock(newSlotIndex + i);
@@ -1198,7 +1198,7 @@ namespace Scripts.UI.Timeline
                         dataLayerCheckResult = $"✗ 数据层未找到：卡片 {cardName} (CardId: {cardInfo.Id})";
                         Debug.LogWarning($"<color=orange>{dataLayerCheckResult}</color>");
                         Debug.LogWarning($"<color=orange>  当前索引: {currentSlotIndex}, 新索引: {newSlotIndex}</color>");
-                        Debug.LogWarning($"<color=orange>  数据层检查范围: 新索引[{newSlotIndex}]到[{newSlotIndex + cardInfo.Channeling + cardInfo.Duration + cardInfo.Recoil - 1}]</color>");
+                        Debug.LogWarning($"<color=orange>  数据层检查范围: 新索引[{newSlotIndex}]</color>");
                         
                         // 打印数据层当前状态（用于调试）
                         Debug.LogWarning($"<color=orange>  数据层当前状态（前10格）:</color>");
@@ -1283,8 +1283,7 @@ namespace Scripts.UI.Timeline
                     int skillEndIndex = newSlotIndex;
                     if (skillInfo != null)
                     {
-                        // 注意：索引起始点是Duration的开始位置，不包括Channeling
-                        skillTotalSlots = skillInfo.Duration + skillInfo.Recoil;
+                        skillTotalSlots = skillInfo.ExecutingCost;
                         skillEndIndex = newSlotIndex + skillTotalSlots - 1; // 结束位置
                     }
                     

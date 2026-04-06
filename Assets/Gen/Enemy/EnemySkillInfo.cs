@@ -21,9 +21,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
         { if(!_buf["Name"].IsString) { throw new SerializationException(); }  Name = _buf["Name"]; }
         { if(!_buf["Description"].IsString) { throw new SerializationException(); }  Description = _buf["Description"]; }
         { var __json0 = _buf["Effects"]; if(!__json0.IsArray) { throw new SerializationException(); } Effects = new System.Collections.Generic.List<Effect>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { Effect __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.Effect.DeserializeEffect(__e0);  }  Effects.Add(__v0); }   }
-        { if(!_buf["Channeling"].IsNumber) { throw new SerializationException(); }  Channeling = _buf["Channeling"]; }
-        { if(!_buf["Duration"].IsNumber) { throw new SerializationException(); }  Duration = _buf["Duration"]; }
-        { if(!_buf["Recoil"].IsNumber) { throw new SerializationException(); }  Recoil = _buf["Recoil"]; }
+        { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
         { if(!_buf["TargetType"].IsNumber) { throw new SerializationException(); }  TargetType = (TargetTypeEnum)_buf["TargetType"].AsInt; }
     }
 
@@ -36,9 +34,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
     public readonly string Name;
     public readonly string Description;
     public readonly System.Collections.Generic.List<Effect> Effects;
-    public readonly int Channeling;
-    public readonly int Duration;
-    public readonly int Recoil;
+    public readonly int ExecutingCost;
     public readonly TargetTypeEnum TargetType;
    
     public const int __ID__ = -1485659299;
@@ -56,9 +52,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
         + "Name:" + Name + ","
         + "Description:" + Description + ","
         + "Effects:" + Luban.StringUtil.CollectionToString(Effects) + ","
-        + "Channeling:" + Channeling + ","
-        + "Duration:" + Duration + ","
-        + "Recoil:" + Recoil + ","
+        + "ExecutingCost:" + ExecutingCost + ","
         + "TargetType:" + TargetType + ","
         + "}";
     }

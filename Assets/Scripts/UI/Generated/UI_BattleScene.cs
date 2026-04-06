@@ -19,9 +19,11 @@ namespace Scripts.UI
         public RectTransform TimeLineContainer;
         public RectTransform CardDeck;
         public RectTransform CardBin;
+        public ATB ATB;
         public Button Btn_EndRoundBase;
         public Button Btn_EmptyBase;
         public Button Btn_PaikuBase;
+        public EnergyBar EnergyBar;
         public RectTransform BattleAnimation;
 
         #endregion
@@ -65,6 +67,9 @@ namespace Scripts.UI
                     case "CardBin":
                         CardBin = bind.GetComponent<RectTransform>();
                         break;
+                    case "ATB":
+                        ATB = bind.GetComponent<ATB>();
+                        break;
                     case "Btn_EndRoundBase":
                         Btn_EndRoundBase = bind.GetComponent<Button>();
                         break;
@@ -73,6 +78,9 @@ namespace Scripts.UI
                         break;
                     case "Btn_PaikuBase":
                         Btn_PaikuBase = bind.GetComponent<Button>();
+                        break;
+                    case "EnergyBar":
+                        EnergyBar = bind.GetComponent<EnergyBar>();
                         break;
                     case "BattleAnimation":
                         BattleAnimation = bind.GetComponent<RectTransform>();

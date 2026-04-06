@@ -1,25 +1,71 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ashlight.Config;
 using Ashlight.State.Runtime;
+using cfg;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Data
 {
     /// <summary>
-    /// 战斗卡组系统
-    /// 管理抽牌堆、弃牌堆、手牌区（类似杀戮尖塔）
-    /// POCO类，支持深拷贝用于预测系统
+    /// 单个参战角色的抽牌堆 + 弃牌堆（与全局手牌区配合使用）
+    /// </summary>
+    public sealed class CharacterDeckSplit
+    {
+        public List<CardRuntimeState> DrawPile { get; set; }
+        public List<CardRuntimeState> DiscardPile { get; set; }
+
+        public CharacterDeckSplit()
+        {
+            DrawPile = new List<CardRuntimeState>();
+            DiscardPile = new List<CardRuntimeState>();
+        }
+
+        public CharacterDeckSplit Clone()
+        {
+            var clone = new CharacterDeckSplit();
+            foreach (var c in DrawPile)
+            {
+                if (c != null)
+                {
+                    clone.DrawPile.Add(c.Clone());
+                }
+            }
+
+            foreach (var c in DiscardPile)
+            {
+                if (c != null)
+                {
+                    clone.DiscardPile.Add(c.Clone());
+                }
+            }
+
+            return clone;
+        }
+    }
+
+    /// <summary>
+    /// 战斗卡组系统：每名玩家角色独立抽/弃牌堆，开局按 BelongTo 分堆并各自洗牌；手牌区仍全局共享。
     /// </summary>
     public class BattleDeckSystem
     {
         /// <summary>
-        /// 抽牌堆
+        /// 参战角色顺序（用于归属兜底、兼容旧 DrawCard）
+        /// </summary>
+        private readonly List<CharacterEnum> _partyCharacterOrder = new List<CharacterEnum>();
+
+        /// <summary>
+        /// 每名角色的抽牌堆与弃牌堆
+        /// </summary>
+        public Dictionary<CharacterEnum, CharacterDeckSplit> PerCharacterDecks { get; set; }
+
+        /// <summary>
+        /// 抽牌堆（过渡期保留，分堆后通常为空）
         /// </summary>
         public List<CardRuntimeState> DrawPile { get; set; }
 
         /// <summary>
-        /// 弃牌堆
+        /// 弃牌堆（过渡期保留，分堆后通常为空）
         /// </summary>
         public List<CardRuntimeState> DiscardPile { get; set; }
 
@@ -38,13 +84,11 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public List<CardRuntimeState> InPlayPile { get; set; }
 
-        /// <summary>
-        /// 随机数生成器（用于洗牌）
-        /// </summary>
         private System.Random _random;
 
         public BattleDeckSystem()
         {
+            PerCharacterDecks = new Dictionary<CharacterEnum, CharacterDeckSplit>();
             DrawPile = new List<CardRuntimeState>();
             DiscardPile = new List<CardRuntimeState>();
             Hand = new List<CardRuntimeState>();
@@ -54,9 +98,78 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
-        /// 初始化卡组
+        /// 按参战角色拆分牌堆：每张牌根据 CardInfo.BelongTo 放入对应角色抽牌堆并各自洗牌。
         /// </summary>
-        /// <param name="cards">所有卡牌列表</param>
+        public void Initialize(List<CardRuntimeState> cards, IList<CharacterEnum> partyCharacters)
+        {
+            if (cards == null)
+            {
+                Debug.LogError("[BattleDeckSystem] 初始化卡组失败：卡牌列表为null");
+                return;
+            }
+
+            DrawPile.Clear();
+            DiscardPile.Clear();
+            Hand.Clear();
+            RemovedPile.Clear();
+            InPlayPile.Clear();
+            PerCharacterDecks.Clear();
+            _partyCharacterOrder.Clear();
+
+            if (partyCharacters == null || partyCharacters.Count == 0)
+            {
+                Debug.LogError("[BattleDeckSystem] 参战角色列表为空，无法按角色分堆");
+                return;
+            }
+
+            var seen = new HashSet<CharacterEnum>();
+            foreach (var p in partyCharacters)
+            {
+                if (seen.Add(p))
+                {
+                    _partyCharacterOrder.Add(p);
+                    PerCharacterDecks[p] = new CharacterDeckSplit();
+                }
+            }
+
+            foreach (var card in cards)
+            {
+                if (card == null)
+                {
+                    continue;
+                }
+
+                var c = card.Clone();
+                var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(c.CardId);
+                CharacterEnum owner = info != null ? info.BelongTo : _partyCharacterOrder[0];
+
+                if (!PerCharacterDecks.ContainsKey(owner))
+                {
+                    Debug.LogWarning($"[BattleDeckSystem] 卡牌 {c.CardId} 归属 {owner} 不在本战队伍中，归入队伍首位 {_partyCharacterOrder[0]}");
+                    owner = _partyCharacterOrder[0];
+                }
+
+                PerCharacterDecks[owner].DrawPile.Add(c);
+            }
+
+            foreach (var split in PerCharacterDecks.Values)
+            {
+                ShufflePile(split.DrawPile);
+            }
+
+            int total = 0;
+            foreach (var kv in PerCharacterDecks)
+            {
+                total += kv.Value.DrawPile.Count;
+                Debug.Log($"[BattleDeckSystem] 角色 {kv.Key} 抽牌堆: {kv.Value.DrawPile.Count} 张（已洗牌）");
+            }
+
+            Debug.Log($"[BattleDeckSystem] 按角色分堆完成，合计 {total} 张");
+        }
+
+        /// <summary>
+        /// 兼容旧调用：将所有牌放入单一抽牌堆（不推荐）
+        /// </summary>
         public void Initialize(List<CardRuntimeState> cards)
         {
             if (cards == null)
@@ -65,14 +178,14 @@ namespace Ashlight.Battle.Core.Data
                 return;
             }
 
-            // 清空所有区域
             DrawPile.Clear();
             DiscardPile.Clear();
             Hand.Clear();
             RemovedPile.Clear();
             InPlayPile.Clear();
+            PerCharacterDecks.Clear();
+            _partyCharacterOrder.Clear();
 
-            // 将所有卡牌放入抽牌堆
             foreach (var card in cards)
             {
                 if (card != null)
@@ -81,39 +194,127 @@ namespace Ashlight.Battle.Core.Data
                 }
             }
 
-            Debug.Log($"[BattleDeckSystem] 卡组初始化完成，抽牌堆: {DrawPile.Count} 张");
+            ShuffleDeck();
+            Debug.Log($"[BattleDeckSystem] 单堆模式初始化，抽牌堆: {DrawPile.Count} 张");
+        }
+
+        private void ShufflePile(List<CardRuntimeState> pile)
+        {
+            if (pile == null)
+            {
+                return;
+            }
+
+            int n = pile.Count;
+            for (int i = n - 1; i > 0; i--)
+            {
+                int j = _random.Next(0, i + 1);
+                var temp = pile[i];
+                pile[i] = pile[j];
+                pile[j] = temp;
+            }
         }
 
         /// <summary>
-        /// 洗牌（使用Fisher-Yates洗牌算法）
+        /// 洗牌：各角色抽牌堆分别洗牌；若仍存在旧版全局 DrawPile 亦洗牌。
         /// </summary>
         public void ShuffleDeck()
         {
+            if (PerCharacterDecks != null)
+            {
+                foreach (var split in PerCharacterDecks.Values)
+                {
+                    ShufflePile(split.DrawPile);
+                }
+            }
+
             int n = DrawPile.Count;
             for (int i = n - 1; i > 0; i--)
             {
                 int j = _random.Next(0, i + 1);
-                // 交换
                 var temp = DrawPile[i];
                 DrawPile[i] = DrawPile[j];
                 DrawPile[j] = temp;
             }
 
-            Debug.Log($"[BattleDeckSystem] 抽牌堆已洗牌: {DrawPile.Count} 张");
+            Debug.Log("[BattleDeckSystem] ShuffleDeck 完成");
         }
 
         /// <summary>
-        /// 抽牌
+        /// 从指定角色的牌堆顶抽牌；该角色抽牌堆空则将其弃牌堆洗回抽牌堆再继续。
         /// </summary>
-        /// <param name="count">抽牌数量</param>
-        /// <returns>实际抽到的卡牌数量</returns>
-        public int DrawCard(int count)
+        public int DrawCardForCharacter(CharacterEnum characterId, int count)
         {
-            int drawnCount = 0;
+            if (count <= 0)
+            {
+                return 0;
+            }
 
+            if (!PerCharacterDecks.TryGetValue(characterId, out var split) || split == null)
+            {
+                Debug.LogWarning($"[BattleDeckSystem] 未找到角色牌堆: {characterId}");
+                return 0;
+            }
+
+            int drawnCount = 0;
             for (int i = 0; i < count; i++)
             {
-                // 如果抽牌堆为空，将弃牌堆洗入抽牌堆
+                if (split.DrawPile.Count == 0)
+                {
+                    if (split.DiscardPile.Count == 0)
+                    {
+                        Debug.LogWarning($"[BattleDeckSystem] 角色 {characterId} 抽牌堆与弃牌堆均为空");
+                        break;
+                    }
+
+                    ReshuffleCharacterDiscardIntoDraw(split);
+                }
+
+                if (split.DrawPile.Count > 0)
+                {
+                    var card = split.DrawPile[0];
+                    split.DrawPile.RemoveAt(0);
+                    Hand.Add(card);
+                    drawnCount++;
+                    Debug.Log($"[BattleDeckSystem] 抽牌({characterId}): {card.CardId}");
+                }
+            }
+
+            Debug.Log($"[BattleDeckSystem] 角色 {characterId} 抽牌完成: {drawnCount}/{count}，当前手牌: {Hand.Count}");
+            return drawnCount;
+        }
+
+        private void ReshuffleCharacterDiscardIntoDraw(CharacterDeckSplit split)
+        {
+            if (split == null || split.DiscardPile.Count == 0)
+            {
+                return;
+            }
+
+            split.DrawPile.AddRange(split.DiscardPile);
+            split.DiscardPile.Clear();
+            ShufflePile(split.DrawPile);
+            Debug.Log("[BattleDeckSystem] 角色牌堆：弃牌洗回抽牌堆");
+        }
+
+        /// <summary>
+        /// 兼容旧逻辑：对队伍首位角色抽牌；无分堆时走单堆抽顶。
+        /// </summary>
+        public int DrawCard(int count)
+        {
+            if (count <= 0)
+            {
+                return 0;
+            }
+
+            if (_partyCharacterOrder.Count > 0 && PerCharacterDecks != null && PerCharacterDecks.Count > 0)
+            {
+                return DrawCardForCharacter(_partyCharacterOrder[0], count);
+            }
+
+            int drawnCount = 0;
+            for (int i = 0; i < count; i++)
+            {
                 if (DrawPile.Count == 0)
                 {
                     if (DiscardPile.Count == 0)
@@ -122,8 +323,9 @@ namespace Ashlight.Battle.Core.Data
                         break;
                     }
 
-                    Debug.Log($"[BattleDeckSystem] 抽牌堆为空，将弃牌堆 {DiscardPile.Count} 张卡牌洗入抽牌堆");
-                    ReshuffleDiscardIntoDraw();
+                    DrawPile.AddRange(DiscardPile);
+                    DiscardPile.Clear();
+                    ShufflePile(DrawPile);
                 }
 
                 if (DrawPile.Count > 0)
@@ -132,19 +334,45 @@ namespace Ashlight.Battle.Core.Data
                     DrawPile.RemoveAt(0);
                     Hand.Add(card);
                     drawnCount++;
-                    Debug.Log($"[BattleDeckSystem] 抽牌: {card.CardId}");
                 }
             }
 
-            Debug.Log($"[BattleDeckSystem] 抽牌完成: {drawnCount}/{count}，当前手牌: {Hand.Count} 张");
             return drawnCount;
         }
 
-        /// <summary>
-        /// 弃牌
-        /// </summary>
-        /// <param name="card">要弃掉的卡牌</param>
-        /// <returns>是否成功弃牌</returns>
+        private CharacterEnum ResolveCharacterForCard(CardRuntimeState card)
+        {
+            if (card == null)
+            {
+                return _partyCharacterOrder.Count > 0 ? _partyCharacterOrder[0] : default;
+            }
+
+            var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(card.CardId);
+            if (info != null && PerCharacterDecks != null && PerCharacterDecks.ContainsKey(info.BelongTo))
+            {
+                return info.BelongTo;
+            }
+
+            return _partyCharacterOrder.Count > 0 ? _partyCharacterOrder[0] : default;
+        }
+
+        private CharacterDeckSplit GetSplitForDiscard(CardRuntimeState card)
+        {
+            var ch = ResolveCharacterForCard(card);
+            if (PerCharacterDecks != null && PerCharacterDecks.TryGetValue(ch, out var split) && split != null)
+            {
+                return split;
+            }
+
+            if (_partyCharacterOrder.Count > 0 && PerCharacterDecks != null &&
+                PerCharacterDecks.TryGetValue(_partyCharacterOrder[0], out var first) && first != null)
+            {
+                return first;
+            }
+
+            return null;
+        }
+
         public bool DiscardCard(CardRuntimeState card)
         {
             if (card == null)
@@ -160,17 +388,20 @@ namespace Ashlight.Battle.Core.Data
             }
 
             Hand.Remove(card);
-            DiscardPile.Add(card);
+            var split = GetSplitForDiscard(card);
+            if (split != null)
+            {
+                split.DiscardPile.Add(card);
+            }
+            else
+            {
+                DiscardPile.Add(card);
+            }
+
             Debug.Log($"[BattleDeckSystem] 弃牌: {card.CardId}");
             return true;
         }
 
-        /// <summary>
-        /// 使用卡牌（从手牌移除，放入弃牌堆）
-        /// </summary>
-        /// <param name="card">要使用的卡牌</param>
-        /// <param name="isExhaust">是否为消耗型卡牌（消耗型卡牌不进入弃牌堆，而是移除）</param>
-        /// <returns>是否成功使用</returns>
         public bool UseCard(CardRuntimeState card, bool isExhaust = false)
         {
             if (card == null)
@@ -190,23 +421,23 @@ namespace Ashlight.Battle.Core.Data
             if (isExhaust)
             {
                 RemovedPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 使用并消耗卡牌: {card.CardId}");
             }
             else
             {
-                DiscardPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 使用卡牌: {card.CardId}");
+                var split = GetSplitForDiscard(card);
+                if (split != null)
+                {
+                    split.DiscardPile.Add(card);
+                }
+                else
+                {
+                    DiscardPile.Add(card);
+                }
             }
 
             return true;
         }
 
-        /// <summary>
-        /// 使用卡牌（通过 InstanceId）
-        /// </summary>
-        /// <param name="instanceId">卡牌实例ID</param>
-        /// <param name="isExhaust">是否为消耗型卡牌</param>
-        /// <returns>是否成功使用</returns>
         public bool UseCardByInstanceId(string instanceId, bool isExhaust = false)
         {
             var card = Hand.FirstOrDefault(c => c.InstanceId == instanceId);
@@ -219,12 +450,6 @@ namespace Ashlight.Battle.Core.Data
             return UseCard(card, isExhaust);
         }
 
-        /// <summary>
-        /// 使用卡牌（通过 CardId，兼容旧逻辑）
-        /// </summary>
-        /// <param name="cardId">卡牌ID</param>
-        /// <param name="isExhaust">是否为消耗型卡牌</param>
-        /// <returns>是否成功使用</returns>
         public bool UseCardByCardId(string cardId, bool isExhaust = false)
         {
             var card = Hand.FirstOrDefault(c => c.CardId == cardId);
@@ -237,11 +462,6 @@ namespace Ashlight.Battle.Core.Data
             return UseCard(card, isExhaust);
         }
 
-        /// <summary>
-        /// 将卡牌放置到时间轴（从手牌移到InPlayPile）
-        /// </summary>
-        /// <param name="card">要放置的卡牌</param>
-        /// <returns>是否成功</returns>
         public bool PlayCardToTimeline(CardRuntimeState card)
         {
             if (card == null)
@@ -262,11 +482,6 @@ namespace Ashlight.Battle.Core.Data
             return true;
         }
 
-        /// <summary>
-        /// 通过卡牌ID将卡牌放置到时间轴
-        /// </summary>
-        /// <param name="cardId">卡牌ID</param>
-        /// <returns>是否成功</returns>
         public bool PlayCardToTimelineById(string cardId)
         {
             var card = Hand.FirstOrDefault(c => c.CardId == cardId);
@@ -275,14 +490,10 @@ namespace Ashlight.Battle.Core.Data
                 Debug.LogWarning($"[BattleDeckSystem] 放置卡牌到时间轴失败：手牌中不存在卡牌ID {cardId}");
                 return false;
             }
+
             return PlayCardToTimeline(card);
         }
 
-        /// <summary>
-        /// 通过 InstanceId 将卡牌放置到时间轴
-        /// </summary>
-        /// <param name="instanceId">卡牌实例ID</param>
-        /// <returns>是否成功</returns>
         public bool PlayCardToTimelineByInstanceId(string instanceId)
         {
             var card = Hand.FirstOrDefault(c => c.InstanceId == instanceId);
@@ -291,15 +502,10 @@ namespace Ashlight.Battle.Core.Data
                 Debug.LogWarning($"[BattleDeckSystem] 放置卡牌到时间轴失败：手牌中不存在 InstanceId={instanceId}");
                 return false;
             }
+
             return PlayCardToTimeline(card);
         }
 
-        /// <summary>
-        /// 卡牌执行完毕，从InPlayPile移到弃牌堆
-        /// </summary>
-        /// <param name="cardId">卡牌ID</param>
-        /// <param name="isExhaust">是否为消耗型卡牌</param>
-        /// <returns>是否成功</returns>
         public bool FinishPlayingCard(string cardId, bool isExhaust = false)
         {
             var card = InPlayPile.FirstOrDefault(c => c.CardId == cardId);
@@ -314,23 +520,23 @@ namespace Ashlight.Battle.Core.Data
             if (isExhaust)
             {
                 RemovedPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 卡牌执行完毕并消耗: {cardId}");
             }
             else
             {
-                DiscardPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 卡牌执行完毕，移入弃牌堆: {cardId}");
+                var split = GetSplitForDiscard(card);
+                if (split != null)
+                {
+                    split.DiscardPile.Add(card);
+                }
+                else
+                {
+                    DiscardPile.Add(card);
+                }
             }
 
             return true;
         }
 
-        /// <summary>
-        /// 卡牌执行完毕，从InPlayPile移到弃牌堆（通过 InstanceId 查找）
-        /// </summary>
-        /// <param name="instanceId">卡牌实例ID</param>
-        /// <param name="isExhaust">是否为消耗型卡牌</param>
-        /// <returns>是否成功</returns>
         public bool FinishPlayingCardByInstanceId(string instanceId, bool isExhaust = false)
         {
             var card = InPlayPile.FirstOrDefault(c => c.InstanceId == instanceId);
@@ -345,22 +551,23 @@ namespace Ashlight.Battle.Core.Data
             if (isExhaust)
             {
                 RemovedPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 卡牌执行完毕并消耗: {card.CardId} (InstanceId: {instanceId})");
             }
             else
             {
-                DiscardPile.Add(card);
-                Debug.Log($"[BattleDeckSystem] 卡牌执行完毕，移入弃牌堆: {card.CardId} (InstanceId: {instanceId})");
+                var split = GetSplitForDiscard(card);
+                if (split != null)
+                {
+                    split.DiscardPile.Add(card);
+                }
+                else
+                {
+                    DiscardPile.Add(card);
+                }
             }
 
             return true;
         }
 
-        /// <summary>
-        /// 将卡牌从时间轴返回手牌（用于取消放置）
-        /// </summary>
-        /// <param name="cardId">卡牌ID</param>
-        /// <returns>是否成功</returns>
         public bool ReturnCardToHand(string cardId)
         {
             var card = InPlayPile.FirstOrDefault(c => c.CardId == cardId);
@@ -376,38 +583,67 @@ namespace Ashlight.Battle.Core.Data
             return true;
         }
 
-        /// <summary>
-        /// 弃掉所有手牌
-        /// </summary>
         public void DiscardAllHand()
         {
             int count = Hand.Count;
-            DiscardPile.AddRange(Hand);
+            foreach (var card in Hand.ToList())
+            {
+                var split = GetSplitForDiscard(card);
+                if (split != null)
+                {
+                    split.DiscardPile.Add(card);
+                }
+                else
+                {
+                    DiscardPile.Add(card);
+                }
+            }
+
             Hand.Clear();
             Debug.Log($"[BattleDeckSystem] 弃掉所有手牌: {count} 张");
         }
 
         /// <summary>
-        /// 将弃牌堆洗入抽牌堆
+        /// 收集所有需要实例化 UI 的卡牌（各角色牌堆 + 旧堆 + 手牌等）
         /// </summary>
-        private void ReshuffleDiscardIntoDraw()
+        public void CollectAllCardsForPool(List<CardRuntimeState> outList)
         {
-            DrawPile.AddRange(DiscardPile);
-            DiscardPile.Clear();
-            ShuffleDeck();
+            if (outList == null)
+            {
+                return;
+            }
+
+            outList.Clear();
+            if (PerCharacterDecks != null)
+            {
+                foreach (var split in PerCharacterDecks.Values)
+                {
+                    outList.AddRange(split.DrawPile);
+                    outList.AddRange(split.DiscardPile);
+                }
+            }
+
+            outList.AddRange(DrawPile);
+            outList.AddRange(DiscardPile);
+            outList.AddRange(Hand);
+            outList.AddRange(InPlayPile);
+            outList.AddRange(RemovedPile);
         }
 
-        /// <summary>
-        /// 获取卡组总数（抽牌堆 + 弃牌堆 + 手牌）
-        /// </summary>
         public int GetTotalCardCount()
         {
-            return DrawPile.Count + DiscardPile.Count + Hand.Count + InPlayPile.Count;
+            int total = Hand.Count + InPlayPile.Count + RemovedPile.Count + DrawPile.Count + DiscardPile.Count;
+            if (PerCharacterDecks != null)
+            {
+                foreach (var split in PerCharacterDecks.Values)
+                {
+                    total += split.DrawPile.Count + split.DiscardPile.Count;
+                }
+            }
+
+            return total;
         }
 
-        /// <summary>
-        /// 深拷贝（用于预测系统）
-        /// </summary>
         public BattleDeckSystem Clone()
         {
             var clone = new BattleDeckSystem
@@ -416,49 +652,61 @@ namespace Ashlight.Battle.Core.Data
                 DiscardPile = new List<CardRuntimeState>(),
                 Hand = new List<CardRuntimeState>(),
                 RemovedPile = new List<CardRuntimeState>(),
-                InPlayPile = new List<CardRuntimeState>()
+                InPlayPile = new List<CardRuntimeState>(),
+                PerCharacterDecks = new Dictionary<CharacterEnum, CharacterDeckSplit>()
             };
 
-            // 深拷贝抽牌堆
+            clone._partyCharacterOrder.AddRange(_partyCharacterOrder);
+
             foreach (var card in DrawPile)
             {
                 clone.DrawPile.Add(card.Clone());
             }
 
-            // 深拷贝弃牌堆
             foreach (var card in DiscardPile)
             {
                 clone.DiscardPile.Add(card.Clone());
             }
 
-            // 深拷贝手牌区
             foreach (var card in Hand)
             {
                 clone.Hand.Add(card.Clone());
             }
 
-            // 深拷贝移除区
             foreach (var card in RemovedPile)
             {
                 clone.RemovedPile.Add(card.Clone());
             }
 
-            // 深拷贝正在使用区
             foreach (var card in InPlayPile)
             {
                 clone.InPlayPile.Add(card.Clone());
             }
 
+            if (PerCharacterDecks != null)
+            {
+                foreach (var kv in PerCharacterDecks)
+                {
+                    clone.PerCharacterDecks[kv.Key] = kv.Value.Clone();
+                }
+            }
+
             return clone;
         }
 
-        /// <summary>
-        /// 获取调试信息
-        /// </summary>
         public string GetDebugInfo()
         {
-            return $"抽牌堆: {DrawPile.Count}, 弃牌堆: {DiscardPile.Count}, 手牌: {Hand.Count}, 使用中: {InPlayPile.Count}, 移除: {RemovedPile.Count}";
+            var parts = new List<string>();
+            if (PerCharacterDecks != null)
+            {
+                foreach (var kv in PerCharacterDecks)
+                {
+                    parts.Add($"{kv.Key}:抽{kv.Value.DrawPile.Count}/弃{kv.Value.DiscardPile.Count}");
+                }
+            }
+
+            string per = parts.Count > 0 ? string.Join(", ", parts) : "无分堆";
+            return $"[{per}] 旧堆抽{DrawPile.Count}/弃{DiscardPile.Count}, 手牌: {Hand.Count}, 使用中: {InPlayPile.Count}, 移除: {RemovedPile.Count}";
         }
     }
 }
-

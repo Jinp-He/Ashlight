@@ -1,0 +1,18 @@
+# Unity generated
+Library/
+Temp/
+obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# IDE
+.vs/
+.vscode/
+.gradle/
+
+# Data/Tools
+Tools/

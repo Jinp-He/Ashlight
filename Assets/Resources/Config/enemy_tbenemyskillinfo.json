@@ -11,9 +11,7 @@
         "is_aoe": false
       }
     ],
-    "Channeling": 0,
-    "Duration": 1,
-    "Recoil": 1,
+    "ExecutingCost": 2,
     "TargetType": 3
   },
   {
@@ -28,9 +26,7 @@
         "is_aoe": false
       }
     ],
-    "Channeling": 0,
-    "Duration": 1,
-    "Recoil": 2,
+    "ExecutingCost": 3,
     "TargetType": 3
   }
 ]

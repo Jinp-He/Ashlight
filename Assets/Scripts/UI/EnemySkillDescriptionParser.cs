@@ -218,16 +218,8 @@ namespace Scripts.UI
 
                 switch (propertyName)
                 {
-                    case "Channeling":
-                        value = enemySkillInfo.Channeling.ToString();
-                        break;
-
-                    case "Duration":
-                        value = enemySkillInfo.Duration.ToString();
-                        break;
-
-                    case "Recoil":
-                        value = enemySkillInfo.Recoil.ToString();
+                    case "ExecutingCost":
+                        value = enemySkillInfo.ExecutingCost.ToString();
                         break;
 
                     case "TargetType":

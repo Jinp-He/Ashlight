@@ -100,6 +100,14 @@ namespace Scripts.UI
         
         // 卡片锁定状态（被执行后不可移动）
         private bool _isLocked = false;
+
+        /// <summary>
+        /// 本回合已打出执行牌后，其余执行牌被压制（变暗、不可交互）
+        /// </summary>
+        private bool _executionSuppressed = false;
+
+        private readonly System.Collections.Generic.List<UnityEngine.UI.Graphic> _executionTintGraphics = new System.Collections.Generic.List<UnityEngine.UI.Graphic>();
+        private readonly System.Collections.Generic.List<Color> _executionTintColors = new System.Collections.Generic.List<Color>();
         
         // 时间轴相关（当 Card 在时间轴上时使用）
         private Timeline.TimelineTrackView _parentTrack;
@@ -348,6 +356,11 @@ namespace Scripts.UI
                 UnlockCard();
             }
 
+            if (_executionSuppressed)
+            {
+                SetExecutionSuppressed(false);
+            }
+
             // 重置视觉状态
             if (Card != null)
             {
@@ -454,6 +467,67 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 执行牌已打出后：将其余执行牌变暗并禁止悬停/拖拽（本回合内）
+        /// </summary>
+        public void SetExecutionSuppressed(bool suppressed)
+        {
+            if (suppressed && _executionSuppressed)
+                return;
+            if (!suppressed && !_executionSuppressed)
+                return;
+
+            if (suppressed)
+            {
+                _executionSuppressed = true;
+                _isHovering = false;
+                _scaleTween?.Kill();
+                if (Img_Outline != null)
+                {
+                    Img_Outline.gameObject.SetActive(false);
+                }
+
+                if (Card != null && Card.transform != null)
+                {
+                    Card.transform.localScale = _originalCardScale;
+                }
+
+                RestoreCard();
+                HideDescription();
+
+                _executionTintGraphics.Clear();
+                _executionTintColors.Clear();
+                foreach (var g in GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                {
+                    if (g == null)
+                        continue;
+                    _executionTintGraphics.Add(g);
+                    _executionTintColors.Add(g.color);
+                    var c = g.color;
+                    g.color = new Color(c.r * 0.32f, c.g * 0.32f, c.b * 0.32f, c.a);
+                }
+
+                if (_canvasGroup != null)
+                    _canvasGroup.blocksRaycasts = false;
+            }
+            else
+            {
+                for (int i = 0; i < _executionTintGraphics.Count; i++)
+                {
+                    var g = _executionTintGraphics[i];
+                    if (g != null && i < _executionTintColors.Count)
+                        g.color = _executionTintColors[i];
+                }
+
+                _executionTintGraphics.Clear();
+                _executionTintColors.Clear();
+                _executionSuppressed = false;
+
+                if (_canvasGroup != null)
+                    _canvasGroup.blocksRaycasts = true;
+            }
+        }
+
+        /// <summary>
         /// 设置锁定状态的视觉效果（变暗）
         /// </summary>
         private void SetLockedVisual()
@@ -537,16 +611,16 @@ namespace Scripts.UI
                 Txt_CardTag.text = GetTargetTypeText(_currentCard.TargetType);
             }
 
-            // 设置左侧消耗（引导时间）
+            // 设置左侧消耗（能量）
             if (Txt_LeftCost != null)
             {
-                Txt_LeftCost.text = _currentCard.Duration.ToString();
+                Txt_LeftCost.text = _currentCard.Energy.ToString();
             }
 
-            // 设置右侧消耗（后摇）
+            // 设置右侧消耗（卡牌类型）
             if (Txt_RightCost != null)
             {
-                Txt_RightCost.text = _currentCard.Recoil.ToString();
+                Txt_RightCost.text = _currentCard.CardType == cfg.CardTypeEnum.Swift ? "迅" : "执";
             }
 
             // 设置稀有度显示
@@ -620,6 +694,9 @@ namespace Scripts.UI
         {
             // 如果正在拖拽，不处理悬停效果
             if (_isDragging)
+                return;
+
+            if (_executionSuppressed)
                 return;
 
             _isHovering = true;
@@ -741,6 +818,11 @@ namespace Scripts.UI
             if (_isLocked)
             {
                 Debug.Log($"[CardViewController] 卡片已锁定，不允许拖拽: {_currentCard?.Name}");
+                return;
+            }
+
+            if (_executionSuppressed)
+            {
                 return;
             }
 
@@ -1263,7 +1345,7 @@ namespace Scripts.UI
                     Debug.Log($"[CardViewController] 在TimeSlot上释放卡牌: {_currentCard.Name}, 索引: {slotIndex}, 轨道: {track.name}");
                 }
                 
-                int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+                int totalSlots = 1;
                 
                 // 检查位置（使用与高亮显示相同的 slotIndex）
                 bool canPlaceByPosition = track.GetTrack().CanPlaceCard(slotIndex, totalSlots);
@@ -1585,7 +1667,7 @@ namespace Scripts.UI
             ClearTimelineHighlight();
             
             // 计算卡牌占用的格子数
-            int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+            int totalSlots = 1;
             
             // 检查是否可以放置（位置检查）
             bool canPlaceByPosition = track.GetTrack().CanPlaceCard(slotIndex, totalSlots);
@@ -1995,7 +2077,7 @@ namespace Scripts.UI
                 var track = targetSlot.GetParentTrack();
                 if (track != null && _currentCard != null)
                 {
-                    int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+                    int totalSlots = 1;
                     
                     // 检查是否可以放置（位置检查）
                     bool canPlaceByPosition = track.GetTrack().CanPlaceCard(targetSlot.SlotIndex, totalSlots);
@@ -2714,18 +2796,33 @@ namespace Scripts.UI
                 return;
             }
 
-            bool success = battleManager.TryPlayCardImmediately(_currentCard, ownerUnitId, targetId, InstanceId);
+            bool isExecutionCard = _currentCard != null && _currentCard.CardType == CardTypeEnum.Execution;
+            bool success;
+            if (isExecutionCard)
+            {
+                success = battleManager.TryQueuePlayerExecutionCard(_currentCard, ownerUnitId, targetId, InstanceId, out _);
+            }
+            else
+            {
+                success = battleManager.TryPlayCardImmediately(_currentCard, ownerUnitId, targetId, InstanceId);
+            }
+
             if (!success)
             {
-                Debug.LogWarning("[CardViewController] 立即执行卡牌失败，恢复手牌状态");
+                Debug.LogWarning("[CardViewController] 打牌失败，恢复手牌状态");
                 RestoreCardToHandState();
                 return;
             }
 
             var battleScene = FindObjectOfType<UI_BattleScene>();
+            if (isExecutionCard)
+            {
+                battleScene?.OnPlayerPlayedExecutionCard(this, ownerUnitId);
+            }
+
             battleScene?.ConsumeHandCard(this);
 
-            Debug.Log($"[CardViewController] 立即执行卡牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}");
+            Debug.Log($"[CardViewController] 出牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}, execution={isExecutionCard}");
         }
 
         /// <summary>

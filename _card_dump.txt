@@ -1,0 +1,33 @@
+Rocket001|打击|造成{A}点伤害|AttackEffect,A,10,false
+Rocket002|迅猛打击|造成{A}点伤害。若目标处于[僵直]或[引导]中，伤害翻倍。|AttackExtraEffect,A,8,Channeling|Recoit,2.0
+Rocket003|旋风斩|对所有敌人造成{A}点伤害，每造成一次伤害，获得{D}点护甲|AttackEffect,A,8,true;DefenseEffect,D,3,true
+Rocket004|巨龙撞击|造成 {A} 点伤害并 [推迟] {T} 格。若撞上敌人的攻击意图，造成 [晕眩]。|AttackEffect,A,8,false;PushCollisionEffect,T,1,Stun
+Rocket005|守护|[迅捷]。[拦截] 指定队友受到的伤害，获得 {D} 点高额护甲。|SwiftEffect,T;InterceptEffect,D,20
+Rocket006|挺身而出|[引导] 3。引导期间无法攻击，但 [嘲讽] 全体并大幅减伤。|TauntEffect,N,All;BuffEffect,B,ReduceDmg,0.5
+Rocket007|吞噬痛苦|[迅捷]。立刻清除自身所有 [僵直]，恢复 {H} 点生命。|SwiftEffect,N;ClearRecoilEffect,N;HealEffect,H,8
+Rocket008|挫志怒吼|使所有敌人意图 [推迟] {T} 格。若敌人撞在一起，造成 [晕眩]。|TimeShiftAllEffect,T,1;CollisionEffect,B,Stun
+Rocket009|交错打击|造成 {A} 点伤害，如果敌人正在攻击，额外造成 {A:1} 点伤害|AttackEffect,A,8,false;AttackConditionalEffect,A,8,IsAttacking
+Irene001|火球术|造成 {A} 点伤害。|AttackEffect,A,10,false
+Irene002|冰霜震击|造成 {A} 点伤害，并 [推迟] {T} 格。|AttackEffect,A,8,false;PushCollisionEffect,T,1,None
+Irene003|奥术飞弹|[迅捷]。造成 3 次 {A} 点伤害，目标随机。|SwiftEffect,F;AttackEffect,A,4,false;AttackEffect,A,4,false;AttackEffect,A,4,false
+Irene004|寒冰护甲|[迅捷]。获得 {D} 点护甲，并施加 [寒冷] (受击时 [推迟] 来源)。|SwiftEffect,F;DefenseEffect,D,10,false;BuffEffect,F,Chill,1
+Irene005|炎爆术|[引导] {T}。造成 {A} 点巨额伤害。若目标 [燃烧]，伤害翻倍。|ChannelEffect,T,3;AttackExtraEffect,A,25,Burn,2.0
+Irene006|暴风雪|[引导] {T}。对所有敌人造成 {A} 点伤害并 [推迟] 1 格。|ChannelEffect,T,2;AttackEffect,A,12,true;TimeShiftAllEffect,T,1
+Irene007|深度冻结|使目标 [晕眩] 1 回合，且下一次受到的伤害增加 {F}%。|BuffEffect,F,Stun,1;BuffEffect,F,Vulnerable,50
+Irene008|时间扭曲|[迅捷]。下一张 [引导] 卡牌的引导时间减少 {F} 格。|SwiftEffect,F;BuffEffect,F,ReduceChannel,2
+Irene009|陨石灭世|[引导] {T}。对所有敌人造成 {A} 点伤害，场地变为 [火海]。|ChannelEffect,T,4;AttackEffect,A,25,true;BuffEffect,F,TerrainFire,3
+Irene010|黑洞|使所有敌人意图 [推迟] {T} 格。若敌人撞在一起，造成 [晕眩]。|TimeShiftAllEffect,T,3;CollisionEffect,F,Stun
+Irene011|镜像实体|[迅捷]。[拦截] 下一次单体伤害，并反弹 {A} 点伤害。|SwiftEffect,F;InterceptEffect,D,0;AttackExtraEffect,A,10,OnHit,1.0
+Irene012|魔力超载|[迅捷]。本回合下一张法术生效两次。下回合自身 [僵直] {T} 格。|SwiftEffect,F;BuffEffect,F,DoubleCast,1;BuffEffect,T,SelfStun,2
+Zhouzhou001|快速射击|[迅捷]。造成 {A} 点伤害。|SwiftEffect,F;AttackEffect,A,12,false
+Zhouzhou002|强力击|造成 {A} 点伤害并 [推迟] {T} 格。若发生碰撞，造成 [晕眩]。|AttackEffect,A,12,false;PushCollisionEffect,T,2,Stun
+Zhouzhou003|二连矢|连续造成 2 次 {A} 点伤害。|AttackEffect,A,8,false;AttackEffect,A,8,false
+Zhouzhou004|多重射击|对所有敌人造成 {A} 点伤害。|AttackEffect,A,12,true
+Zhouzhou005|狙击|[引导] {T}。造成 {A} 点致命伤害。若目标满血，伤害翻倍。|ChannelEffect,T,2;AttackExtraEffect,A,25,FullHP,2.0
+Zhouzhou006|后撤步|[迅捷]。造成 {A} 点伤害并使目标 [推迟] {T} 格。|SwiftEffect,F;AttackEffect,A,8,false;PushCollisionEffect,T,1,None
+Zhouzhou007|捕兽夹|造成 {A} 点伤害并施加 [定身] (无法移动)。|AttackEffect,A,10,false;BuffEffect,F,Root,1
+Zhouzhou008|致命射击|造成 {A} 点伤害。如果目标正在 [引导] 或 [攻击]，额外造成 {A:1} 点伤害。|AttackEffect,A,12,false;AttackConditionalEffect,A,12,IsAttacking
+Zhouzhou009|剑雨|[引导] {T}。对所有敌人造成 3 次 {A} 点伤害。|ChannelEffect,T,3;AttackEffect,A,10,true;AttackEffect,A,10,true;AttackEffect,A,10,true
+Zhouzhou010|猎人印记|[迅捷]。使目标下一次受到的伤害增加 {F}%。|SwiftEffect,F;BuffEffect,F,Vulnerable,50
+Zhouzhou011|急速装填|[迅捷]。立刻清除自身所有 [僵直]，并抽 1 张牌。|SwiftEffect,F;ClearRecoilEffect,F;BuffEffect,F,DrawCard,1
+Zhouzhou012|穿云箭|造成 {A} 点伤害。本次攻击无视护甲，且无法被 [拦截]。|AttackExtraEffect,A,18,Pierce,1.0

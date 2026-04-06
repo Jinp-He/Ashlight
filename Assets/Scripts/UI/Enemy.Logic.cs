@@ -16,35 +16,14 @@ namespace Scripts.UI
     {
         #region 私有字段
 
-        /// <summary>
-        /// 敌人配置信息
-        /// </summary>
         private EnemyInfo _enemyInfo;
-
-        /// <summary>
-        /// 战斗单位状态
-        /// </summary>
         private UnitState _unitState;
-
-        /// <summary>
-        /// 是否已初始化
-        /// </summary>
         private bool _isInitialized = false;
-
-        /// <summary>
-        /// 是否正在闪烁显示预测血量
-        /// </summary>
         private bool _isBlinking = false;
-
-        /// <summary>
-        /// 闪烁协程引用
-        /// </summary>
         private Coroutine _blinkCoroutine = null;
-
-        /// <summary>
-        /// 预测的血量值
-        /// </summary>
         private int _predictedHp = 0;
+
+        private Coroutine _thinkingCoroutine = null;
 
         #endregion
 
@@ -81,11 +60,9 @@ namespace Scripts.UI
             _enemyInfo = enemyInfo;
             _isInitialized = true;
 
-            // 加载Spine骨骼动画
             LoadSkeletonAnimation();
-
-            // 初始化UI显示
             UpdateDisplay();
+            SetIntentionThinking();
 
             Debug.Log($"[Enemy] 初始化完成: {enemyInfo.Name}");
         }
@@ -225,13 +202,85 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 显示敌人意图
+        /// 设置规划轨意图显示："思考中..."（省略号滚动动画）
         /// </summary>
-        /// <param name="intentionType">意图类型</param>
-        public void ShowIntention(cfg.EnemyIntentionEnum intentionType)
+        public void SetIntentionThinking()
         {
-            // TODO: 实现敌人意图的显示
-            Debug.Log($"[Enemy] 显示意图: {intentionType}");
+            StopThinkingAnimation();
+            _thinkingCoroutine = StartCoroutine(ThinkingAnimationCoroutine());
+        }
+
+        /// <summary>
+        /// 设置执行轨意图显示：攻击类显示"目标名+伤害"，非攻击类显示"技能"
+        /// </summary>
+        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, string targetName)
+        {
+            StopThinkingAnimation();
+
+            if (Txt_Intention == null) return;
+
+            int totalDamage = 0;
+            bool hasAttack = false;
+
+            if (skillInfo?.Effects != null)
+            {
+                foreach (var effect in skillInfo.Effects)
+                {
+                    if (effect is cfg.AttackEffect atk)
+                    {
+                        totalDamage += atk.Damage;
+                        hasAttack = true;
+                    }
+                    else if (effect is cfg.AttackExtraEffect atkEx)
+                    {
+                        totalDamage += atkEx.Damage;
+                        hasAttack = true;
+                    }
+                }
+            }
+
+            if (hasAttack && !string.IsNullOrEmpty(targetName))
+            {
+                Txt_Intention.text = $"<color=#FF6B6B>{targetName} -{totalDamage}</color>";
+            }
+            else
+            {
+                Txt_Intention.text = "<color=#7EC8E3>技能</color>";
+            }
+        }
+
+        /// <summary>
+        /// 清除意图显示
+        /// </summary>
+        public void ClearIntention()
+        {
+            StopThinkingAnimation();
+            if (Txt_Intention != null)
+                Txt_Intention.text = string.Empty;
+        }
+
+        private void StopThinkingAnimation()
+        {
+            if (_thinkingCoroutine != null)
+            {
+                StopCoroutine(_thinkingCoroutine);
+                _thinkingCoroutine = null;
+            }
+        }
+
+        private System.Collections.IEnumerator ThinkingAnimationCoroutine()
+        {
+            string[] frames = { "思考中", "思考中.", "思考中..", "思考中..." };
+            int index = 0;
+
+            while (true)
+            {
+                if (Txt_Intention != null)
+                    Txt_Intention.text = frames[index];
+
+                index = (index + 1) % frames.Length;
+                yield return new WaitForSeconds(0.4f);
+            }
         }
 
         /// <summary>
