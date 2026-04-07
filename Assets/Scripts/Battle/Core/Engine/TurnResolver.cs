@@ -233,8 +233,7 @@ namespace Ashlight.Battle.Core.Engine
         /// </summary>
         private int GetCardEnergyCost(cfg.Character.CardInfo card)
         {
-            // TODO: 待配置表迁移后改为 card.EnergyCost
-            return 1;
+            return card?.Energy ?? 1;
         }
     }
 

@@ -63,6 +63,11 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public int TurnCount { get; set; }
 
+        /// <summary>
+        /// 全场暂停标志（玩家回合时为true，冻结所有其他单位推进）
+        /// </summary>
+        public bool IsGlobalPaused { get; set; }
+
         public BattleStateSnapshot()
         {
             PlayerUnits = new List<UnitState>();
@@ -75,6 +80,7 @@ namespace Ashlight.Battle.Core.Data
             IsPrediction = false;
             CurrentTurnUnitId = null;
             TurnCount = 0;
+            IsGlobalPaused = false;
         }
 
         /// <summary>
@@ -149,6 +155,7 @@ namespace Ashlight.Battle.Core.Data
                 IsPrediction = this.IsPrediction,
                 CurrentTurnUnitId = this.CurrentTurnUnitId,
                 TurnCount = this.TurnCount,
+                IsGlobalPaused = this.IsGlobalPaused,
                 PlayerUnits = new List<UnitState>(),
                 EnemyUnits = new List<UnitState>()
             };

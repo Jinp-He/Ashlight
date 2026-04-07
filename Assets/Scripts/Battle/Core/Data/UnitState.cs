@@ -87,6 +87,53 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public OverloadState Overload { get; set; }
 
+        // ========== 敌人意图轴/执行轴字段 ==========
+
+        /// <summary>
+        /// 当前敌人行动阶段（仅敌人单位使用）
+        /// </summary>
+        public EnemyPhase CurrentPhase { get; set; }
+
+        /// <summary>
+        /// 意图轴总长度（格数，来自技能配置）
+        /// </summary>
+        public int IntentAxisLength { get; set; }
+
+        /// <summary>
+        /// 意图轴当前进度（0 到 IntentAxisLength）
+        /// </summary>
+        public int IntentAxisProgress { get; set; }
+
+        /// <summary>
+        /// 执行轴总长度（格数，默认1）
+        /// </summary>
+        public int ExecuteAxisLength { get; set; }
+
+        /// <summary>
+        /// 执行轴当前进度（0 到 ExecuteAxisLength）
+        /// </summary>
+        public int ExecuteAxisProgress { get; set; }
+
+        /// <summary>
+        /// 是否处于硬直状态（所有推进冻结）
+        /// </summary>
+        public bool IsStunned { get; set; }
+
+        /// <summary>
+        /// 硬直剩余tick数
+        /// </summary>
+        public int StunRemainingTicks { get; set; }
+
+        /// <summary>
+        /// 待执行技能ID（敌人意图轴中暂存）
+        /// </summary>
+        public string PendingSkillId { get; set; }
+
+        /// <summary>
+        /// 待执行技能的目标ID（敌人意图轴中暂存）
+        /// </summary>
+        public string PendingTargetId { get; set; }
+
         public UnitState()
         {
             Buffs = new List<BuffState>();
@@ -98,6 +145,16 @@ namespace Ashlight.Battle.Core.Data
             BaseEnergy = 3;
             BaseDrawCount = 5;
             CurrentEnergy = 0;
+            // 敌人意图轴/执行轴默认值
+            CurrentPhase = EnemyPhase.None;
+            IntentAxisLength = 0;
+            IntentAxisProgress = 0;
+            ExecuteAxisLength = 1;
+            ExecuteAxisProgress = 0;
+            IsStunned = false;
+            StunRemainingTicks = 0;
+            PendingSkillId = null;
+            PendingTargetId = null;
         }
 
         /// <summary>
@@ -269,7 +326,17 @@ namespace Ashlight.Battle.Core.Data
                 Buffs = new List<BuffState>(),
                 Track = this.Track?.Clone(),
                 ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
-                Overload = this.Overload?.Clone() ?? new OverloadState()
+                Overload = this.Overload?.Clone() ?? new OverloadState(),
+                // 敌人意图轴/执行轴
+                CurrentPhase = this.CurrentPhase,
+                IntentAxisLength = this.IntentAxisLength,
+                IntentAxisProgress = this.IntentAxisProgress,
+                ExecuteAxisLength = this.ExecuteAxisLength,
+                ExecuteAxisProgress = this.ExecuteAxisProgress,
+                IsStunned = this.IsStunned,
+                StunRemainingTicks = this.StunRemainingTicks,
+                PendingSkillId = this.PendingSkillId,
+                PendingTargetId = this.PendingTargetId
             };
 
             if (this.Buffs != null)
