@@ -2544,26 +2544,41 @@ namespace Scripts.UI
 
             if (targetObj == null || _currentCard == null)
             {
+                // 群体目标类型：鼠标离开时，把所有合法目标恢复成 dim 状态
+                if (_currentCard != null)
+                {
+                    if (_currentCard.TargetType == cfg.TargetTypeEnum.AllAlly)
+                    {
+                        CharacterEnum ownerCharacterId = GetOwnerCharacterId();
+                        var allies = _targetManager?.GetAllValidAllies(ownerCharacterId);
+                        if (allies != null)
+                        {
+                            foreach (var ally in allies)
+                            {
+                                if (ally != null)
+                                {
+                                    ally.SetColor(validTargetDimColor);
+                                }
+                            }
+                        }
+                    }
+                    else if (_currentCard.TargetType == cfg.TargetTypeEnum.AllEnemy)
+                    {
+                        var enemies = _targetManager?.GetAllValidEnemies();
+                        if (enemies != null)
+                        {
+                            foreach (var enemy in enemies)
+                            {
+                                if (enemy != null)
+                                {
+                                    enemy.SetColor(validTargetDimColor);
+                                }
+                            }
+                        }
+                    }
+                }
                 _previousHoveredTarget = null;
                 return;
-            }
-
-            // 如果目标合法，恢复其颜色为白色（选中状态）
-            if (isValid)
-            {
-                var character = targetObj.GetComponent<Character>();
-                var enemy = targetObj.GetComponent<Enemy>();
-
-                if (character != null)
-                {
-                    character.SetColor(Color.white);
-                    character.ShowIndicator(Color.green);
-                }
-                else if (enemy != null)
-                {
-                    enemy.SetColor(Color.white);
-                    enemy.ShowIndicator(Color.green);
-                }
             }
 
             // 保存当前悬停的目标
@@ -2572,7 +2587,7 @@ namespace Scripts.UI
             // 检查是否为群体目标类型
             if (_currentCard.TargetType == cfg.TargetTypeEnum.AllAlly)
             {
-                // 高亮所有合法队友（群体目标类型总是显示合法的目标，所以总是显示绿色）
+                // 高亮所有合法队友：全部变白 + 绿色指示
                 CharacterEnum ownerCharacterId = GetOwnerCharacterId();
                 var allies = _targetManager?.GetAllValidAllies(ownerCharacterId);
                 if (allies != null)
@@ -2581,6 +2596,7 @@ namespace Scripts.UI
                     {
                         if (ally != null)
                         {
+                            ally.SetColor(Color.white);
                             ally.ShowIndicator(Color.green);
                         }
                     }
@@ -2588,7 +2604,7 @@ namespace Scripts.UI
             }
             else if (_currentCard.TargetType == cfg.TargetTypeEnum.AllEnemy)
             {
-                // 高亮所有合法敌人（群体目标类型总是显示合法的目标，所以总是显示绿色）
+                // 高亮所有合法敌人：全部变白 + 绿色指示
                 var enemies = _targetManager?.GetAllValidEnemies();
                 if (enemies != null)
                 {
@@ -2596,6 +2612,7 @@ namespace Scripts.UI
                     {
                         if (enemy != null)
                         {
+                            enemy.SetColor(Color.white);
                             enemy.ShowIndicator(Color.green);
                         }
                     }
@@ -2603,9 +2620,26 @@ namespace Scripts.UI
             }
             else
             {
-                // 单目标 - 如果目标非法，不显示Indicator
-                if (!isValid)
+                // 单目标 - 如果目标合法，设为白色并显示绿色指示
+                if (isValid)
                 {
+                    var character = targetObj.GetComponent<Character>();
+                    var enemy = targetObj.GetComponent<Enemy>();
+
+                    if (character != null)
+                    {
+                        character.SetColor(Color.white);
+                        character.ShowIndicator(Color.green);
+                    }
+                    else if (enemy != null)
+                    {
+                        enemy.SetColor(Color.white);
+                        enemy.ShowIndicator(Color.green);
+                    }
+                }
+                else
+                {
+                    // 非法目标不显示Indicator
                     return;
                 }
             }
