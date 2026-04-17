@@ -45,8 +45,8 @@ namespace Scripts.UI
         private float overlapThreshold = 15f;
 
         [SerializeField]
-        [Tooltip("重叠时每级Y轴错开距离（像素）")]
-        private float overlapSeparation = 18f;
+        [Tooltip("重叠时每级X轴错开距离（像素）")]
+        private float overlapSeparation = 20f;
 
         /// <summary>
         /// 规划轨到达终点时触发（玩家进入出牌阶段 / 敌人生成意图）
@@ -186,7 +186,7 @@ namespace Scripts.UI
             float w = Mathf.Max(1f, Mathf.Abs(segmentWidth));
             float startX = -w * Mathf.Max(1, executingCost);
             icon.StartX = startX;
-            icon.Rect.anchoredPosition = new Vector2(startX, icon.Rect.anchoredPosition.y);
+            icon.Rect.anchoredPosition = new Vector2(startX, iconBaseY);
             // 进入执行轨后至少经过一帧 + 短延迟才允许触发“执行完成”，与规划结束解耦
             icon.BlockExecutionCompleteUntil = Time.unscaledTime + 0.12f;
 
@@ -259,7 +259,8 @@ namespace Scripts.UI
 
             float startX = CalculateStartXBySpeed(icon.Speed);
             icon.StartX = startX;
-            icon.Rect.anchoredPosition = new Vector2(startX, icon.Rect.anchoredPosition.y);
+            float xOffset = CalculateXOffsetForOverlap(startX);
+            icon.Rect.anchoredPosition = new Vector2(startX + xOffset, iconBaseY);
             icon.BlockExecutionCompleteUntil = 0f;
         }
 
@@ -293,8 +294,8 @@ namespace Scripts.UI
             }
 
             float startX = CalculateStartXBySpeed(speed);
-            float posY = CalculateYWithSeparation(startX);
-            rect.anchoredPosition = new Vector2(startX, posY);
+            float xOffset = CalculateXOffsetForOverlap(startX);
+            rect.anchoredPosition = new Vector2(startX + xOffset, iconBaseY);
 
             _activeIcons.Add(new AtbIconRuntime
             {
@@ -310,10 +311,10 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 根据 targetX 附近已有图标数量，计算错开后的 Y 值
-        /// 错开规律：0→baseY, 1→+sep, 2→-sep, 3→+2*sep, ...
+        /// 根据 targetX 附近已有图标数量，计算左右错开的 X 偏移
+        /// 错开规律：0→0, 1→+sep, 2→-sep, 3→+2*sep, ...
         /// </summary>
-        private float CalculateYWithSeparation(float targetX)
+        private float CalculateXOffsetForOverlap(float targetX)
         {
             int nearbyCount = 0;
             for (int i = 0; i < _activeIcons.Count; i++)
@@ -323,11 +324,11 @@ namespace Scripts.UI
             }
 
             if (nearbyCount == 0)
-                return iconBaseY;
+                return 0f;
 
             int level = (nearbyCount + 1) / 2;
             float sign = (nearbyCount % 2 == 1) ? 1f : -1f;
-            return iconBaseY + sign * level * overlapSeparation;
+            return sign * level * overlapSeparation;
         }
 
         private float CalculateStartXBySpeed(int speed)

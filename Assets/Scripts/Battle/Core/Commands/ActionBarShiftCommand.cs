@@ -53,17 +53,36 @@ namespace Ashlight.Battle.Core.Commands
 
         private void ApplyShift(UnitState target)
         {
+            // 如果目标处于意图轴/执行轴且为负向位移（延后），作用于轴进度而非行动条
+            if (ShiftSegments < 0 && target.CurrentPhase != EnemyPhase.None)
+            {
+                int delayAmount = System.Math.Abs(ShiftSegments);
+                if (target.CurrentPhase == EnemyPhase.IntentAxis)
+                {
+                    int before = target.IntentAxisProgress;
+                    target.IntentAxisProgress = Mathf.Max(0, target.IntentAxisProgress - delayAmount);
+                    Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 意图轴延后 {delayAmount} 格 ({before} -> {target.IntentAxisProgress}/{target.IntentAxisLength})");
+                }
+                else if (target.CurrentPhase == EnemyPhase.ExecuteAxis)
+                {
+                    int before = target.ExecuteAxisProgress;
+                    target.ExecuteAxisProgress = Mathf.Max(0, target.ExecuteAxisProgress - delayAmount);
+                    Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 执行轴延后 {delayAmount} 格 ({before} -> {target.ExecuteAxisProgress}/{target.ExecuteAxisLength})");
+                }
+                return;
+            }
+
             if (target.ActionBar == null)
             {
                 return;
             }
 
-            int before = target.ActionBar.CurrentSegment;
+            int beforeSeg = target.ActionBar.CurrentSegment;
             target.ActionBar.Shift(ShiftSegments);
-            int after = target.ActionBar.CurrentSegment;
+            int afterSeg = target.ActionBar.CurrentSegment;
 
             string direction = ShiftSegments > 0 ? "前进" : "后退";
-            Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 行动条{direction} {System.Math.Abs(ShiftSegments)} 段 ({before} -> {after})");
+            Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 行动条{direction} {System.Math.Abs(ShiftSegments)} 段 ({beforeSeg} -> {afterSeg})");
         }
 
         public int GetPriority()

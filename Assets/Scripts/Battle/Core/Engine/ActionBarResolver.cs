@@ -24,6 +24,12 @@ namespace Ashlight.Battle.Core.Engine
                 return null;
             }
 
+            // 全场暂停时不推进任何单位
+            if (state.IsGlobalPaused)
+            {
+                return null;
+            }
+
             var aliveUnits = GetAliveUnitsWithActionBar(state);
             if (aliveUnits.Count == 0)
             {

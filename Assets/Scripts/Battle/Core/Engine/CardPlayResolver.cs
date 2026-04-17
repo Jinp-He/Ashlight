@@ -141,6 +141,18 @@ namespace Ashlight.Battle.Core.Engine
                 return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true);
             }
 
+            // TODO: 待 Luban schema 新增 StunEffect 后启用
+            // if (effect is StunEffect stunEffect)
+            // {
+            //     return new StunCommand(stunEffect.StunTicks);
+            // }
+
+            // TODO: 待 Luban schema 新增 InterruptEffect 后启用
+            // if (effect is InterruptEffect interruptEffect)
+            // {
+            //     return new InterruptCommand();
+            // }
+
             Debug.LogWarning($"[CardPlayResolver] 未处理的 Effect 类型: {effect.GetType().Name}");
             return null;
         }

@@ -83,6 +83,11 @@ namespace Ashlight.Battle
         /// </summary>
         public CardPlayResolver CardPlayResolver { get; private set; }
 
+        /// <summary>
+        /// 敌人意图轴/执行轴推进解算器
+        /// </summary>
+        public EnemyIntentAxisResolver EnemyIntentAxisResolver { get; private set; }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -97,6 +102,7 @@ namespace Ashlight.Battle
             ActionBarResolver = new ActionBarResolver();
             CardPlayResolver = new CardPlayResolver();
             TurnResolver = new TurnResolver(CardPlayResolver, ActionBarResolver);
+            EnemyIntentAxisResolver = new EnemyIntentAxisResolver();
             Predictor = new BattlePredictor();
             PredictionManager = new BattlePredictionManager(this);
 
@@ -673,6 +679,9 @@ namespace Ashlight.Battle
 
             ClearPendingPlayerExecution(unitId);
 
+            // 全场暂停：冻结所有其他单位推进
+            CurrentState.IsGlobalPaused = true;
+
             CurrentRound++;
             CurrentState.CurrentTurnUnitId = unitId;
 
@@ -705,6 +714,46 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
+        /// 玩家手动结束回合：结算执行牌 → 弃手牌 → 解除全场暂停 → 重置ATB
+        /// </summary>
+        public void OnPlayerEndTurn(string unitId)
+        {
+            if (CurrentState == null || string.IsNullOrEmpty(unitId))
+            {
+                return;
+            }
+
+            var playerUnit = CurrentState.GetUnitById(unitId);
+            if (playerUnit == null || playerUnit.IsDead || !playerUnit.IsPlayerUnit)
+            {
+                return;
+            }
+
+            // 1. 结算执行牌（如果有）
+            if (HasPendingPlayerExecutionCard(unitId))
+            {
+                ExecutePendingPlayerCardAfterExecutionTrack(unitId);
+            }
+
+            // 2. 弃掉剩余手牌
+            DiscardCurrentHand();
+
+            // 3. 清除回合标记
+            CurrentState.CurrentTurnUnitId = null;
+
+            // 4. 重置该玩家ATB
+            if (ActionBarResolver != null)
+            {
+                ActionBarResolver.RestartUnitActionBar(playerUnit);
+            }
+
+            // 5. 解除全场暂停
+            CurrentState.IsGlobalPaused = false;
+
+            Debug.Log($"[BattleManager] 玩家回合结束，全场恢复: {unitId}");
+        }
+
+        /// <summary>
         /// 开始指定敌方单位回合
         /// </summary>
         public void StartEnemyTurn(string unitId)
@@ -728,7 +777,118 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
+        /// 敌人ATB到达行动点后：选定技能，进入意图轴
+        /// 替代旧的 TryPrepareEnemyIntentAfterPlanning + 等待执行轨 的流程
+        /// </summary>
+        /// <returns>是否成功进入意图轴</returns>
+        public bool StartEnemyIntentAxis(string unitId, out EnemySkillInfo preparedSkill, out string targetUnitId)
+        {
+            preparedSkill = null;
+            targetUnitId = null;
+
+            if (CurrentState == null)
+            {
+                return false;
+            }
+
+            var enemyUnit = CurrentState.GetUnitById(unitId);
+            if (enemyUnit == null || enemyUnit.IsDead || enemyUnit.IsPlayerUnit)
+            {
+                return false;
+            }
+
+            if (!TryPickEnemySkillAndTarget(enemyUnit, out var selectedSkill, out var target))
+            {
+                return false;
+            }
+
+            int intentAxisLength = Mathf.Max(1, selectedSkill.ExecutingCost);
+            int executeAxisLength = 1;
+
+            EnemyIntentAxisResolver.StartIntentAxis(
+                enemyUnit, selectedSkill.Id, target.UnitId,
+                intentAxisLength, executeAxisLength
+            );
+
+            // 同时存入旧字典以保持向后兼容（UI层可能仍在读取）
+            _pendingEnemyIntents[unitId] = (selectedSkill, target.UnitId);
+
+            preparedSkill = selectedSkill;
+            targetUnitId = target.UnitId;
+            return true;
+        }
+
+        /// <summary>
+        /// 每 tick 推进所有敌人的意图轴/执行轴，并对完成的敌人执行技能效果
+        /// UI 层在主循环中调用此方法
+        /// </summary>
+        /// <returns>本 tick 内触发了技能效果的敌人ID列表</returns>
+        public List<string> TickEnemyAxes()
+        {
+            var firedEnemyIds = new List<string>();
+
+            if (CurrentState == null || CurrentState.IsBattleEnded || EnemyIntentAxisResolver == null)
+            {
+                return firedEnemyIds;
+            }
+
+            var completedEnemies = EnemyIntentAxisResolver.AdvanceEnemyAxes(CurrentState);
+            foreach (var enemy in completedEnemies)
+            {
+                if (ExecuteCompletedEnemySkill(enemy))
+                {
+                    firedEnemyIds.Add(enemy.UnitId);
+                }
+
+                // 重置阶段并重启ATB
+                EnemyIntentAxisResolver.ResetPhase(enemy);
+                if (ActionBarResolver != null)
+                {
+                    ActionBarResolver.RestartUnitActionBar(enemy);
+                }
+
+                if (CurrentState.IsBattleEnded)
+                {
+                    break;
+                }
+            }
+
+            return firedEnemyIds;
+        }
+
+        /// <summary>
+        /// 执行完成执行轴的敌人技能（从 UnitState 中读取待执行数据）
+        /// </summary>
+        private bool ExecuteCompletedEnemySkill(UnitState enemy)
+        {
+            if (enemy == null || string.IsNullOrEmpty(enemy.PendingSkillId) || string.IsNullOrEmpty(enemy.PendingTargetId))
+            {
+                return false;
+            }
+
+            // 从旧字典获取完整技能信息
+            if (!_pendingEnemyIntents.TryGetValue(enemy.UnitId, out var intent))
+            {
+                Debug.LogWarning($"[BattleManager] 敌人执行轴完成但未找到待执行技能: {enemy.UnitId}");
+                return false;
+            }
+
+            var target = CurrentState.GetUnitById(enemy.PendingTargetId);
+            if (target == null || target.IsDead)
+            {
+                ClearPendingEnemyIntent(enemy.UnitId);
+                return false;
+            }
+
+            var skill = intent.Skill;
+            ClearPendingEnemyIntent(enemy.UnitId);
+            ExecuteEnemySkillInternal(enemy, skill, target);
+            return true;
+        }
+
+        /// <summary>
         /// 规划轨结束时调用：随机确定本回合技能与目标，供 UI 展示并进入执行轨；不造成伤害。
+        /// [旧接口，保留向后兼容，新代码应使用 StartEnemyIntentAxis]
         /// </summary>
         /// <returns>是否成功生成待执行意图</returns>
         public bool TryPrepareEnemyIntentAfterPlanning(string unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId)
@@ -1020,6 +1180,12 @@ namespace Ashlight.Battle
             }
 
             CurrentState.CurrentTurnUnitId = null;
+
+            // 安全兜底：确保全场暂停被解除（兼容旧 UI 调用路径）
+            if (CurrentState.IsGlobalPaused)
+            {
+                CurrentState.IsGlobalPaused = false;
+            }
         }
 
         public void DiscardCurrentHand()

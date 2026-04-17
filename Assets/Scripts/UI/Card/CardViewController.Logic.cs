@@ -28,11 +28,15 @@ namespace Scripts.UI
         [Header("悬停设置")]
         [SerializeField]
         [Tooltip("悬停时的缩放比例")]
-        private float hoverScale = 1.8f;
+        private float hoverScale = 2f;
 
         [SerializeField]
         [Tooltip("缩放动画时长")]
         private float scaleDuration = 0.2f;
+
+        [SerializeField]
+        [Tooltip("悬停时向上偏移距离（像素）")]
+        private float hoverLiftDistance = 80f;
 
         [SerializeField]
         [Tooltip("描述面板相对于卡牌的偏移（像素）")]
@@ -75,6 +79,7 @@ namespace Scripts.UI
         private Vector3 _originalScale;
         private Vector3 _originalCardScale; // Card子对象的原始缩放
         private Tween _scaleTween;
+        private Tween _hoverMoveTween;
         private DescriptionViewController _descriptionView;
         private Canvas _parentCanvas;
         private string _currentHoveredLink = string.Empty;
@@ -84,6 +89,8 @@ namespace Scripts.UI
         private int _originalSiblingIndex;
         private Canvas _hoverCanvas;
         private bool _isHovering = false;
+        private RectTransform _rectTransform;
+        private Vector2 _hoverBaseAnchoredPosition;
 
         // 拖拽相关
         private bool _isDragging = false;
@@ -189,6 +196,11 @@ namespace Scripts.UI
             {
                 _hoverCanvas = gameObject.AddComponent<Canvas>();
             }
+            _rectTransform = GetComponent<RectTransform>();
+            if (_rectTransform != null)
+            {
+                _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
+            }
             
             // 添加GraphicRaycaster（用于接收鼠标事件）
             if (gameObject.GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
@@ -258,6 +270,7 @@ namespace Scripts.UI
             // 清理动画
             _scaleTween?.Kill();
             _positionTween?.Kill();
+            _hoverMoveTween?.Kill();
 
             // 清理描述面板
             if (_descriptionView != null)
@@ -481,6 +494,7 @@ namespace Scripts.UI
                 _executionSuppressed = true;
                 _isHovering = false;
                 _scaleTween?.Kill();
+                ForceResetHoverLift();
                 if (Img_Outline != null)
                 {
                     Img_Outline.gameObject.SetActive(false);
@@ -700,6 +714,10 @@ namespace Scripts.UI
                 return;
 
             _isHovering = true;
+            if (_rectTransform != null)
+            {
+                _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
+            }
 
             // 显示轮廓
             if (Img_Outline != null)
@@ -717,6 +735,7 @@ namespace Scripts.UI
                 _scaleTween = Card.transform.DOScale(_originalCardScale * hoverScale, scaleDuration)
                     .SetEase(Ease.OutBack);
             }
+            PlayHoverLift(true);
         }
 
         /// <summary>
@@ -746,6 +765,7 @@ namespace Scripts.UI
                 _scaleTween = Card.transform.DOScale(_originalCardScale, scaleDuration)
                     .SetEase(Ease.OutBack);
             }
+            PlayHoverLift(false);
 
             // 隐藏描述面板
             HideDescription();
@@ -800,6 +820,32 @@ namespace Scripts.UI
             Debug.Log("[CardViewController] 卡牌恢复原始层级");
         }
 
+        /// <summary>
+        /// 播放悬停位移动画（向上/回落）
+        /// </summary>
+        private void PlayHoverLift(bool entering)
+        {
+            if (_rectTransform == null) return;
+
+            _hoverMoveTween?.Kill();
+            Vector2 targetPos = entering
+                ? _hoverBaseAnchoredPosition + new Vector2(0f, hoverLiftDistance)
+                : _hoverBaseAnchoredPosition;
+
+            _hoverMoveTween = _rectTransform.DOAnchorPos(targetPos, scaleDuration)
+                .SetEase(Ease.OutCubic);
+        }
+
+        /// <summary>
+        /// 立即重置悬停位移，避免状态切换后残留偏移
+        /// </summary>
+        private void ForceResetHoverLift()
+        {
+            if (_rectTransform == null) return;
+            _hoverMoveTween?.Kill();
+            _rectTransform.anchoredPosition = _hoverBaseAnchoredPosition;
+        }
+
         #endregion
 
         #region 拖拽处理（战斗模式）
@@ -827,6 +873,7 @@ namespace Scripts.UI
             }
 
             _isDragging = true;
+            ForceResetHoverLift();
 
             // 根据 Card 的状态决定拖拽行为
             if (_cardDragState == CardDragState.OnTime)

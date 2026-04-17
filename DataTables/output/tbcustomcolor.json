@@ -1,0 +1,32 @@
+[
+  {
+    "Id": "Background_gray",
+    "Color": "2b3131",
+    "Desc": "用于大面积底色及文字"
+  },
+  {
+    "Id": "Brown",
+    "Color": "524636",
+    "Desc": "一般作用于与大面积深色做区分时"
+  },
+  {
+    "Id": "Highlight",
+    "Color": "cccbca",
+    "Desc": "次级高亮"
+  },
+  {
+    "Id": "Gray",
+    "Color": "737373",
+    "Desc": "低级仅作为指示"
+  },
+  {
+    "Id": "Yellow",
+    "Color": "fcc12b",
+    "Desc": "高亮，通常与小面积灰色搭配"
+  },
+  {
+    "Id": "Warning_Red",
+    "Color": "cc3939",
+    "Desc": "极少，仅作为警示使用"
+  }
+]
