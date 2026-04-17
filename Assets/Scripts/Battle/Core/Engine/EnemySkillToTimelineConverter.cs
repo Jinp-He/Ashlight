@@ -30,27 +30,11 @@ namespace Ashlight.Battle.Core.Engine
 
             var blocks = new List<TimelineBlock>();
 
-            // 1. 创建Startup阶段Blocks（引导期，无Commands）
-            for (int i = 0; i < skillInfo.Channeling; i++)
-            {
-                blocks.Add(CreateBlock(PhaseEnum.Startup, ownerId, targetId, skillInfo.Id, null));
-            }
+            var commands = ConvertEffectsToCommands(skillInfo.Effects);
+            blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, skillInfo.Id, commands));
+            blocks[0].IsLastBlock = true;
 
-            // 2. 创建Active阶段Blocks（生效期，包含Commands）
-            for (int i = 0; i < skillInfo.Duration; i++)
-            {
-                // 只在第一个Active格子执行Commands
-                List<ICommand> commands = (i == 0) ? ConvertEffectsToCommands(skillInfo.Effects) : null;
-                blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, skillInfo.Id, commands));
-            }
-
-            // 3. 创建Recoil阶段Blocks（后摇期，无Commands）
-            for (int i = 0; i < skillInfo.Recoil; i++)
-            {
-                blocks.Add(CreateBlock(PhaseEnum.Recoil, ownerId, targetId, skillInfo.Id, null));
-            }
-
-            Debug.Log($"[EnemySkillToTimelineConverter] 敌人技能 {skillInfo.Name} 转换为 {blocks.Count} 个Blocks (Channeling:{skillInfo.Channeling}, Duration:{skillInfo.Duration}, Recoil:{skillInfo.Recoil})");
+            Debug.Log($"[EnemySkillToTimelineConverter] 敌人技能 {skillInfo.Name} 转换为 {blocks.Count} 个Blocks (ExecutingCost:{skillInfo.ExecutingCost})");
 
             return blocks;
         }

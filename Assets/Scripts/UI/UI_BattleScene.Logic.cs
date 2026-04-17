@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using cfg;
 using cfg.Character;
+using cfg.Enemy;
 using Ashlight.Common.Events;
 using Ashlight.Common.Utils;
 using Ashlight.Config;
@@ -108,6 +109,17 @@ namespace Scripts.UI
         /// 动画处理器
         /// </summary>
         private BattleAnimationHandler _animationHandler;
+        private bool _isProcessingAtbTurn;
+        /// <summary>
+        /// 当前正在执行轨中的敌人 unitId 集合（支持多敌人同时在执行轨）
+        /// </summary>
+        private readonly HashSet<string> _enemiesInExecutionTrack = new HashSet<string>();
+        private bool _isProcessingPlayerExecutionTurn;
+
+        /// <summary>
+        /// 当前规划回合内是否已打出过执行牌（用于 ATB 执行轨与手牌压制）
+        /// </summary>
+        private bool _playerPlayedExecutionCardThisAtbTurn;
 
         #endregion
 
@@ -150,6 +162,12 @@ namespace Scripts.UI
             // 订阅时间轴前进事件
             GameEvent.Subscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Subscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
+
+            if (ATB != null)
+            {
+                ATB.OnPlanningComplete += HandleAtbPlanningComplete;
+                ATB.OnExecutionComplete += HandleAtbExecutionComplete;
+            }
         }
 
         /// <summary>
@@ -166,6 +184,17 @@ namespace Scripts.UI
         /// </summary>
         private void Update()
         {
+            if (ATB != null)
+            {
+                ATB.Tick(Time.deltaTime);
+            }
+
+            string currentTurnUnitId = _battleManager?.CurrentState?.CurrentTurnUnitId;
+            if (!string.IsNullOrEmpty(currentTurnUnitId))
+            {
+                UpdateEnergyBarByUnitId(currentTurnUnitId);
+            }
+
             // 监听空格键触发时间轴前进
             if (Input.GetKeyDown(KeyCode.Space))
             {
@@ -186,6 +215,12 @@ namespace Scripts.UI
             GameEvent.Unsubscribe<HpPredictionStopEvent>(OnHpPredictionStop);
             GameEvent.Unsubscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Unsubscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
+
+            if (ATB != null)
+            {
+                ATB.OnPlanningComplete -= HandleAtbPlanningComplete;
+                ATB.OnExecutionComplete -= HandleAtbExecutionComplete;
+            }
 
             // 移除按钮监听
             RemoveButtonListeners();
@@ -238,15 +273,15 @@ namespace Scripts.UI
             // 创建玩家和敌人的UI
             CreateBattleUnits();
 
+            // 初始化ATB图标（按单位速度决定初始位置）
+            if (ATB != null && _battleManager != null && _battleManager.CurrentState != null)
+            {
+                ATB.InitializeByUnits(_battleManager.CurrentState.PlayerUnits, _battleManager.CurrentState.EnemyUnits);
+                ATB.Resume();
+            }
+
             // 创建时间轴UI
             CreateTimelines();
-
-            // 时间轴UI创建完成后，开始第一回合（触发敌人意图选择）
-            if (_battleManager != null)
-            {
-                Debug.Log("[UI_BattleScene] 时间轴UI已创建，开始第一回合");
-                _battleManager.StartPlayerTurn();
-            }
 
             Debug.Log("[UI_BattleScene] 战斗场景初始化完成");
         }
@@ -278,7 +313,7 @@ namespace Scripts.UI
             string encounterId = testEncounterId;
 
             // 创建战斗信息
-            var battleInfo = BattleInfo.Create(activeTeam, encounterId, initialDrawCount: 5);
+            var battleInfo = BattleInfo.Create(activeTeam, encounterId, initialDrawCount: 0);
 
             // 初始化战斗
             _battleManager.InitializeBattle(battleInfo);
@@ -880,6 +915,52 @@ namespace Scripts.UI
             Debug.Log($"[UI_BattleScene] 立即出牌后移入弃牌堆: {card.GetCurrentCard()?.Name}");
         }
 
+        /// <summary>
+        /// 玩家打出执行牌：挂起动作、压暗其余执行牌、并立即将 ATB 图标移入执行轨。
+        /// ATB 此时处于 Pause 状态，图标会冻在执行轨起点，等玩家结束回合 Resume 后才开始移动。
+        /// </summary>
+        public void OnPlayerPlayedExecutionCard(CardViewController playedCard, string ownerUnitId)
+        {
+            if (string.IsNullOrEmpty(ownerUnitId) || playedCard == null)
+            {
+                return;
+            }
+
+            _playerPlayedExecutionCardThisAtbTurn = true;
+            ApplyHandExecutionSuppressionExcept(playedCard);
+
+            if (ATB != null && _battleManager != null)
+            {
+                int executingCost = _battleManager.GetPendingPlayerExecutionCost(ownerUnitId);
+                ATB.MoveToExecutingTrack(ownerUnitId, executingCost);
+            }
+        }
+
+        private void ApplyHandExecutionSuppressionExcept(CardViewController playedCard)
+        {
+            foreach (var c in _handCards)
+            {
+                if (c == null || c == playedCard)
+                {
+                    continue;
+                }
+
+                var info = c.GetCurrentCard();
+                if (info != null && info.CardType == CardTypeEnum.Execution)
+                {
+                    c.SetExecutionSuppressed(true);
+                }
+            }
+        }
+
+        private void ClearHandExecutionSuppression()
+        {
+            foreach (var c in _handCards)
+            {
+                c?.SetExecutionSuppressed(false);
+            }
+        }
+
         #endregion
 
         /// <summary>
@@ -1164,6 +1245,45 @@ namespace Scripts.UI
         {
             Debug.Log("[UI_BattleScene] 开始结束回合...");
 
+            if (ATB != null && _battleManager?.CurrentState != null)
+            {
+                string currentTurnUnitId = _battleManager.CurrentState.CurrentTurnUnitId;
+                if (!string.IsNullOrEmpty(currentTurnUnitId))
+                {
+                    var currentTurnUnit = _battleManager.CurrentState.GetUnitById(currentTurnUnitId);
+                    if (currentTurnUnit != null && currentTurnUnit.IsPlayerUnit)
+                    {
+                        currentTurnUnit.CurrentEnergy = 0;
+                        _battleManager.DiscardCurrentHand();
+                        DisplayHandCards();
+
+                        ClearHandExecutionSuppression();
+
+                        if (_battleManager.HasPendingPlayerExecutionCard(currentTurnUnitId))
+                        {
+                            _isProcessingPlayerExecutionTurn = true;
+                            // 图标可能已在 OnPlayerPlayedExecutionCard 时提前移入执行轨，避免重置位置
+                            if (!ATB.IsInExecutionTrack(currentTurnUnitId))
+                            {
+                                int executingCost = _battleManager.GetPendingPlayerExecutionCost(currentTurnUnitId);
+                                ATB.MoveToExecutingTrack(currentTurnUnitId, executingCost);
+                            }
+                            ATB.Resume();
+                            Debug.Log($"[UI_BattleScene] 玩家结束回合，执行轨开始推进: {currentTurnUnitId}");
+                            yield break;
+                        }
+
+                        ATB.SkipExecutingTrack(currentTurnUnitId);
+
+                        _playerPlayedExecutionCardThisAtbTurn = false;
+                        _battleManager.EndCurrentTurn();
+                        ATB.Resume();
+                        Debug.Log($"[UI_BattleScene] 玩家回合结束并恢复ATB: {currentTurnUnitId}");
+                        yield break;
+                    }
+                }
+            }
+
             // 停止血量预测显示
             if (_battleManager.PredictionManager != null)
             {
@@ -1182,12 +1302,196 @@ namespace Scripts.UI
             // 4. 更新手牌UI显示（显示新抽取的牌）
             DisplayHandCards();
 
-            // 5. 开始下一回合（敌人选择新的意图）
-            _battleManager.StartPlayerTurn();
+            // 5. 非ATB模式下保持原有自动开回合逻辑
+            if (ATB == null)
+            {
+                _battleManager.StartPlayerTurn();
+            }
 
             Debug.Log($"[UI_BattleScene] 回合结束完成，当前回合: {_battleManager.CurrentRound}");
             
             yield break;
+        }
+
+        /// <summary>
+        /// 规划轨到点处理：
+        /// 1. 玩家到点必须始终能进入出牌阶段，并暂停整条 ATB（包括敌人执行轨）
+        /// 2. 敌人执行轨存在全局挂起状态，执行完成前不允许其他敌人再次进入规划完成逻辑
+        /// </summary>
+        private void HandleAtbPlanningComplete(string unitId, bool isPlayerUnit)
+        {
+            if (ShouldIgnoreAtbPlanningComplete(isPlayerUnit))
+            {
+                return;
+            }
+
+            _isProcessingAtbTurn = true;
+            try
+            {
+                if (ATB != null)
+                {
+                    ATB.Pause();
+                }
+
+                if (isPlayerUnit)
+                {
+                    _isProcessingPlayerExecutionTurn = false;
+                    _playerPlayedExecutionCardThisAtbTurn = false;
+                    ClearHandExecutionSuppression();
+                    _battleManager.StartPlayerTurn(unitId, false);
+                    DisplayHandCards();
+                    UpdateAllUnitsDisplay();
+                    UpdateEnergyBarByUnitId(unitId);
+                    Debug.Log($"[UI_BattleScene] 玩家回合开始并暂停ATB: {unitId}");
+                }
+                else
+                {
+                    _battleManager.StartEnemyTurn(unitId);
+                    if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId))
+                    {
+                        if (ATB != null)
+                        {
+                            ATB.Resume();
+                        }
+                        return;
+                    }
+
+                    _enemiesInExecutionTrack.Add(unitId);
+
+                    var targetState = _battleManager.CurrentState.GetUnitById(targetUnitId);
+                    string targetName = targetState?.GetCharacterInfo()?.Name ?? "目标";
+                    var enemyUi = FindEnemyByUnitId(unitId);
+                    enemyUi?.SetIntentionExecuting(preparedSkill, targetName);
+
+                    UpdateAllUnitsDisplay();
+                    UpdateEnergyBarByUnitId(unitId);
+
+                    if (ATB != null)
+                    {
+                        ATB.MoveToExecutingTrack(unitId, executingCost);
+                        ATB.Resume();
+                    }
+                }
+            }
+            finally
+            {
+                _isProcessingAtbTurn = false;
+            }
+        }
+
+        private bool ShouldIgnoreAtbPlanningComplete(bool isPlayerUnit)
+        {
+            // 只做重入保护和空值检查；不再因"敌人在执行轨中"而拦截任何单位的规划完成。
+            // 规则：任意单位（包括多个敌人）可以独立进入执行轨；
+            //       只有玩家到达规划轨终点时才全局暂停 ATB，冻结所有执行轨。
+            return _battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn;
+        }
+
+        /// <summary>
+        /// 执行轨到达终点：结算敌人技能伤害，结束回合并恢复 ATB
+        /// </summary>
+        private void HandleAtbExecutionComplete(string unitId, bool isPlayerUnit)
+        {
+            if (_battleManager == null || _battleManager.CurrentState == null)
+            {
+                return;
+            }
+
+            if (isPlayerUnit)
+            {
+                bool hasPendingPlayerExecution = _battleManager.HasPendingPlayerExecutionCard(unitId);
+                if (!_isProcessingPlayerExecutionTurn && !hasPendingPlayerExecution)
+                {
+                    ClearHandExecutionSuppression();
+                    _playerPlayedExecutionCardThisAtbTurn = false;
+                    return;
+                }
+
+                if (ATB != null)
+                {
+                    ATB.Pause();
+                }
+
+                try
+                {
+                    _battleManager.ExecutePendingPlayerCardAfterExecutionTrack(unitId);
+                    UpdateAllUnitsDisplay();
+                    UpdateEnergyBarByUnitId(unitId);
+                    _battleManager.EndCurrentTurn();
+                }
+                finally
+                {
+                    _isProcessingPlayerExecutionTurn = false;
+                    _playerPlayedExecutionCardThisAtbTurn = false;
+                    ClearHandExecutionSuppression();
+                    if (ATB != null)
+                    {
+                        ATB.Resume();
+                    }
+                }
+
+                return;
+            }
+
+            if (!_battleManager.HasPendingEnemyIntent(unitId))
+            {
+                return;
+            }
+
+            if (ATB != null)
+            {
+                ATB.Pause();
+            }
+
+            try
+            {
+                _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
+                FindEnemyByUnitId(unitId)?.SetIntentionThinking();
+                UpdateAllUnitsDisplay();
+                UpdateEnergyBarByUnitId(unitId);
+                _battleManager.EndCurrentTurn();
+            }
+            finally
+            {
+                _enemiesInExecutionTrack.Remove(unitId);
+                if (ATB != null)
+                {
+                    ATB.Resume();
+                }
+            }
+        }
+
+        private void UpdateEnergyBarByUnitId(string unitId)
+        {
+            if (_battleManager?.CurrentState == null || EnergyBar == null || string.IsNullOrEmpty(unitId))
+            {
+                return;
+            }
+
+            var unit = _battleManager.CurrentState.GetUnitById(unitId);
+            if (unit == null || unit.IsDead)
+            {
+                return;
+            }
+
+            if (EnergyBar.Txt_Energy != null)
+            {
+                int maxEnergy = Mathf.Max(0, unit.BaseEnergy);
+                int currentEnergy = Mathf.Clamp(unit.CurrentEnergy, 0, maxEnergy);
+                EnergyBar.Txt_Energy.text = $"{currentEnergy}/{maxEnergy}";
+            }
+
+            if (EnergyBar.Icon != null)
+            {
+                string iconPath = unit.IsPlayerUnit
+                    ? AssetPath.GetCharacterIconAssetPath(unit.ConfigId)
+                    : AssetPath.GetEnemyIconAssetPath(unit.ConfigId);
+                var iconSprite = Resources.Load<Sprite>(iconPath);
+                if (iconSprite != null)
+                {
+                    EnergyBar.Icon.sprite = iconSprite;
+                }
+            }
         }
 
         /// <summary>
@@ -1272,6 +1576,11 @@ namespace Scripts.UI
             if (evt.IsPrediction)
             {
                 Debug.Log($"[UI_BattleScene] 预解算模式：跳过战斗演出，{evt.CasterId} -> {evt.TargetId}");
+                return;
+            }
+
+            if (evt.SkipBattleAnimation)
+            {
                 return;
             }
 

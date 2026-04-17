@@ -55,11 +55,106 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public string ConfigId { get; set; }
 
+        // ========== ATB 系统新增字段 ==========
+
+        /// <summary>
+        /// 单位速度，决定行动条推进效率
+        /// </summary>
+        public int Speed { get; set; }
+
+        /// <summary>
+        /// 基础能量（每回合刷新值）
+        /// </summary>
+        public int BaseEnergy { get; set; }
+
+        /// <summary>
+        /// 基础抽牌数（每回合抽牌值）
+        /// </summary>
+        public int BaseDrawCount { get; set; }
+
+        /// <summary>
+        /// 当前回合剩余能量
+        /// </summary>
+        public int CurrentEnergy { get; set; }
+
+        /// <summary>
+        /// 行动条状态
+        /// </summary>
+        public ActionBarState ActionBar { get; set; }
+
+        /// <summary>
+        /// 过载状态
+        /// </summary>
+        public OverloadState Overload { get; set; }
+
+        // ========== 敌人意图轴/执行轴字段 ==========
+
+        /// <summary>
+        /// 当前敌人行动阶段（仅敌人单位使用）
+        /// </summary>
+        public EnemyPhase CurrentPhase { get; set; }
+
+        /// <summary>
+        /// 意图轴总长度（格数，来自技能配置）
+        /// </summary>
+        public int IntentAxisLength { get; set; }
+
+        /// <summary>
+        /// 意图轴当前进度（0 到 IntentAxisLength）
+        /// </summary>
+        public int IntentAxisProgress { get; set; }
+
+        /// <summary>
+        /// 执行轴总长度（格数，默认1）
+        /// </summary>
+        public int ExecuteAxisLength { get; set; }
+
+        /// <summary>
+        /// 执行轴当前进度（0 到 ExecuteAxisLength）
+        /// </summary>
+        public int ExecuteAxisProgress { get; set; }
+
+        /// <summary>
+        /// 是否处于硬直状态（所有推进冻结）
+        /// </summary>
+        public bool IsStunned { get; set; }
+
+        /// <summary>
+        /// 硬直剩余tick数
+        /// </summary>
+        public int StunRemainingTicks { get; set; }
+
+        /// <summary>
+        /// 待执行技能ID（敌人意图轴中暂存）
+        /// </summary>
+        public string PendingSkillId { get; set; }
+
+        /// <summary>
+        /// 待执行技能的目标ID（敌人意图轴中暂存）
+        /// </summary>
+        public string PendingTargetId { get; set; }
+
         public UnitState()
         {
             Buffs = new List<BuffState>();
             Track = new TimelineTrack();
+            ActionBar = new ActionBarState();
+            Overload = new OverloadState();
             IsDead = false;
+            Speed = 10;
+            BaseEnergy = 3;
+            BaseDrawCount = 5;
+            CurrentEnergy = 0;
+            // 敌人意图轴/执行轴默认值
+            CurrentPhase = EnemyPhase.None;
+            IntentAxisLength = 0;
+            IntentAxisProgress = 0;
+            ExecuteAxisLength = 1;
+            ExecuteAxisProgress = 0;
+            IsStunned = false;
+            StunRemainingTicks = 0;
+            PendingSkillId = null;
+            PendingTargetId = null;
         }
 
         /// <summary>
@@ -224,11 +319,26 @@ namespace Ashlight.Battle.Core.Data
                 IsDead = this.IsDead,
                 IsPlayerUnit = this.IsPlayerUnit,
                 ConfigId = this.ConfigId,
+                Speed = this.Speed,
+                BaseEnergy = this.BaseEnergy,
+                BaseDrawCount = this.BaseDrawCount,
+                CurrentEnergy = this.CurrentEnergy,
                 Buffs = new List<BuffState>(),
-                Track = this.Track?.Clone()
+                Track = this.Track?.Clone(),
+                ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
+                Overload = this.Overload?.Clone() ?? new OverloadState(),
+                // 敌人意图轴/执行轴
+                CurrentPhase = this.CurrentPhase,
+                IntentAxisLength = this.IntentAxisLength,
+                IntentAxisProgress = this.IntentAxisProgress,
+                ExecuteAxisLength = this.ExecuteAxisLength,
+                ExecuteAxisProgress = this.ExecuteAxisProgress,
+                IsStunned = this.IsStunned,
+                StunRemainingTicks = this.StunRemainingTicks,
+                PendingSkillId = this.PendingSkillId,
+                PendingTargetId = this.PendingTargetId
             };
 
-            // 深拷贝Buffs列表
             if (this.Buffs != null)
             {
                 foreach (var buff in this.Buffs)

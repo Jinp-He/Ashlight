@@ -127,6 +127,15 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 检查指定攻击对是否已有待消费伤害
+        /// </summary>
+        private bool HasPendingDamage(string attackerId, string targetId)
+        {
+            string key = GetAttackPairKey(attackerId, targetId);
+            return _pendingDamageByPair.ContainsKey(key);
+        }
+
+        /// <summary>
         /// 获取攻击对的key
         /// </summary>
         private string GetAttackPairKey(string attackerId, string targetId)
@@ -193,6 +202,19 @@ namespace Scripts.UI
 
             // 获取缓存的伤害值
             int damage = 0;
+            if (evt.IsAttackCard)
+            {
+                // 时序修正：
+                // CardExecutedEvent 可能先于 AttackExecutedEvent 到达，
+                // 最多等待2帧让伤害事件完成缓存，避免伤害数字延后一拍。
+                int waitFrames = 2;
+                while (waitFrames > 0 && !HasPendingDamage(evt.CasterId, evt.TargetId))
+                {
+                    waitFrames--;
+                    yield return null;
+                }
+            }
+
             if (TryConsumePendingDamage(evt.CasterId, evt.TargetId, out damage))
             {
                 Debug.Log($"[BattleAnimationHandler] 获取到缓存的伤害值: {damage}");

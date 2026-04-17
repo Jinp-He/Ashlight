@@ -20,7 +20,7 @@ namespace cfg
         /// <summary>
         /// 僵直
         /// </summary>
-        Recoit = 1,
+        Recoil = 1,
     }
 
 } 

@@ -89,10 +89,12 @@ namespace Ashlight.Battle.Core.Commands
             switch (ConditionType)
             {
                 case "IsAttacking":
-                    // 检查目标时间轴上是否有Active阶段的攻击Block
-                    return HasAttackingPhase(target);
+                    // 旧条件：检查目标时间轴上是否有Active阶段（兼容旧系统）
+                    // 新系统中等价于 EnemyInExecuteAxis
+                    return target.CurrentPhase == EnemyPhase.ExecuteAxis || HasAttackingPhase(target);
 
                 case "IsDefending":
+                case "HasShield":
                     // 检查目标是否有护甲
                     return target.Defense > 0;
 
@@ -103,6 +105,25 @@ namespace Ashlight.Battle.Core.Commands
                 case "HighHp":
                     // 检查目标是否高血量（高于80%）
                     return target.CurrentHp > target.MaxHp * 0.8f;
+
+                // ========== 方案3 新增条件 ==========
+
+                case "EnemyInIntentAxis":
+                    // 目标处于意图轴阶段
+                    return target.CurrentPhase == EnemyPhase.IntentAxis;
+
+                case "EnemyInExecuteAxis":
+                    // 目标处于执行轴阶段
+                    return target.CurrentPhase == EnemyPhase.ExecuteAxis;
+
+                case "EnemyInAnyAxis":
+                    // 目标处于意图轴或执行轴
+                    return target.CurrentPhase == EnemyPhase.IntentAxis
+                        || target.CurrentPhase == EnemyPhase.ExecuteAxis;
+
+                case "IsStunned":
+                    // 目标处于硬直状态
+                    return target.IsStunned;
 
                 default:
                     Debug.LogWarning($"[AttackConditionalCommand] 未知的条件类型: {ConditionType}");

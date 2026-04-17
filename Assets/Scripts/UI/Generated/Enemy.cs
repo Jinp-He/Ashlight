@@ -19,6 +19,7 @@ namespace Scripts.UI
         public TextMeshProUGUI Txt_Hp;
         public RectTransform Shield;
         public TextMeshProUGUI Txt_Shield;
+        public TextMeshProUGUI Txt_Intention;
 
         #endregion
 
@@ -60,6 +61,9 @@ namespace Scripts.UI
                         break;
                     case "Txt_Shield":
                         Txt_Shield = bind.GetComponent<TextMeshProUGUI>();
+                        break;
+                    case "Txt_Intention":
+                        Txt_Intention = bind.GetComponent<TextMeshProUGUI>();
                         break;
                 }
             }

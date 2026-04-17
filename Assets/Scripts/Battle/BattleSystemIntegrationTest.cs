@@ -139,9 +139,7 @@ namespace Ashlight.Battle
             if (state.DeckSystem != null)
             {
                 Debug.Log($"[测试] ✓ 卡组系统已创建");
-                Debug.Log($"  - 抽牌堆: {state.DeckSystem.DrawPile.Count} 张");
-                Debug.Log($"  - 弃牌堆: {state.DeckSystem.DiscardPile.Count} 张");
-                Debug.Log($"  - 手牌: {state.DeckSystem.Hand.Count} 张");
+                Debug.Log($"  - {state.DeckSystem.GetDebugInfo()}");
                 Debug.Log($"  - 总计: {state.DeckSystem.GetTotalCardCount()} 张");
 
                 // 显示手牌详情

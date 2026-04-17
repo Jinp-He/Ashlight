@@ -21,6 +21,9 @@ public sealed partial class CharaterInfo : Luban.BeanBase
         { if(!_buf["Name"].IsString) { throw new SerializationException(); }  Name = _buf["Name"]; }
         { if(!_buf["BaseHp"].IsNumber) { throw new SerializationException(); }  BaseHp = _buf["BaseHp"]; }
         { var __json0 = _buf["BaseDeck"]; if(!__json0.IsArray) { throw new SerializationException(); } BaseDeck = new System.Collections.Generic.List<string>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { string __v0;  { if(!__e0.IsString) { throw new SerializationException(); }  __v0 = __e0; }  BaseDeck.Add(__v0); }   }
+        { if(!_buf["Speed"].IsNumber) { throw new SerializationException(); }  Speed = _buf["Speed"]; }
+        { if(!_buf["Draw"].IsNumber) { throw new SerializationException(); }  Draw = _buf["Draw"]; }
+        { if(!_buf["Energy"].IsNumber) { throw new SerializationException(); }  Energy = _buf["Energy"]; }
     }
 
     public static CharaterInfo DeserializeCharaterInfo(JSONNode _buf)
@@ -33,6 +36,9 @@ public sealed partial class CharaterInfo : Luban.BeanBase
     public readonly int BaseHp;
     public readonly System.Collections.Generic.List<string> BaseDeck;
     public System.Collections.Generic.List<Character.CardInfo> BaseDeck_Ref;
+    public readonly int Speed;
+    public readonly int Draw;
+    public readonly int Energy;
    
     public const int __ID__ = -1839130327;
     public override int GetTypeId() => __ID__;
@@ -51,6 +57,9 @@ public sealed partial class CharaterInfo : Luban.BeanBase
         + "Name:" + Name + ","
         + "BaseHp:" + BaseHp + ","
         + "BaseDeck:" + Luban.StringUtil.CollectionToString(BaseDeck) + ","
+        + "Speed:" + Speed + ","
+        + "Draw:" + Draw + ","
+        + "Energy:" + Energy + ","
         + "}";
     }
 }
