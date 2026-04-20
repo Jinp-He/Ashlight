@@ -912,6 +912,8 @@ namespace Scripts.UI
 
             _cardPoolManager.MoveToDiscard(card);
             UpdateHandLayout();
+            // 出牌后能量减少，剩余手牌可能转为能量不足 —— 立即刷新变色
+            RefreshHandEnergyAffordability();
             Debug.Log($"[UI_BattleScene] 立即出牌后移入弃牌堆: {card.GetCurrentCard()?.Name}");
         }
 
@@ -1490,6 +1492,28 @@ namespace Scripts.UI
                 if (iconSprite != null)
                 {
                     EnergyBar.Icon.sprite = iconSprite;
+                }
+            }
+
+            // 能量变化后刷新所有手牌的能量可负担态（左上角变色）
+            RefreshHandEnergyAffordability();
+        }
+
+        /// <summary>
+        /// 通知所有手牌根据当前玩家能量刷新左上角能量数字颜色
+        /// </summary>
+        private void RefreshHandEnergyAffordability()
+        {
+            if (_handCards == null)
+            {
+                return;
+            }
+
+            foreach (var cardView in _handCards)
+            {
+                if (cardView != null)
+                {
+                    cardView.RefreshEnergyAffordability();
                 }
             }
         }

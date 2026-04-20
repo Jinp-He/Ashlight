@@ -65,12 +65,28 @@ namespace Scripts.UI
         [Tooltip("合法目标的变暗颜色（拖动时合法目标会变暗）")]
         private Color validTargetDimColor = new Color(0.5f, 0.5f, 0.5f, 1f);
 
+        [SerializeField]
+        [Tooltip("能量不足时左上角能量文本的变色颜色")]
+        private Color insufficientEnergyColor = new Color(1f, 0.25f, 0.25f, 1f);
+
+        [SerializeField]
+        [Tooltip("执行（延时）卡牌左上角能量底图颜色")]
+        private Color executionCostTint = new Color(1f, 0.55f, 0.2f, 1f);
+
         #endregion
 
         #region 私有字段
 
         private CardInfo _currentCard;
         private DescriptionMode _displayMode = DescriptionMode.View;
+
+        // 记录 Txt_LeftCost 默认颜色，用于能量足够时恢复
+        private Color _defaultLeftCostColor;
+        private bool _defaultLeftCostColorCaptured = false;
+
+        // 记录 Img_CostLeft 默认颜色，用于非执行牌时恢复
+        private Color _defaultLeftCostImageColor;
+        private bool _defaultLeftCostImageColorCaptured = false;
 
         /// <summary>
         /// 当前关联的 CardRuntimeState 的 InstanceId（用于对象池关联）
@@ -631,10 +647,30 @@ namespace Scripts.UI
                 Txt_LeftCost.text = _currentCard.Energy.ToString();
             }
 
+            // 根据玩家当前能量刷新左上角颜色
+            RefreshEnergyAffordability();
+
             // 设置右侧消耗（卡牌类型）
+            bool isExecution = _currentCard.CardType == cfg.CardTypeEnum.Execution;
             if (Txt_RightCost != null)
             {
-                Txt_RightCost.text = _currentCard.CardType == cfg.CardTypeEnum.Swift ? "迅" : "执";
+                Txt_RightCost.text = isExecution ? "执" : "迅";
+            }
+
+            // 执行（延时）卡牌左上角能量底图变橙色
+            if (Img_CostLeft != null)
+            {
+                if (!_defaultLeftCostImageColorCaptured)
+                {
+                    _defaultLeftCostImageColor = Img_CostLeft.color;
+                    _defaultLeftCostImageColorCaptured = true;
+                }
+                Img_CostLeft.color = isExecution ? executionCostTint : _defaultLeftCostImageColor;
+                Debug.Log($"[CardViewController] {_currentCard.Name} CardType={_currentCard.CardType} isExecution={isExecution} Img_CostLeft.color={Img_CostLeft.color}");
+            }
+            else
+            {
+                Debug.LogWarning($"[CardViewController] {_currentCard.Name} Img_CostLeft 为 null，无法设置类型底色");
             }
 
             // 设置稀有度显示
@@ -869,6 +905,13 @@ namespace Scripts.UI
 
             if (_executionSuppressed)
             {
+                return;
+            }
+
+            // 能量不足时禁止从手牌拖出（已经放到时间轴上的牌不受影响，那张牌的能量已被扣除）
+            if (_cardDragState != CardDragState.OnTime && !HasEnoughEnergyForCard())
+            {
+                Debug.Log($"[CardViewController] 能量不足，无法拖拽: {_currentCard?.Name} (需求={_currentCard?.Energy})");
                 return;
             }
 
@@ -1630,6 +1673,60 @@ namespace Scripts.UI
         private CharacterEnum GetOwnerCharacterId()
         {
             return _currentCard.BelongTo;
+        }
+
+        /// <summary>
+        /// 判断该卡牌的所属单位是否拥有足够的能量
+        /// 解析失败或战斗数据不可用时返回 true（不误禁拖拽）
+        /// </summary>
+        private bool HasEnoughEnergyForCard()
+        {
+            if (_currentCard == null)
+            {
+                return true;
+            }
+
+            var battleManager = Ashlight.Battle.BattleManager.Instance;
+            if (battleManager == null || battleManager.CurrentState == null)
+            {
+                return true;
+            }
+
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (string.IsNullOrEmpty(ownerUnitId))
+            {
+                return true;
+            }
+
+            var unit = battleManager.CurrentState.GetUnitById(ownerUnitId);
+            if (unit == null)
+            {
+                return true;
+            }
+
+            return unit.CurrentEnergy >= _currentCard.Energy;
+        }
+
+        /// <summary>
+        /// 根据玩家能量刷新左上角能量文本颜色
+        /// 能量不足：变为 <see cref="insufficientEnergyColor"/>
+        /// 能量足够：恢复默认颜色
+        /// </summary>
+        public void RefreshEnergyAffordability()
+        {
+            if (Txt_LeftCost == null || _currentCard == null)
+            {
+                return;
+            }
+
+            if (!_defaultLeftCostColorCaptured)
+            {
+                _defaultLeftCostColor = Txt_LeftCost.color;
+                _defaultLeftCostColorCaptured = true;
+            }
+
+            bool affordable = HasEnoughEnergyForCard();
+            Txt_LeftCost.color = affordable ? _defaultLeftCostColor : insufficientEnergyColor;
         }
         
         /// <summary>
