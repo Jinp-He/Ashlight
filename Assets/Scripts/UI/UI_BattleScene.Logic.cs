@@ -950,30 +950,38 @@ namespace Scripts.UI
 
         /// <summary>
         /// 更新手牌布局
+        /// 排序：Swift(蓝/即时)在左，Execution(橙/延迟)在右；同类型保持加入顺序（OrderBy 稳定）。
         /// </summary>
         private void UpdateHandLayout()
         {
             if (CardContainer == null || _handCards.Count == 0)
                 return;
 
-            // 计算总宽度
-            float totalWidth = (_handCards.Count - 1) * cardSpacing;
-            
-            // 计算起始位置（居中）
+            var sortedCards = _handCards.OrderBy(GetHandSortKey).ToList();
+
+            float totalWidth = (sortedCards.Count - 1) * cardSpacing;
             float startX = -totalWidth / 2f;
 
-            // 更新每张卡牌的位置
-            for (int i = 0; i < _handCards.Count; i++)
+            for (int i = 0; i < sortedCards.Count; i++)
             {
-                if (_handCards[i] == null) continue;
+                if (sortedCards[i] == null) continue;
 
-                RectTransform cardRect = _handCards[i].transform as RectTransform;
+                RectTransform cardRect = sortedCards[i].transform as RectTransform;
                 if (cardRect != null)
                 {
                     float xPos = startX + i * cardSpacing;
                     cardRect.anchoredPosition = new Vector2(xPos, 0f);
+                    cardRect.SetSiblingIndex(i);
                 }
             }
+        }
+
+        private static int GetHandSortKey(CardViewController cardView)
+        {
+            var info = cardView?.GetCurrentCard();
+            if (info == null) return 0;
+            if (info.CardType == CardTypeEnum.Swift) return 0;
+            return Mathf.Max(1, info.ExecutingCost);
         }
 
         /// <summary>
