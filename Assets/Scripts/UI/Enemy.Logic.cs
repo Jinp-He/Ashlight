@@ -23,7 +23,19 @@ namespace Scripts.UI
         private Coroutine _blinkCoroutine = null;
         private int _predictedHp = 0;
 
-        private Coroutine _thinkingCoroutine = null;
+        // 静态敌人状态图（无 Spine 骨骼时用）
+        private bool _isStaticSprite = false;
+        private Sprite _idleSprite;
+        private Sprite _hitSprite;
+        private Sprite _attackSprite;
+        private Sprite _castSprite;
+        private Coroutine _staticStateCoroutine;
+
+        // 初始基线，用于 sprite 换图后联动 IntentionView 位置
+        private bool _baselineCaptured = false;
+        private float _initialEnemyImageHeight;
+        private Vector2 _initialIntentionAnchoredPos;
+
 
         #endregion
 
@@ -34,11 +46,41 @@ namespace Scripts.UI
             // 初始化UI绑定
             InitUIBindings();
 
+            // 兜底：UIBind 未配置时按组件类型抓 IntentionView
+            if (IntentionView == null)
+            {
+                IntentionView = GetComponentInChildren<IntentionView>(true);
+                if (IntentionView == null)
+                {
+                    Debug.LogWarning("[Enemy] 未找到 IntentionView 子节点：请将 UI_意图 prefab 拖入并挂 UIBind(BindName=IntentionView)，或确保是子节点");
+                }
+            }
+
             // 默认隐藏Indicator
             if (Indicator != null)
             {
                 Indicator.alpha = 0f;
             }
+
+            CaptureLayoutBaseline();
+        }
+
+        private void CaptureLayoutBaseline()
+        {
+            if (_baselineCaptured) return;
+            if (EnemyImage != null)
+            {
+                _initialEnemyImageHeight = EnemyImage.rectTransform.rect.height;
+            }
+            if (IntentionView != null)
+            {
+                var rt = IntentionView.transform as RectTransform;
+                if (rt != null)
+                {
+                    _initialIntentionAnchoredPos = rt.anchoredPosition;
+                }
+            }
+            _baselineCaptured = true;
         }
 
         #endregion
@@ -183,70 +225,82 @@ namespace Scripts.UI
         {
             if (_unitState == null || BuffBase == null) return;
 
-            // TODO: 实现Buff图标的显示
-            // 清空现有Buff
+            // 清空现有 Buff 图标
             foreach (Transform child in BuffBase)
             {
                 Destroy(child.gameObject);
             }
 
-            // 添加新的Buff图标
-            if (_unitState.Buffs != null)
+            if (_unitState.Buffs == null || _unitState.Buffs.Count == 0) return;
+
+            var prefab = ResolveBuffPrefab();
+            if (prefab == null)
             {
-                foreach (var buff in _unitState.Buffs)
-                {
-                    // TODO: 实例化Buff图标预制体
-                    //Debug.Log($"[Enemy] Buff: {buff.BuffId}, 持续: {buff.Duration}回合");
-                }
+                Debug.LogWarning($"[Enemy] 找不到 UI_Buff prefab：Resources/{BuffPrefabResourcePath}");
+                return;
+            }
+
+            foreach (var buff in _unitState.Buffs)
+            {
+                if (buff == null) continue;
+                // Resources.Load<UI_Buff> + Instantiate 重载直接返回 UI_Buff，免 GetComponent
+                // 第三个参数 worldPositionStays=false 对 UI 元素必须（沿用 prefab anchored 设定）
+                var ui = Instantiate(prefab, BuffBase, false);
+                ui.Initialize(buff);
             }
         }
 
+        private const string BuffPrefabResourcePath = "UI/BattleScene/UI_Buff";
+        private static UI_Buff _cachedBuffPrefab;
+
+        private static UI_Buff ResolveBuffPrefab()
+        {
+            if (_cachedBuffPrefab == null)
+            {
+                _cachedBuffPrefab = Resources.Load<UI_Buff>(BuffPrefabResourcePath);
+            }
+            return _cachedBuffPrefab;
+        }
+
         /// <summary>
-        /// 设置规划轨意图显示："思考中..."（省略号滚动动画）
+        /// 设置规划轨意图显示：思考图标 + 坐标全灰
         /// </summary>
         public void SetIntentionThinking()
         {
-            StopThinkingAnimation();
-            _thinkingCoroutine = StartCoroutine(ThinkingAnimationCoroutine());
+            if (IntentionView != null)
+            {
+                IntentionView.ShowThinking();
+            }
+            // 兼容旧 Txt_Intention（如 prefab 尚未切换到 IntentionView）
+            if (Txt_Intention != null)
+                Txt_Intention.text = string.Empty;
         }
 
         /// <summary>
-        /// 设置执行轨意图显示：攻击类显示"目标名+伤害"，非攻击类显示"技能"
+        /// 设置执行轨意图显示：根据技能效果决定 Attack/Shield/State 图标 + 数值。
+        /// Coord 按"暗黑地牢式"展示目标位置：单体亮目标格、AOE 全亮。
+        /// </summary>
+        /// <param name="skillInfo">敌人技能配置</param>
+        /// <param name="targetSlot">目标在我方队伍中的位置索引（0 起；AOE 时可传 -1）</param>
+        /// <param name="totalSlots">我方队伍总人数（决定 Coord 总格数）</param>
+        /// <param name="isAoe">是否 AOE（全体技能）</param>
+        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, int targetSlot, int totalSlots, bool isAoe)
+        {
+            if (IntentionView != null)
+            {
+                IntentionView.ShowFromSkill(skillInfo, targetSlot, totalSlots, isAoe);
+            }
+            // 兼容旧 Txt_Intention
+            if (Txt_Intention != null)
+                Txt_Intention.text = string.Empty;
+        }
+
+        /// <summary>
+        /// 旧签名兜底：没有目标位置信息时调用，Coord 全灰。
         /// </summary>
         public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, string targetName)
         {
-            StopThinkingAnimation();
-
-            if (Txt_Intention == null) return;
-
-            int totalDamage = 0;
-            bool hasAttack = false;
-
-            if (skillInfo?.Effects != null)
-            {
-                foreach (var effect in skillInfo.Effects)
-                {
-                    if (effect is cfg.AttackEffect atk)
-                    {
-                        totalDamage += atk.Damage;
-                        hasAttack = true;
-                    }
-                    else if (effect is cfg.AttackExtraEffect atkEx)
-                    {
-                        totalDamage += atkEx.Damage;
-                        hasAttack = true;
-                    }
-                }
-            }
-
-            if (hasAttack && !string.IsNullOrEmpty(targetName))
-            {
-                Txt_Intention.text = $"<color=#FF6B6B>{targetName} -{totalDamage}</color>";
-            }
-            else
-            {
-                Txt_Intention.text = "<color=#7EC8E3>技能</color>";
-            }
+            SetIntentionExecuting(skillInfo, targetSlot: -1, totalSlots: -1, isAoe: false);
         }
 
         /// <summary>
@@ -254,33 +308,10 @@ namespace Scripts.UI
         /// </summary>
         public void ClearIntention()
         {
-            StopThinkingAnimation();
+            if (IntentionView != null)
+                IntentionView.Hide();
             if (Txt_Intention != null)
                 Txt_Intention.text = string.Empty;
-        }
-
-        private void StopThinkingAnimation()
-        {
-            if (_thinkingCoroutine != null)
-            {
-                StopCoroutine(_thinkingCoroutine);
-                _thinkingCoroutine = null;
-            }
-        }
-
-        private System.Collections.IEnumerator ThinkingAnimationCoroutine()
-        {
-            string[] frames = { "思考中", "思考中.", "思考中..", "思考中..." };
-            int index = 0;
-
-            while (true)
-            {
-                if (Txt_Intention != null)
-                    Txt_Intention.text = frames[index];
-
-                index = (index + 1) % frames.Length;
-                yield return new WaitForSeconds(0.4f);
-            }
         }
 
         /// <summary>
@@ -288,6 +319,11 @@ namespace Scripts.UI
         /// </summary>
         public void PlayHitAnimation()
         {
+            if (_isStaticSprite)
+            {
+                SetStaticSprite(_hitSprite, 0.5f);
+                return;
+            }
             if (Skeleton_Unit != null && Skeleton_Unit.AnimationState != null)
             {
                 // 播放受击动画
@@ -302,6 +338,11 @@ namespace Scripts.UI
         /// </summary>
         public void PlayAttackAnimation()
         {
+            if (_isStaticSprite)
+            {
+                SetStaticSprite(_attackSprite, 0.5f);
+                return;
+            }
             if (Skeleton_Unit != null && Skeleton_Unit.AnimationState != null)
             {
                 Skeleton_Unit.AnimationState.SetAnimation(0, "attack1", false);
@@ -315,6 +356,11 @@ namespace Scripts.UI
         /// </summary>
         public void PlayDeathAnimation()
         {
+            if (_isStaticSprite)
+            {
+                // 静态敌人无死亡动画，保持当前 sprite
+                return;
+            }
             if (Skeleton_Unit != null && Skeleton_Unit.AnimationState != null)
             {
                 Skeleton_Unit.AnimationState.SetAnimation(0, "death", false);
@@ -326,6 +372,11 @@ namespace Scripts.UI
         /// </summary>
         public void PlayShoujiAnimation()
         {
+            if (_isStaticSprite)
+            {
+                SetStaticSprite(_hitSprite, 0.5f);
+                return;
+            }
             if (Skeleton_Unit?.AnimationState == null)
             {
                 Debug.LogWarning("[Enemy] Skeleton_Unit or AnimationState is null");
@@ -486,11 +537,16 @@ namespace Scripts.UI
         /// <param name="color">颜色</param>
         public void SetColor(Color color)
         {
+            if (_isStaticSprite && EnemyImage != null)
+            {
+                EnemyImage.color = color;
+                return;
+            }
             if (Skeleton_Unit != null)
             {
                 // 方法1: 直接设置 SkeletonGraphic 的颜色（推荐用于 UI）
                 Skeleton_Unit.color = color;
-                
+
                 // 方法2: 同时设置 Skeleton 的 RGBA（确保完全生效）
                 if (Skeleton_Unit.Skeleton != null)
                 {
@@ -568,41 +624,151 @@ namespace Scripts.UI
         #region 私有方法
 
         /// <summary>
-        /// 加载Spine骨骼动画
+        /// 加载敌人视觉：优先 Spine 骨骼；若该敌人没有骨骼资源，则回退为静态 Sprite。
         /// </summary>
         private void LoadSkeletonAnimation()
         {
-            if (_enemyInfo == null || Skeleton_Unit == null)
+            if (_enemyInfo == null)
             {
                 return;
             }
 
-            // 使用AssetPath工具类生成Skeleton资源路径
-            string skeletonPath = AssetPath.GetEnemySkeletonAssetPath(_enemyInfo.Id);
-            
-            Debug.Log($"[Enemy] 尝试加载Skeleton: {skeletonPath}");
+            // AlternativePath 决定资源文件夹（多个 EnemyInfo 可共用同一套美术）
+            string artId = string.IsNullOrEmpty(_enemyInfo.AlternativePath) ? _enemyInfo.Id : _enemyInfo.AlternativePath;
 
-            // 从Resources加载Spine骨骼数据
+            string skeletonPath = AssetPath.GetEnemySkeletonAssetPath(artId);
             var skeletonData = Resources.Load<SkeletonDataAsset>(skeletonPath);
-            
-            if (skeletonData != null)
+
+            if (skeletonData != null && Skeleton_Unit != null)
             {
+                Skeleton_Unit.gameObject.SetActive(true);
                 Skeleton_Unit.skeletonDataAsset = skeletonData;
                 Skeleton_Unit.Initialize(true);
-                
-                // 播放默认idle动画
+
                 if (Skeleton_Unit.AnimationState != null)
                 {
                     Skeleton_Unit.AnimationState.SetAnimation(0, "idle", true);
                 }
-                
-                Debug.Log($"[Enemy] Skeleton加载成功: {_enemyInfo.Name}");
+
+                if (EnemyImage != null)
+                {
+                    EnemyImage.gameObject.SetActive(false);
+                }
+
+                CenterSkeletonVisual();
+
+                Debug.Log($"[Enemy] Skeleton加载成功: {_enemyInfo.Name} ({artId})");
+                return;
             }
-            else
+
+            // 回退：用静态 Sprite。优先用 idle.png 作为站立图；缺失时退回主图。
+            string spriteFolder = System.IO.Path.GetDirectoryName(AssetPath.GetEnemySpritesAssetPath(artId)).Replace('\\', '/');
+            _idleSprite = Resources.Load<Sprite>($"{spriteFolder}/idle") ?? Resources.Load<Sprite>(AssetPath.GetEnemySpritesAssetPath(artId));
+            _hitSprite = Resources.Load<Sprite>($"{spriteFolder}/hit");
+            _attackSprite = Resources.Load<Sprite>($"{spriteFolder}/attack");
+            _castSprite = Resources.Load<Sprite>($"{spriteFolder}/cast");
+
+            if (_idleSprite != null && EnemyImage != null)
             {
-                Debug.LogWarning($"[Enemy] 未找到Skeleton资源: {skeletonPath}");
-                Debug.LogWarning($"[Enemy] 请确保资源位于 Resources/{skeletonPath} 路径下");
+                if (Skeleton_Unit != null)
+                {
+                    Skeleton_Unit.gameObject.SetActive(false);
+                }
+
+                _isStaticSprite = true;
+                EnemyImage.gameObject.SetActive(true);
+                ApplyStaticSprite(_idleSprite);
+
+                Debug.Log($"[Enemy] 使用静态Sprite: {_enemyInfo.Name} ({spriteFolder})");
+                return;
             }
+
+            Debug.LogWarning($"[Enemy] 找不到骨骼或Sprite: skeleton={skeletonPath}, sprite folder={spriteFolder}");
+        }
+
+        private void SetStaticSprite(Sprite sprite, float revertAfter)
+        {
+            if (!_isStaticSprite || EnemyImage == null || sprite == null) return;
+
+            if (_staticStateCoroutine != null)
+            {
+                StopCoroutine(_staticStateCoroutine);
+                _staticStateCoroutine = null;
+            }
+
+            ApplyStaticSprite(sprite);
+
+            if (revertAfter > 0f && _idleSprite != null)
+            {
+                _staticStateCoroutine = StartCoroutine(RevertToIdleAfter(revertAfter));
+            }
+        }
+
+        private System.Collections.IEnumerator RevertToIdleAfter(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (EnemyImage != null && _idleSprite != null)
+            {
+                ApplyStaticSprite(_idleSprite);
+            }
+            _staticStateCoroutine = null;
+        }
+
+        /// <summary>
+        /// 给 EnemyImage 换 sprite + SetNativeSize，并联动 IntentionView 跟随顶部偏移。
+        /// </summary>
+        private void ApplyStaticSprite(Sprite sprite)
+        {
+            if (EnemyImage == null || sprite == null) return;
+
+            EnemyImage.sprite = sprite;
+            EnemyImage.preserveAspect = true;
+            EnemyImage.SetNativeSize();
+
+            UpdateIntentionFollowImage();
+        }
+
+        /// <summary>
+        /// EnemyImage Pivot 为 (0.5, 0) 时，SetNativeSize 后图像底部不变、顶部上升 (newH - baseH)。
+        /// 把这个 delta 加到 IntentionView 的初始 anchoredPosition 上即可保持"贴顶"。
+        /// </summary>
+        private void UpdateIntentionFollowImage()
+        {
+            if (IntentionView == null || EnemyImage == null) return;
+
+            var rt = IntentionView.transform as RectTransform;
+            if (rt == null) return;
+
+            float deltaY = EnemyImage.rectTransform.rect.height - _initialEnemyImageHeight;
+            rt.anchoredPosition = new Vector2(
+                _initialIntentionAnchoredPos.x,
+                _initialIntentionAnchoredPos.y + deltaY);
+        }
+
+        /// <summary>
+        /// 用骨骼边界框把 Skeleton_Unit 的可视中心拉回到 RectTransform 锚点正下方/正中央，
+        /// 解决"DogKnight 比其他人偏右"导致血条/Indicator 看着不居中的问题。
+        /// </summary>
+        private void CenterSkeletonVisual()
+        {
+            if (Skeleton_Unit == null || Skeleton_Unit.Skeleton == null) return;
+
+            // 必须先更新世界变换，bounds 才有效
+            Skeleton_Unit.Skeleton.UpdateWorldTransform();
+
+            float[] vertexBuffer = null;
+            Skeleton_Unit.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vertexBuffer);
+
+            if (maxX <= minX) return;
+
+            var rt = Skeleton_Unit.rectTransform;
+            float centerX = (minX + maxX) * 0.5f;
+            float scaleX = rt.localScale.x;
+
+            // 反向偏移 RectTransform，让骨骼视觉中心落到当前锚点 x 上
+            rt.anchoredPosition = new Vector2(
+                rt.anchoredPosition.x - centerX * scaleX,
+                rt.anchoredPosition.y);
         }
 
         /// <summary>

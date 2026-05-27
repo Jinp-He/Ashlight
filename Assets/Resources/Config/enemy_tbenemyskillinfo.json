@@ -28,5 +28,143 @@
     ],
     "ExecutingCost": 3,
     "TargetType": 3
+  },
+  {
+    "Id": "ES003",
+    "Name": "铁锤重击",
+    "Description": "蓄力一击，造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 18,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 8,
+    "TargetType": 3
+  },
+  {
+    "Id": "ES004",
+    "Name": "烈焰扫射",
+    "Description": "对所有目标造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": true
+      }
+    ],
+    "ExecutingCost": 5,
+    "TargetType": 4
+  },
+  {
+    "Id": "ES005",
+    "Name": "铁壁加固",
+    "Description": "获得{D}点护甲，并减伤{V}%",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 10,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "ReduceDmg",
+        "value": 30
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 2
+  },
+  {
+    "Id": "ES006",
+    "Name": "急袭斩",
+    "Description": "快速一击，造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3
+  },
+  {
+    "Id": "ES007",
+    "Name": "寒冰之握",
+    "Description": "造成{A}点伤害，对目标施加冰冻",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Chill",
+        "value": 1
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 3
+  },
+  {
+    "Id": "ES008",
+    "Name": "终极燃烧",
+    "Description": "对所有目标造成{A}点伤害，并施加燃烧",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Burn",
+        "value": 3
+      }
+    ],
+    "ExecutingCost": 10,
+    "TargetType": 4
+  },
+  {
+    "Id": "ES009",
+    "Name": "战吼",
+    "Description": "获得{V}层力量",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Strength",
+        "value": 2
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 2
+  },
+  {
+    "Id": "ES010",
+    "Name": "易伤诅咒",
+    "Description": "对目标施加{V}%易伤",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 3
   }
 ]

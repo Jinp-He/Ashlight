@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using cfg;
 using cfg.Character;
 using Ashlight.Config;
+using UnityEngine;
 namespace Ashlight.Battle.Core.Data
 {
     /// <summary>
@@ -164,23 +165,45 @@ namespace Ashlight.Battle.Core.Data
         /// <returns>实际受到的伤害</returns>
         public int TakeDamage(int damage)
         {
-            // 先消耗护甲
-            int actualDamage = damage;
+            if (damage <= 0)
+            {
+                return 0;
+            }
+
+            // 1. Buff 修正：先放大（易伤），再衰减（减伤）；配置里 Value 是百分比，如 50 表示 50%
+            float modified = damage;
+
+            var vulnerable = GetBuff("Vulnerable");
+            if (vulnerable != null)
+            {
+                modified *= 1f + vulnerable.Value / 100f;
+            }
+
+            var reduceDmg = GetBuff("ReduceDmg");
+            if (reduceDmg != null)
+            {
+                modified *= Mathf.Max(0f, 1f - reduceDmg.Value / 100f);
+            }
+
+            int adjusted = Mathf.Max(0, Mathf.RoundToInt(modified));
+
+            // 2. 护甲吸收
+            int actualDamage = adjusted;
             if (Defense > 0)
             {
-                if (Defense >= damage)
+                if (Defense >= adjusted)
                 {
-                    Defense -= damage;
+                    Defense -= adjusted;
                     return 0; // 完全被护甲吸收
                 }
                 else
                 {
-                    actualDamage = damage - Defense;
+                    actualDamage = adjusted - Defense;
                     Defense = 0;
                 }
             }
 
-            // 扣除血量
+            // 3. 扣血
             CurrentHp -= actualDamage;
             if (CurrentHp <= 0)
             {
@@ -188,7 +211,68 @@ namespace Ashlight.Battle.Core.Data
                 IsDead = true;
             }
 
+            // 4. 打断系 buff 计数（Stagger=累计伤害, Block=受击次数）
+            if (!IsDead)
+            {
+                ProcessStaggerOnHit(actualDamage);
+                ProcessBlockOnHit(actualDamage);
+            }
+
             return actualDamage;
+        }
+
+        /// <summary>
+        /// Stagger（破韧）：每次受到伤害扣对应 Value，归 0 时打断行动
+        /// </summary>
+        private void ProcessStaggerOnHit(int actualDamage)
+        {
+            if (actualDamage <= 0) return;
+            var stagger = GetBuff("Stagger");
+            if (stagger == null) return;
+
+            stagger.Value -= actualDamage;
+            if (stagger.Value <= 0)
+            {
+                RemoveBuff("Stagger");
+                TryInterruptByBuff("Stagger");
+            }
+        }
+
+        /// <summary>
+        /// Block（格挡）：每次成功受到伤害扣 1 次数，归 0 时打断行动
+        /// </summary>
+        private void ProcessBlockOnHit(int actualDamage)
+        {
+            if (actualDamage <= 0) return;
+            var block = GetBuff("Block");
+            if (block == null) return;
+
+            block.Value -= 1f;
+            if (block.Value <= 0)
+            {
+                RemoveBuff("Block");
+                TryInterruptByBuff("Block");
+            }
+        }
+
+        /// <summary>
+        /// 由打断系 buff 触发的中断（仅对处于意图轴/执行轴的敌人生效）
+        /// </summary>
+        private void TryInterruptByBuff(string source)
+        {
+            if (CurrentPhase == EnemyPhase.None) return;
+
+            Debug.Log($"[UnitState] {UnitId} 被 [{source}] 打断 (原阶段={CurrentPhase}, 技能={PendingSkillId})");
+            CurrentPhase = EnemyPhase.None;
+            IntentAxisLength = 0;
+            IntentAxisProgress = 0;
+            ExecuteAxisLength = 1;
+            ExecuteAxisProgress = 0;
+            PendingSkillId = null;
+            PendingTargetId = null;
+            IsStunned = false;
+            StunRemainingTicks = 0;
+            ActionBar?.Restart();
         }
 
         /// <summary>
@@ -220,6 +304,23 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public void AddDefense(int amount)
         {
+            // 仅对正向加护甲应用 Dex/Frail（负值是直接扣，比如卡片清空护甲等）
+            if (amount > 0)
+            {
+                float modified = amount;
+                var dex = GetBuff("Dexterity");
+                if (dex != null)
+                {
+                    modified += dex.Value;
+                }
+                var frail = GetBuff("Frail");
+                if (frail != null)
+                {
+                    modified *= Mathf.Max(0f, 1f - frail.Value / 100f);
+                }
+                amount = Mathf.Max(0, Mathf.RoundToInt(modified));
+            }
+
             Defense += amount;
             if (Defense < 0)
             {

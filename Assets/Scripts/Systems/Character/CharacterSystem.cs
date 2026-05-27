@@ -22,7 +22,9 @@ namespace Ashlight.Systems.Character
         {
             if (GameManager.Instance == null)
             {
-                Debug.LogError("[CharacterSystem] GameManager.Instance 为空");
+                // GameManager 尚未初始化（如直接从 BattleScene 启动的测试场景）
+                // 调用方需自行处理返回 null 的情况
+                Debug.LogWarning("[CharacterSystem] GameManager.Instance 为空，跳过存档读取");
                 return null;
             }
 

@@ -21,6 +21,90 @@ namespace cfg
         /// 僵直
         /// </summary>
         Recoil = 1,
+        /// <summary>
+        /// 减伤
+        /// </summary>
+        ReduceDmg = 2,
+        /// <summary>
+        /// 冰冻
+        /// </summary>
+        Chill = 3,
+        /// <summary>
+        /// 晕眩
+        /// </summary>
+        Stun = 4,
+        /// <summary>
+        /// 易伤
+        /// </summary>
+        Vulnerable = 5,
+        /// <summary>
+        /// 引导缩短
+        /// </summary>
+        ReduceChannel = 6,
+        /// <summary>
+        /// 禁锢
+        /// </summary>
+        Root = 7,
+        /// <summary>
+        /// 灵感
+        /// </summary>
+        DrawCard = 8,
+        /// <summary>
+        /// 嘲讽
+        /// </summary>
+        Taunt = 9,
+        /// <summary>
+        /// 被嘲讽
+        /// </summary>
+        Taunted = 10,
+        /// <summary>
+        /// 破韧
+        /// </summary>
+        Stagger = 11,
+        /// <summary>
+        /// 格挡
+        /// </summary>
+        Block = 12,
+        /// <summary>
+        /// 力量
+        /// </summary>
+        Strength = 13,
+        /// <summary>
+        /// 虚弱
+        /// </summary>
+        Weak = 14,
+        /// <summary>
+        /// 脆弱
+        /// </summary>
+        Frail = 15,
+        /// <summary>
+        /// 敏捷
+        /// </summary>
+        Dexterity = 16,
+        /// <summary>
+        /// 再生
+        /// </summary>
+        Regen = 17,
+        /// <summary>
+        /// 充能
+        /// </summary>
+        Energized = 18,
+        /// <summary>
+        /// 减费
+        /// </summary>
+        CardCost = 19,
+        /// <summary>
+        /// 中毒
+        /// </summary>
+        Poison = 20,
+        /// <summary>
+        /// 燃烧
+        /// </summary>
+        Burn = 21,
+        /// <summary>
+        /// 圣物
+        /// </summary>
+        Artifact = 22,
     }
 
 } 

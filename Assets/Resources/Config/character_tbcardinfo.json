@@ -48,7 +48,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 11,
         "is_aoe": true
       },
       {
@@ -74,7 +74,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 14,
         "is_aoe": false
       },
       {
@@ -95,12 +95,12 @@
   {
     "Id": "Rocket005",
     "Name": "守护",
-    "Description": "使友方角色获得 {D} 点高额护甲。",
+    "Description": "使友方角色获得 {D} 点护甲。",
     "Effects": [
       {
         "$type": "InterceptEffect",
         "EffectType": 1,
-        "shield_value": 20
+        "shield_value": 14
       }
     ],
     "CardType": 0,
@@ -217,7 +217,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 14,
         "is_aoe": false
       }
     ],
@@ -237,7 +237,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 11,
         "is_aoe": false
       },
       {
@@ -295,7 +295,7 @@
       {
         "$type": "DefenseEffect",
         "EffectType": 1,
-        "value": 10,
+        "value": 8,
         "per_hit": false
       },
       {
@@ -342,7 +342,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 18,
         "is_aoe": true
       },
       {
@@ -413,7 +413,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 16,
         "conditions": "Channeling|Recoil",
         "multiplier": 2
       }
@@ -434,7 +434,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 18,
+        "damage": 28,
         "is_aoe": true
       },
       {
@@ -465,13 +465,13 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 6,
+        "damage": 4,
         "is_aoe": false
       },
       {
         "$type": "AttackConditionalEffect",
         "EffectType": 0,
-        "bonus_damage": 8,
+        "bonus_damage": 6,
         "condition_type": "InExecution"
       }
     ],
@@ -532,7 +532,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 15,
         "is_aoe": false
       },
       {
@@ -584,7 +584,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 14,
         "is_aoe": true
       }
     ],
@@ -651,7 +651,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 14,
         "is_aoe": false
       },
       {
@@ -791,5 +791,298 @@
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket010",
+    "Name": "破韧斩",
+    "Description": "造成 {A} 点伤害，并对目标施加 [破韧] {V}（累计承受 {V} 点伤害后行动被打断）。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Stagger",
+        "value": 12
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket011",
+    "Name": "战吼",
+    "Description": "获得 [力量] {V}（攻击伤害 +{V}，持续 2 回合）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Strength",
+        "value": 3
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Rocket012",
+    "Name": "盾墙之姿",
+    "Description": "获得 {D} 点护甲，并获得 [敏捷] {V}（防御牌额外 +{V} 护甲）。",
+    "Effects": [
+      {
+        "$type": "InterceptEffect",
+        "EffectType": 1,
+        "shield_value": 12
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Dexterity",
+        "value": 3
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket013",
+    "Name": "粉碎一击",
+    "Description": "造成 {A} 点伤害，并使目标 [晕眩] {V} 回合（打断其正在执行的行动）。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Stun",
+        "value": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 3
+  },
+  {
+    "Id": "Irene013",
+    "Name": "灼热印记",
+    "Description": "造成 {A} 点伤害，并施加 [燃烧] {V}（每回合开始受到 {V} 点伤害，持续 3 回合）。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Burn",
+        "value": 4
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 1
+  },
+  {
+    "Id": "Irene014",
+    "Name": "法术屏障",
+    "Description": "获得 [圣物] {V}（接下来 {V} 次 debuff 被自动抵消）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Artifact",
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene015",
+    "Name": "元素涌动",
+    "Description": "获得 [充能] {V}（下回合开始 +{V} 能量）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Energized",
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene016",
+    "Name": "凋零诅咒",
+    "Description": "对目标施加 [虚弱] {V}%（造成伤害降低）和 [脆弱] {V:1}%（受到的伤害提高）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Weak",
+        "value": 40
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Frail",
+        "value": 50
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou013",
+    "Name": "蛇毒矢",
+    "Description": "造成 {A} 点伤害，并施加 [中毒] {V}（每回合开始受到 {V} 点伤害并衰减 1）。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Poison",
+        "value": 4
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou014",
+    "Name": "闪避姿态",
+    "Description": "获得 [敏捷] {V}（防御牌额外 +{V} 护甲，持续 2 回合）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Dexterity",
+        "value": 3
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Zhouzhou015",
+    "Name": "断筋箭",
+    "Description": "造成 {A} 点伤害，施加 [脆弱] {V}%（获得护甲降低）和 [禁锢] {V:1}（无法移动）。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Frail",
+        "value": 50
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Root",
+        "value": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou016",
+    "Name": "战术准备",
+    "Description": "获得 [灵感] {V}（下回合多抽 {V} 张牌）和 [减费] {V:1}（下一张牌费用 -{V:1}）。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "DrawCard",
+        "value": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "CardCost",
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
   }
 ]

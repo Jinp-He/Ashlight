@@ -12,8 +12,10 @@ namespace Scripts.UI
     {
         #region UI Bindings
 
+        public Image EnemyImage;
         public SkeletonGraphic Skeleton_Unit;
         public RectTransform BuffBase;
+        public IntentionView IntentionView;
         public CanvasGroup Indicator;
         public Image Fill_Hp;
         public TextMeshProUGUI Txt_Hp;
@@ -41,11 +43,17 @@ namespace Scripts.UI
                 string bindName = bind.GetBindName();
                 switch (bindName)
                 {
+                    case "EnemyImage":
+                        EnemyImage = bind.GetComponent<Image>();
+                        break;
                     case "Skeleton_Unit":
                         Skeleton_Unit = bind.GetComponent<SkeletonGraphic>();
                         break;
                     case "BuffBase":
                         BuffBase = bind.GetComponent<RectTransform>();
+                        break;
+                    case "IntentionView":
+                        IntentionView = bind.GetComponent<IntentionView>();
                         break;
                     case "Indicator":
                         Indicator = bind.GetComponent<CanvasGroup>();

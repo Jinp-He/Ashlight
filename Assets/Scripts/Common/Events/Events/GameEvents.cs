@@ -196,4 +196,16 @@ namespace Ashlight.Common.Events
     {
         // 空事件，只用作信号
     }
+
+    /// <summary>
+    /// 战斗结束事件
+    /// 当 BattleStateSnapshot.IsBattleEnded 首次从 false 变为 true 时由 BattleManager 发布一次
+    /// </summary>
+    public struct BattleEndedEvent
+    {
+        /// <summary>
+        /// 玩家是否胜利（true=全部敌人死亡且至少一个玩家存活）
+        /// </summary>
+        public bool IsPlayerVictory;
+    }
 }

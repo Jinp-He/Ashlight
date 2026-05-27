@@ -66,8 +66,34 @@ namespace Scripts.UI
         private int testCardCount = 3;
 
         [SerializeField]
-        [Tooltip("测试用遭遇战ID")]
+        [Tooltip("测试用遭遇战ID（若 BattleManager.PendingEncounterId 有值则优先使用那个；testEncounterSequence 非空时也会被它覆盖）")]
         private string testEncounterId = "E001";
+
+        [SerializeField]
+        [Tooltip("测试关卡推进序列。胜利后按当前关 Id 在数组中的下标 +1 取下一关。留空则不启用序列推进，回退到 testEncounterId")]
+        private string[] testEncounterSequence = new[] { "E001", "E002", "E003", "E004" };
+
+        [SerializeField]
+        [Tooltip("胜利后自动跳下一关（不弹胜利弹窗）。关闭则走 VictoryPanel 流程")]
+        private bool testAutoAdvance = true;
+
+        [SerializeField]
+        [Tooltip("自动跳关延迟（秒），让玩家短暂看到结算/最后一击")]
+        [Range(0f, 5f)]
+        private float testAutoAdvanceDelay = 1.5f;
+
+        [SerializeField]
+        [Tooltip("最后一关后是否循环回第一关。关闭则停在最后一关结束态")]
+        private bool testLoopAfterLast = true;
+
+        [SerializeField]
+        [Tooltip("失败后是否自动重开当前关（仅测试模式）")]
+        private bool testAutoRetryOnDefeat = true;
+
+        [Header("战斗结算UI")]
+        [SerializeField]
+        [Tooltip("战斗胜利弹窗（由用户在场景内手搭，挂 VictoryPanel 脚本后拖进来）")]
+        private VictoryPanel victoryPanel;
 
         #endregion
 
@@ -75,6 +101,12 @@ namespace Scripts.UI
 
         private int _currentMoney = 0;
         private BattleManager _battleManager;
+
+        /// <summary>本场战斗的 EncounterId（决定胜利后跳到哪一关、失败后重置回哪一关）</summary>
+        private string _currentEncounterId;
+
+        /// <summary>胜负后自动跳关的协程引用，避免重复触发</summary>
+        private Coroutine _autoAdvanceCoroutine;
 
         /// <summary>
         /// 卡牌对象池管理器
@@ -163,6 +195,9 @@ namespace Scripts.UI
             GameEvent.Subscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Subscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
 
+            // 订阅战斗结束事件
+            GameEvent.Subscribe<BattleEndedEvent>(OnBattleEnded);
+
             if (ATB != null)
             {
                 ATB.OnPlanningComplete += HandleAtbPlanningComplete;
@@ -215,6 +250,7 @@ namespace Scripts.UI
             GameEvent.Unsubscribe<HpPredictionStopEvent>(OnHpPredictionStop);
             GameEvent.Unsubscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Unsubscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
+            GameEvent.Unsubscribe<BattleEndedEvent>(OnBattleEnded);
 
             if (ATB != null)
             {
@@ -308,9 +344,9 @@ namespace Scripts.UI
                 return;
             }
 
-            // TODO: 从关卡配置或场景参数获取EncounterId
-            // 目前使用测试用的EncounterId
-            string encounterId = testEncounterId;
+            // 解析本场 EncounterId（含 Pending / 测试序列 / Inspector 回退）
+            string encounterId = ResolveStartingEncounterId();
+            _currentEncounterId = encounterId;
 
             // 创建战斗信息
             var battleInfo = BattleInfo.Create(activeTeam, encounterId, initialDrawCount: 0);
@@ -339,13 +375,15 @@ namespace Scripts.UI
             Debug.Log("[UI_BattleScene] 使用测试数据初始化战斗");
 
             // 创建测试用的角色列表（包含Rocket、Irene、Zhouzhou）
-            var testCharacters = new List<CharacterEnum> 
-            { 
+            var testCharacters = new List<CharacterEnum>
+            {
                 CharacterEnum.Rocket,
                 CharacterEnum.Irene,
                 CharacterEnum.Zhouzhou
             };
-            string encounterId = testEncounterId;
+            // 解析本场 EncounterId（含 Pending / 测试序列 / Inspector 回退）
+            string encounterId = ResolveStartingEncounterId();
+            _currentEncounterId = encounterId;
 
             // 创建战斗信息
             var battleInfo = BattleInfo.Create(testCharacters, encounterId, initialDrawCount: 5);
@@ -1033,30 +1071,38 @@ namespace Scripts.UI
 
         /// <summary>
         /// 更新手牌布局
+        /// 排序：Swift(蓝/即时)在左，Execution(橙/延迟)在右；同类型保持加入顺序（OrderBy 稳定）。
         /// </summary>
         private void UpdateHandLayout()
         {
             if (CardContainer == null || _handCards.Count == 0)
                 return;
 
-            // 计算总宽度
-            float totalWidth = (_handCards.Count - 1) * cardSpacing;
-            
-            // 计算起始位置（居中）
+            var sortedCards = _handCards.OrderBy(GetHandSortKey).ToList();
+
+            float totalWidth = (sortedCards.Count - 1) * cardSpacing;
             float startX = -totalWidth / 2f;
 
-            // 更新每张卡牌的位置
-            for (int i = 0; i < _handCards.Count; i++)
+            for (int i = 0; i < sortedCards.Count; i++)
             {
-                if (_handCards[i] == null) continue;
+                if (sortedCards[i] == null) continue;
 
-                RectTransform cardRect = _handCards[i].transform as RectTransform;
+                RectTransform cardRect = sortedCards[i].transform as RectTransform;
                 if (cardRect != null)
                 {
                     float xPos = startX + i * cardSpacing;
                     cardRect.anchoredPosition = new Vector2(xPos, 0f);
+                    cardRect.SetSiblingIndex(i);
                 }
             }
+        }
+
+        private static int GetHandSortKey(CardViewController cardView)
+        {
+            var info = cardView?.GetCurrentCard();
+            if (info == null) return 0;
+            if (info.CardType == CardTypeEnum.Swift) return 0;
+            return Mathf.Max(1, info.ExecutingCost);
         }
 
         /// <summary>
@@ -1151,6 +1197,13 @@ namespace Scripts.UI
                 return;
             }
 
+            // 非玩家回合时按钮无效
+            if (!IsPlayerTurnActive())
+            {
+                Debug.Log("[UI_BattleScene] 非玩家回合，下个回合按钮无效");
+                return;
+            }
+
             StartCoroutine(EndRoundCoroutine());
         }
 
@@ -1236,8 +1289,38 @@ namespace Scripts.UI
                 return;
             }
 
+            // 非玩家回合（敌人意图/执行轴、或无回合状态）按钮无效，
+            // 避免误点导致悄悄 AdvanceOneStep + 重抽手牌。
+            if (!IsPlayerTurnActive())
+            {
+                Debug.Log("[UI_BattleScene] 非玩家回合，结束回合按钮无效");
+                return;
+            }
+
             // 使用协程版本，支持动画等待
             StartCoroutine(EndRoundCoroutine());
+        }
+
+        /// <summary>
+        /// 当前是否处于"玩家可结束的回合"：
+        /// 1) BattleManager / CurrentState 必须存在
+        /// 2) CurrentTurnUnitId 必须指向一个活着的玩家单位
+        /// 3) 该玩家还没把执行卡推入执行轨（已推入说明回合实际上已经在收尾，不能重复结束）
+        /// </summary>
+        private bool IsPlayerTurnActive()
+        {
+            if (_battleManager == null || _battleManager.CurrentState == null)
+                return false;
+
+            string currentUnitId = _battleManager.CurrentState.CurrentTurnUnitId;
+            if (string.IsNullOrEmpty(currentUnitId))
+                return false;
+
+            var unit = _battleManager.CurrentState.GetUnitById(currentUnitId);
+            if (unit == null || unit.IsDead || !unit.IsPlayerUnit)
+                return false;
+
+            return true;
         }
 
         /// <summary>
@@ -1363,7 +1446,24 @@ namespace Scripts.UI
                     var targetState = _battleManager.CurrentState.GetUnitById(targetUnitId);
                     string targetName = targetState?.GetCharacterInfo()?.Name ?? "目标";
                     var enemyUi = FindEnemyByUnitId(unitId);
-                    enemyUi?.SetIntentionExecuting(preparedSkill, targetName);
+
+                    // 计算 Coord 目标位置（暗黑地牢式）
+                    var playerUnits = _battleManager.CurrentState.PlayerUnits;
+                    int totalSlots = playerUnits?.Count ?? 0;
+                    int targetSlot = -1;
+                    if (!string.IsNullOrEmpty(targetUnitId) && playerUnits != null)
+                    {
+                        for (int i = 0; i < playerUnits.Count; i++)
+                        {
+                            if (playerUnits[i] != null && playerUnits[i].UnitId == targetUnitId)
+                            {
+                                targetSlot = i;
+                                break;
+                            }
+                        }
+                    }
+                    bool isAoe = SkillIsAoe(preparedSkill);
+                    enemyUi?.SetIntentionExecuting(preparedSkill, targetSlot, totalSlots, isAoe);
 
                     UpdateAllUnitsDisplay();
                     UpdateEnergyBarByUnitId(unitId);
@@ -1387,6 +1487,27 @@ namespace Scripts.UI
             // 规则：任意单位（包括多个敌人）可以独立进入执行轨；
             //       只有玩家到达规划轨终点时才全局暂停 ATB，冻结所有执行轨。
             return _battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn;
+        }
+
+        /// <summary>
+        /// 判断敌人技能是否是 AOE：
+        /// 1) TargetType 为 AllEnemy / AllAlly
+        /// 2) 任一 AttackEffect 的 IsAoe 为 true
+        /// </summary>
+        private static bool SkillIsAoe(EnemySkillInfo skill)
+        {
+            if (skill == null) return false;
+            if (skill.TargetType == cfg.TargetTypeEnum.AllEnemy
+                || skill.TargetType == cfg.TargetTypeEnum.AllAlly)
+                return true;
+            if (skill.Effects != null)
+            {
+                foreach (var eff in skill.Effects)
+                {
+                    if (eff is cfg.AttackEffect atk && atk.IsAoe) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -1420,16 +1541,21 @@ namespace Scripts.UI
                     UpdateAllUnitsDisplay();
                     UpdateEnergyBarByUnitId(unitId);
                     _battleManager.EndCurrentTurn();
+
+                    // 非 Swift（执行）牌结算完直接进入新回合：刷新能量、重抽手牌，
+                    // ATB 保持暂停由玩家继续操作，而不是回到规划轨起点重新等条。
+                    _battleManager.StartPlayerTurn(unitId, false);
+                    DisplayHandCards();
+                    UpdateAllUnitsDisplay();
+                    UpdateEnergyBarByUnitId(unitId);
+                    Debug.Log($"[UI_BattleScene] 执行牌结算后直接开启新回合: {unitId}");
                 }
                 finally
                 {
                     _isProcessingPlayerExecutionTurn = false;
                     _playerPlayedExecutionCardThisAtbTurn = false;
                     ClearHandExecutionSuppression();
-                    if (ATB != null)
-                    {
-                        ATB.Resume();
-                    }
+                    // 不调用 ATB.Resume()：新回合需要全场暂停等待玩家操作。
                 }
 
                 return;
@@ -1726,6 +1852,147 @@ namespace Scripts.UI
         {
             Debug.Log("[UI_BattleScene] 收到时间轴前进后事件，开始更新UI");
             ApplyTimelineShiftEffect();
+        }
+
+        /// <summary>
+        /// 战斗结束事件处理：暂停 ATB，根据胜负与测试设置决定走自动跳关还是 VictoryPanel
+        /// </summary>
+        private void OnBattleEnded(BattleEndedEvent evt)
+        {
+            Debug.Log($"[UI_BattleScene] 收到战斗结束事件，玩家胜利: {evt.IsPlayerVictory}");
+
+            // 暂停 ATB（冻结规划轨/执行轨），避免关闭弹窗前继续推进
+            if (ATB != null)
+            {
+                ATB.Pause();
+            }
+
+            // 停止血量预测显示
+            if (_battleManager?.PredictionManager != null)
+            {
+                _battleManager.PredictionManager.StopPrediction();
+            }
+
+            if (evt.IsPlayerVictory)
+            {
+                HandleVictory();
+            }
+            else
+            {
+                HandleDefeat();
+            }
+        }
+
+        /// <summary>
+        /// 胜利分支：测试模式按序列自动跳下一关；非测试模式或序列耗尽则走 VictoryPanel
+        /// </summary>
+        private void HandleVictory()
+        {
+            string nextEncounterId = GetNextEncounterId(_currentEncounterId);
+
+            if (testAutoAdvance && !string.IsNullOrEmpty(nextEncounterId))
+            {
+                Debug.Log($"[UI_BattleScene] 胜利，自动跳关：{_currentEncounterId} -> {nextEncounterId}（延迟 {testAutoAdvanceDelay}s）");
+                ScheduleSceneReload(nextEncounterId, testAutoAdvanceDelay);
+                return;
+            }
+
+            if (victoryPanel != null)
+            {
+                victoryPanel.Show(true);
+            }
+            else
+            {
+                Debug.LogWarning("[UI_BattleScene] VictoryPanel 未绑定，且未启用自动跳关；战斗已结束停在原场景");
+            }
+        }
+
+        /// <summary>
+        /// 失败分支：测试模式重开当前关；否则暂留场景（后续接入 DefeatPanel）
+        /// </summary>
+        private void HandleDefeat()
+        {
+            if (testAutoRetryOnDefeat && !string.IsNullOrEmpty(_currentEncounterId))
+            {
+                Debug.Log($"[UI_BattleScene] 失败，重开当前关：{_currentEncounterId}（延迟 {testAutoAdvanceDelay}s）");
+                ScheduleSceneReload(_currentEncounterId, testAutoAdvanceDelay);
+                return;
+            }
+
+            Debug.Log("[UI_BattleScene] 玩家失败，暂未接入失败弹窗");
+        }
+
+        /// <summary>
+        /// 决定本场战斗的起始 EncounterId。
+        /// 优先级：PendingEncounterId（VictoryPanel / 自动跳关写入） &gt; testEncounterSequence[0] &gt; testEncounterId。
+        /// </summary>
+        private string ResolveStartingEncounterId()
+        {
+            string pending = BattleManager.ConsumePendingEncounterId();
+            if (!string.IsNullOrEmpty(pending))
+            {
+                Debug.Log($"[UI_BattleScene] 使用 Pending EncounterId: {pending}");
+                return pending;
+            }
+
+            if (testEncounterSequence != null && testEncounterSequence.Length > 0 && !string.IsNullOrEmpty(testEncounterSequence[0]))
+            {
+                Debug.Log($"[UI_BattleScene] 使用测试序列首关: {testEncounterSequence[0]}");
+                return testEncounterSequence[0];
+            }
+
+            Debug.Log($"[UI_BattleScene] 使用 testEncounterId: {testEncounterId}");
+            return testEncounterId;
+        }
+
+        /// <summary>
+        /// 在 testEncounterSequence 里查找 currentId 的下一项；
+        /// 越界且 testLoopAfterLast 为 true 则回到首项，否则返回 null（视为通关）。
+        /// </summary>
+        private string GetNextEncounterId(string currentId)
+        {
+            if (testEncounterSequence == null || testEncounterSequence.Length == 0)
+            {
+                return null;
+            }
+
+            int idx = System.Array.IndexOf(testEncounterSequence, currentId);
+
+            // 当前 id 不在序列里：从首项开始
+            if (idx < 0)
+            {
+                return testEncounterSequence[0];
+            }
+
+            int next = idx + 1;
+            if (next < testEncounterSequence.Length)
+            {
+                return testEncounterSequence[next];
+            }
+
+            return testLoopAfterLast ? testEncounterSequence[0] : null;
+        }
+
+        /// <summary>
+        /// 延迟后写入 PendingEncounterId 并重载 BattleScene。
+        /// </summary>
+        private void ScheduleSceneReload(string nextEncounterId, float delay)
+        {
+            if (_autoAdvanceCoroutine != null)
+            {
+                return; // 已经在跳关途中
+            }
+            _autoAdvanceCoroutine = StartCoroutine(ReloadSceneAfter(nextEncounterId, delay));
+        }
+
+        private IEnumerator ReloadSceneAfter(string nextEncounterId, float delay)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            BattleManager.PendingEncounterId = nextEncounterId;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
 
         /// <summary>

@@ -1,33 +1,31 @@
 using UnityEngine;
 using Spine.Unity;
-using UnityEngine.UI;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using DG.Tweening;
 using Ashlight.Battle.Core.Data;
-using Ashlight.Config;
-using Ashlight.Common.Utils;
 using Scripts.UI;
-using cfg.Enemy;
 
 /// <summary>
-/// 战斗演出动画组件
-/// 负责播放四步动画序列：准备 -> 入场 -> 战斗 -> 退场
+/// 战斗演出动画组件（原地播放版）
+/// 不再把双方抽离到屏幕中央，直接在各自当前位置播放 attack/shouji 动画。
+/// 旧版"中央舞台"流程参见 BattleAnimation_CenterStage。
 /// </summary>
 public class BattleAnimation : MonoBehaviour
 {
     #region 序列化字段
 
-    [Header("位置设置")]
-    [Tooltip("角色（玩家）生成位置")]
+    // 旧版用于在中央舞台生成 SkeletonGraphic 副本时定位用，原地播放版不再使用，
+    // 但保留字段以避免破坏场景里已有的序列化引用，方便日后切回中央舞台版。
+    [Header("位置设置（仅旧版使用，原地播放版不需要）")]
+    [Tooltip("角色（玩家）生成位置（仅旧版使用）")]
     public RectTransform CharacterPosition;
 
-    [Tooltip("敌人生成位置")]
+    [Tooltip("敌人生成位置（仅旧版使用）")]
     public RectTransform EnemyPosition;
 
     [Header("预制体")]
-    [Tooltip("SkeletonGraphic预制体")]
+    [Tooltip("SkeletonGraphic预制体（仅旧版使用）")]
     public SkeletonGraphic skeletonGraphicPrefab;
 
     [Tooltip("伤害数字预制体（包含TextMeshProUGUI组件，如果为空则使用动态创建）")]
@@ -37,32 +35,20 @@ public class BattleAnimation : MonoBehaviour
 
     #region 私有字段
 
-    private RectTransform _rectTransform;
     private Canvas _canvas;
-    private List<SkeletonGraphic> _spawnedSkeletons = new List<SkeletonGraphic>();
 
-    // 动画参数
-    private const float MOVE_DURATION = .3f;       // 移动时间
-    private const float BATTLE_DURATION = 1.2f;    // 战斗动画时间
-    private const float FADEOUT_DURATION = .3f;   // 淡出时间
-    private const float INTERMITTENT_DURATION = 2f;   // 中间时间
+    // 原地播放整体加快 1 倍：Spine 动画 TimeScale 设为 2，等待时长也减半。
+    private const float SPEED_MULTIPLIER = 2f;
+    private const float BATTLE_DURATION = 0.4f;
+    private const float DAMAGE_FLOAT_DURATION = 0.5f;
+
     #endregion
 
     #region Unity生命周期
 
     private void Awake()
     {
-        _rectTransform = GetComponent<RectTransform>();
         _canvas = GetComponentInParent<Canvas>();
-
-        if (_rectTransform == null)
-        {
-            // // Debug.LogError("[BattleAnimation] 缺少RectTransform组件");
-        }
-        if (_canvas == null)
-        {
-            // // Debug.LogError("[BattleAnimation] 未找到父Canvas");
-        }
     }
 
     #endregion
@@ -71,23 +57,16 @@ public class BattleAnimation : MonoBehaviour
 
     /// <summary>
     /// 获取动画总演出时间（用于解算时等待）
-    /// 包含：移动时间 + 战斗时间 + 淡出时间
     /// </summary>
     public static float GetTotalAnimationDuration()
     {
-        return MOVE_DURATION + BATTLE_DURATION + FADEOUT_DURATION;
+        return BATTLE_DURATION;
     }
 
     /// <summary>
-    /// 播放战斗演出动画
+    /// 播放战斗演出动画（原地版）
+    /// 直接在 caster/target 各自当前位置播放 attack/shouji，不做位移与抽离。
     /// </summary>
-    /// <param name="casterState">施法者状态</param>
-    /// <param name="targetState">目标状态</param>
-    /// <param name="casterUI">施法者UI对象（Character或Enemy）</param>
-    /// <param name="targetUI">目标UI对象（Character或Enemy）</param>
-    /// <param name="isAttackCard">是否是攻击类卡片</param>
-    /// <param name="damage">伤害值（用于显示伤害数字）</param>
-    /// <param name="onHit">受击回调（用于更新UI）</param>
     public IEnumerator PlayBattleAnimation(
         UnitState casterState,
         UnitState targetState,
@@ -99,487 +78,174 @@ public class BattleAnimation : MonoBehaviour
     {
         if (casterState == null || targetState == null)
         {
-            // // Debug.LogError("[BattleAnimation] casterState或targetState为null");
             yield break;
         }
 
-        // 获取战斗方向：敌人攻击从右往左，玩家攻击从左往右
-        bool isEnemyAttack = !casterState.IsPlayerUnit;
+        // 0. 临时把双方 Spine 动画提速，结束后还原，避免影响后续 idle
+        SkeletonGraphic casterSkeleton = GetUnitSkeleton(casterUI);
+        SkeletonGraphic targetSkeleton = GetUnitSkeleton(targetUI);
+        float casterOriginalScale = SetSkeletonTimeScale(casterSkeleton, SPEED_MULTIPLIER);
+        float targetOriginalScale = SetSkeletonTimeScale(targetSkeleton, SPEED_MULTIPLIER);
 
-        // Debug.Log($"[BattleAnimation] 开始战斗演出: {casterState.UnitId} -> {targetState.UnitId}, 敌人攻击={isEnemyAttack}, 攻击卡片={isAttackCard}");
-
-        // === 步骤A: 准备阶段 ===
-        yield return StepA_Prepare(casterState, targetState, casterUI, targetUI);
-
-        // === 步骤B: 入场阶段 ===
-        yield return StepB_Enter(isEnemyAttack);
-
-        // === 步骤C: 战斗动画阶段 ===
-        yield return StepC_Battle(isAttackCard, isEnemyAttack, targetUI, damage, onHit);
-
-        // === 步骤D: 退场阶段 ===
-        yield return StepD_Exit(casterUI, targetUI);
-
-        // Debug.Log("[BattleAnimation] 战斗演出完成");
-    }
-
-    #endregion
-
-    #region 私有方法 - 动画步骤
-
-    /// <summary>
-    /// 步骤A: 准备阶段
-    /// - 隐藏原角色（alpha=0）
-    /// - 生成SkeletonGraphic副本到对应位置
-    /// </summary>
-    private IEnumerator StepA_Prepare(
-        UnitState casterState,
-        UnitState targetState,
-        MonoBehaviour casterUI,
-        MonoBehaviour targetUI)
-    {
-        // Debug.Log("[BattleAnimation] 步骤A: 准备阶段");
-
-        // 清理之前的Skeleton
-        ClearSpawnedSkeletons();
-
-        // 1. 隐藏原角色（仅alpha=0）
-        SetUnitAlpha(casterUI, 0f);
-        SetUnitAlpha(targetUI, 0f);
-
-        // 2. 确定生成位置：根据单位是玩家还是敌人来决定
-        RectTransform casterSpawnPos = casterState.IsPlayerUnit ? CharacterPosition : EnemyPosition;
-        RectTransform targetSpawnPos = targetState.IsPlayerUnit ? CharacterPosition : EnemyPosition;
-
-        // 3. 按顺序生成：先施法者（技能使用者），后目标（被使用者）
-        SpawnSkeleton(casterState, casterSpawnPos, "Caster_Skeleton");
-        SpawnSkeleton(targetState, targetSpawnPos, "Target_Skeleton");
-
-        yield return null; // 等待一帧确保生成完成
-    }
-
-    /// <summary>
-    /// 步骤B: 入场阶段
-    /// - 根据战斗方向从屏幕边缘移动到中间
-    /// </summary>
-    private IEnumerator StepB_Enter(bool isEnemyAttack)
-    {
-        // Debug.Log($"[BattleAnimation] 步骤B: 入场阶段, 敌人攻击={isEnemyAttack}");
-
-        if (_canvas == null || _rectTransform == null)
+        try
         {
-            // // Debug.LogError("[BattleAnimation] Canvas或RectTransform为null，跳过入场动画");
-            yield break;
-        }
+            // 1. 攻击者在原位播放 attack1
+            PlayCasterAttack(casterUI);
 
-        // 获取屏幕宽度
-        RectTransform canvasRect = _canvas.GetComponent<RectTransform>();
-        float screenWidth = canvasRect.rect.width;
+            // 2. 目标在原位播放 shouji
+            PlayTargetHurt(targetUI);
 
-        // 计算两方平分的中间位置
-        // CharacterPosition和EnemyPosition之间的中点作为屏幕中心对齐点
-        float characterX = CharacterPosition.localPosition.x;
-        float enemyX = EnemyPosition.localPosition.x;
-        float centerOffset = (characterX + enemyX) / 2f;
-
-        float startX, targetX;
-
-        if (isEnemyAttack)
-        {
-            // 敌人攻击：从右往左
-            startX = screenWidth / 2f + Mathf.Abs(centerOffset) + GetAnimationWidth() / 2f;
-            targetX = -centerOffset;
-        }
-        else
-        {
-            // 玩家攻击：从左往右
-            startX = -screenWidth / 2f - Mathf.Abs(centerOffset) - GetAnimationWidth() / 2f;
-            targetX = -centerOffset;
-        }
-
-        // Debug.Log($"[BattleAnimation] 移动: {startX} -> {targetX}");
-
-        // 设置初始位置
-        _rectTransform.anchoredPosition = new Vector2(startX, _rectTransform.anchoredPosition.y);
-
-        // 移动动画
-        yield return _rectTransform
-            .DOAnchorPosX(targetX, MOVE_DURATION)
-            .SetEase(Ease.OutQuad)
-            .WaitForCompletion();
-    }
-
-    // 惯性移动距离（像素）
-    private const float INERTIA_DISTANCE = 12f;
-
-    /// <summary>
-    /// 步骤C: 战斗动画阶段
-    /// - 施法者播放attack1
-    /// - 被攻击者播放shouji（所有卡片都播放）
-    /// - 显示伤害数字（在目标Skeleton头顶位置）
-    /// - 整体保持惯性移动
-    /// </summary>
-    private IEnumerator StepC_Battle(bool isAttackCard, bool isEnemyAttack, MonoBehaviour targetUI, int damage, Action onHit)
-    {
-        // Debug.Log($"[BattleAnimation] 步骤C: 战斗动画阶段, 攻击卡片={isAttackCard}, 敌人攻击={isEnemyAttack}, 伤害={damage}");
-
-        // 找到生成的Skeleton
-        SkeletonGraphic casterSkeleton = FindSkeletonByName("Caster_Skeleton");
-        SkeletonGraphic targetSkeleton = FindSkeletonByName("Target_Skeleton");
-
-        // Debug.Log($"[BattleAnimation] 查找Skeleton结果: casterSkeleton={casterSkeleton != null}, targetSkeleton={targetSkeleton != null}");
-        // Debug.Log($"[BattleAnimation] _spawnedSkeletons数量: {_spawnedSkeletons.Count}");
-        foreach (var s in _spawnedSkeletons)
-        {
-            // Debug.Log($"[BattleAnimation] Skeleton: name={s?.gameObject.name}, AnimationState={s?.AnimationState != null}");
-        }
-
-        // 施法者播放attack1动画
-        if (casterSkeleton != null && casterSkeleton.AnimationState != null)
-        {
-            PlayAnimation(casterSkeleton, "attack1", "施法者");
-        }
-        else
-        {
-            // // Debug.LogError($"[BattleAnimation] 施法者Skeleton播放attack1失败: skeleton={casterSkeleton != null}, AnimationState={casterSkeleton?.AnimationState != null}");
-        }
-
-        // 目标播放shouji动画
-        if (targetSkeleton != null && targetSkeleton.AnimationState != null)
-        {
-            PlayAnimation(targetSkeleton, "shouji", "目标");
-        }
-        else
-        {
-            // // Debug.LogError($"[BattleAnimation] 目标Skeleton播放shouji失败: skeleton={targetSkeleton != null}, AnimationState={targetSkeleton?.AnimationState != null}");
-        }
-
-        // 显示伤害数字（在目标Skeleton头顶位置）
-        if (damage > 0 && targetSkeleton != null)
-        {
-            // 获取目标Skeleton的头顶位置（向上偏移一定距离）
-            Vector3 damagePos = GetSkeletonTopPosition(targetSkeleton);
-            ShowDamageNumber(damagePos, damage);
-        }
-
-        onHit?.Invoke();
-
-        // 惯性移动：沿入场方向继续移动一小段距离
-        // 敌人攻击从右往左，所以惯性向左（负方向）
-        // 玩家攻击从左往右，所以惯性向右（正方向）
-        float inertiaDirection = isEnemyAttack ? -1f : 1f;
-        float targetX = _rectTransform.anchoredPosition.x + (INERTIA_DISTANCE * inertiaDirection);
-
-        // Debug.Log($"[BattleAnimation] 惯性移动: {_rectTransform.anchoredPosition.x} -> {targetX} (方向={inertiaDirection})");
-
-        // 惯性移动动画（在BATTLE_DURATION期间完成，使用缓出效果模拟减速）
-        _rectTransform.DOAnchorPosX(targetX, BATTLE_DURATION).SetEase(Ease.OutQuad);
-
-        // 等待战斗动画时间
-        yield return new WaitForSeconds(BATTLE_DURATION);
-    }
-
-    /// <summary>
-    /// 播放指定动画（统一方法，带详细日志）
-    /// 自动检测0帧动画并保持姿势
-    /// </summary>
-    /// <param name="skeleton">目标Skeleton</param>
-    /// <param name="animName">动画名称</param>
-    /// <param name="unitName">单位名称（用于日志）</param>
-    private void PlayAnimation(SkeletonGraphic skeleton, string animName, string unitName)
-    {
-        if (skeleton == null || skeleton.AnimationState == null)
-        {
-            // // Debug.LogError($"[BattleAnimation] {unitName}播放{animName}失败: AnimationState为null");
-            return;
-        }
-
-        var skeletonData = skeleton.AnimationState.Data?.SkeletonData;
-        if (skeletonData == null)
-        {
-            // // Debug.LogError($"[BattleAnimation] {unitName}播放{animName}失败: SkeletonData为null");
-            return;
-        }
-
-        // 列出所有可用动画
-        var animations = skeletonData.Animations;
-        // Debug.Log($"[BattleAnimation] {unitName}可用动画列表 (共{animations.Count}个):");
-        foreach (var anim in animations)
-        {
-            // Debug.Log($"  [BattleAnimation] - {anim.Name} (时长={anim.Duration}秒)");
-        }
-
-        var targetAnim = skeletonData.FindAnimation(animName);
-        if (targetAnim != null)
-        {
-            // 检测是否是0帧动画（Duration为0或非常小）
-            bool isZeroFrameAnim = targetAnim.Duration <= 0.001f;
-
-            if (isZeroFrameAnim)
+            // 3. 在目标头顶显示伤害数字
+            if (damage > 0)
             {
-                // 0帧动画，设置为循环播放以保持姿势
-                skeleton.AnimationState.SetAnimation(0, animName, true);
-                // Debug.Log($"[BattleAnimation] {unitName}成功播放{animName}动画 (0帧动画，保持姿势模式，Duration={targetAnim.Duration})");
-            }
-            else
-            {
-                // 普通动画，播放完后切换回idle
-                skeleton.AnimationState.SetAnimation(0, animName, false);
-                skeleton.AnimationState.AddAnimation(0, "idle", true, 0f);
-                // Debug.Log($"[BattleAnimation] {unitName}成功播放{animName}动画 (Duration={targetAnim.Duration}秒)");
-            }
-        }
-        else
-        {
-            // // Debug.LogError($"[BattleAnimation] {unitName}未找到{animName}动画!");
-        }
-    }
-
-    /// <summary>
-    /// 获取Skeleton头顶位置（用于显示伤害数字）
-    /// </summary>
-    private Vector3 GetSkeletonTopPosition(SkeletonGraphic skeleton)
-    {
-        if (skeleton == null) return Vector3.zero;
-
-        // 计算头顶位置：基于Skeleton的bounds或固定偏移
-        Vector3 worldPos = skeleton.transform.position;
-
-        // 尝试从Skeleton获取实际bounds
-        if (skeleton.Skeleton != null)
-        {
-            // 获取Skeleton的边界（需要传入vertexBuffer）
-            float[] vertexBuffer = null;
-            skeleton.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vertexBuffer);
-
-            // 头顶位置 = 当前位置 + 高度
-            float height = maxY - minY;
-            worldPos.y += height * skeleton.transform.lossyScale.y;
-
-            // Debug.Log($"[BattleAnimation] Skeleton bounds: minY={minY}, maxY={maxY}, height={height}, worldPos.y={worldPos.y}");
-        }
-        else
-        {
-            // 回退：固定向上偏移200像素
-            worldPos.y += 200f;
-        }
-
-        return worldPos;
-    }
-
-    /// <summary>
-    /// 步骤D: 退场阶段
-    /// - 所有角色淡出，变黑并且alpha变成0
-    /// </summary>
-    private IEnumerator StepD_Exit(MonoBehaviour casterUI, MonoBehaviour targetUI)
-    {
-        // Debug.Log("[BattleAnimation] 步骤D: 退场阶段");
-
-        // 对所有生成的Skeleton执行淡出效果（变黑+透明）
-        foreach (var skeleton in _spawnedSkeletons)
-        {
-            if (skeleton == null) continue;
-
-            // 同时变黑和淡出
-            Color targetColor = new Color(0, 0, 0, 0); // 黑色且透明
-
-            DOTween.To(
-                () => skeleton.color,
-                c =>
+                Vector3 damagePos = GetUnitTopWorldPosition(targetUI);
+                if (damagePos != Vector3.zero)
                 {
-                    skeleton.color = c;
-                    // 同时更新Skeleton的RGBA
-                    if (skeleton.Skeleton != null)
-                    {
-                        skeleton.Skeleton.R = c.r;
-                        skeleton.Skeleton.G = c.g;
-                        skeleton.Skeleton.B = c.b;
-                        skeleton.Skeleton.A = c.a;
-                    }
-                },
-                targetColor,
-                FADEOUT_DURATION
-            );
-        }
-
-        // 等待淡出完成
-        yield return new WaitForSeconds(FADEOUT_DURATION);
-
-        // 清理生成的Skeleton
-        ClearSpawnedSkeletons();
-
-        // 恢复原角色显示
-        SetUnitAlpha(casterUI, 1f);
-        SetUnitAlpha(targetUI, 1f);
-    }
-
-    #endregion
-
-    #region 私有方法 - 辅助
-
-    /// <summary>
-    /// 生成SkeletonGraphic副本
-    /// </summary>
-    private SkeletonGraphic SpawnSkeleton(UnitState unitState, RectTransform parentPosition, string skeletonName)
-    {
-        if (skeletonGraphicPrefab == null)
-        {
-            // // Debug.LogError("[BattleAnimation] skeletonGraphicPrefab未设置");
-            return null;
-        }
-
-        if (parentPosition == null)
-        {
-            // // Debug.LogError("[BattleAnimation] parentPosition为null");
-            return null;
-        }
-
-        // 实例化预制体
-        SkeletonGraphic skeleton = Instantiate(skeletonGraphicPrefab, parentPosition);
-        skeleton.transform.localPosition = Vector3.zero;
-        skeleton.transform.localScale = Vector3.one;
-        skeleton.gameObject.name = skeletonName;
-
-        // 加载SkeletonDataAsset
-        string skeletonPath;
-        if (unitState.IsPlayerUnit)
-        {
-            skeletonPath = AssetPath.GetSkeletonAssetPath(unitState.ConfigId);
-        }
-        else
-        {
-            EnemyInfo enemyInfo = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(unitState.ConfigId);
-            string enemyId = enemyInfo?.AlternativePath;
-            skeletonPath = AssetPath.GetEnemySkeletonAssetPath(enemyId);
-        }
-
-        // Debug.Log($"[BattleAnimation] 加载Skeleton: name={skeletonName}, configId={unitState.ConfigId}, path={skeletonPath}");
-
-        var skeletonData = Resources.Load<SkeletonDataAsset>(skeletonPath);
-        if (skeletonData != null)
-        {
-            skeleton.skeletonDataAsset = skeletonData;
-            skeleton.Initialize(true);
-
-            // 播放idle动画
-            if (skeleton.AnimationState != null)
-            {
-                skeleton.AnimationState.SetAnimation(0, "idle", true);
+                    ShowDamageNumber(damagePos, damage);
+                }
             }
 
-            // Debug.Log($"[BattleAnimation] 生成Skeleton成功: {skeletonName}, 资源路径: {skeletonPath}");
-        }
-        else
-        {
-            // // Debug.LogWarning($"[BattleAnimation] 未找到Skeleton资源: {skeletonPath}");
-        }
+            // 4. 触发受击回调（更新血量等 UI）
+            onHit?.Invoke();
 
-        _spawnedSkeletons.Add(skeleton);
-        return skeleton;
+            // 5. 等待动画播放完毕
+            yield return new WaitForSeconds(BATTLE_DURATION);
+        }
+        finally
+        {
+            // 还原 TimeScale，避免后续 idle 一直 2 倍速
+            SetSkeletonTimeScale(casterSkeleton, casterOriginalScale);
+            SetSkeletonTimeScale(targetSkeleton, targetOriginalScale);
+        }
     }
 
-    /// <summary>
-    /// 根据名称查找已生成的Skeleton
-    /// </summary>
-    private SkeletonGraphic FindSkeletonByName(string name)
+    private static SkeletonGraphic GetUnitSkeleton(MonoBehaviour unitUI)
     {
-        foreach (var skeleton in _spawnedSkeletons)
-        {
-            if (skeleton != null && skeleton.gameObject.name == name)
-            {
-                return skeleton;
-            }
-        }
+        if (unitUI == null) return null;
+        var character = unitUI as Character;
+        if (character != null) return character.Skeleton_Unit;
+        var enemy = unitUI as Enemy;
+        if (enemy != null) return enemy.Skeleton_Unit;
         return null;
     }
 
     /// <summary>
-    /// 清理所有生成的Skeleton
+    /// 设置 Skeleton 动画的 TimeScale，返回旧值用于稍后还原。
     /// </summary>
-    private void ClearSpawnedSkeletons()
+    private static float SetSkeletonTimeScale(SkeletonGraphic skeleton, float scale)
     {
-        foreach (var skeleton in _spawnedSkeletons)
+        if (skeleton == null || skeleton.AnimationState == null) return 1f;
+        float old = skeleton.AnimationState.TimeScale;
+        skeleton.AnimationState.TimeScale = scale;
+        return old;
+    }
+
+    #endregion
+
+    #region 私有方法 - 动画驱动
+
+    private void PlayCasterAttack(MonoBehaviour casterUI)
+    {
+        if (casterUI == null) return;
+
+        var character = casterUI as Character;
+        if (character != null)
         {
-            if (skeleton != null)
-            {
-                Destroy(skeleton.gameObject);
-            }
+            character.PlayAttackAnimation();
+            return;
         }
-        _spawnedSkeletons.Clear();
+
+        var enemy = casterUI as Enemy;
+        if (enemy != null)
+        {
+            enemy.PlayAttackAnimation();
+        }
+    }
+
+    private void PlayTargetHurt(MonoBehaviour targetUI)
+    {
+        if (targetUI == null) return;
+
+        var character = targetUI as Character;
+        if (character != null)
+        {
+            character.PlayShoujiAnimation();
+            return;
+        }
+
+        var enemy = targetUI as Enemy;
+        if (enemy != null)
+        {
+            enemy.PlayShoujiAnimation();
+        }
     }
 
     /// <summary>
-    /// 设置单位的alpha值
+    /// 取目标 Skeleton 的头顶世界坐标，用于伤害数字定位。
     /// </summary>
-    private void SetUnitAlpha(MonoBehaviour unitUI, float alpha)
+    private Vector3 GetUnitTopWorldPosition(MonoBehaviour unitUI)
     {
-        if (unitUI == null) return;
+        if (unitUI == null) return Vector3.zero;
 
-        Color color = Color.white;
-        color.a = alpha;
-
-        // 尝试获取Character组件
+        SkeletonGraphic skeleton = null;
         var character = unitUI as Character;
         if (character != null)
         {
-            character.SetColor(color);
-            return;
+            skeleton = character.Skeleton_Unit;
         }
-
-        // 尝试获取Enemy组件
-        var enemy = unitUI as Enemy;
-        if (enemy != null)
+        else
         {
-            enemy.SetColor(color);
-            return;
+            var enemy = unitUI as Enemy;
+            if (enemy != null)
+            {
+                skeleton = enemy.Skeleton_Unit;
+            }
         }
 
-        // // Debug.LogWarning($"[BattleAnimation] 无法设置单位alpha: {unitUI.name}");
+        if (skeleton == null)
+        {
+            // 回退：单位自身 transform 上方一点
+            return unitUI.transform.position + new Vector3(0, 200f, 0);
+        }
+
+        Vector3 worldPos = skeleton.transform.position;
+        if (skeleton.Skeleton != null)
+        {
+            float[] vertexBuffer = null;
+            skeleton.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vertexBuffer);
+            float height = maxY - minY;
+            worldPos.y += height * skeleton.transform.lossyScale.y;
+        }
+        else
+        {
+            worldPos.y += 200f;
+        }
+        return worldPos;
     }
 
-    /// <summary>
-    /// 获取动画区域的宽度（用于计算起始位置）
-    /// </summary>
-    private float GetAnimationWidth()
-    {
-        if (CharacterPosition == null || EnemyPosition == null)
-            return 0f;
-
-        return Mathf.Abs(EnemyPosition.localPosition.x - CharacterPosition.localPosition.x);
-    }
-
-    /// <summary>
-    /// 显示伤害数字（使用DOTween动画）
-    /// </summary>
     private void ShowDamageNumber(Vector3 targetPosition, int damage)
     {
-        if (damage <= 0)
+        if (damage <= 0 || _canvas == null)
         {
-            // Debug.Log("[BattleAnimation] 伤害为0，不显示伤害数字");
             return;
         }
 
-        GameObject damageTextObj = null;
-        TMPro.TextMeshProUGUI textMesh = null;
-        RectTransform rectTransform = null;
+        GameObject damageTextObj;
+        TMPro.TextMeshProUGUI textMesh;
+        RectTransform rectTransform;
 
-        // 优先使用prefab，如果prefab为空则使用动态创建（向后兼容）
         if (damageTextPrefab != null)
         {
-            // 使用prefab实例化
             damageTextObj = Instantiate(damageTextPrefab, _canvas.transform);
             damageTextObj.transform.position = targetPosition;
             damageTextObj.name = "BattleDamageText";
 
-            // 获取TextMeshPro组件
             textMesh = damageTextObj.GetComponent<TMPro.TextMeshProUGUI>();
             if (textMesh == null)
             {
-                // // Debug.LogWarning("[BattleAnimation] 伤害数字prefab缺少TextMeshProUGUI组件，尝试添加");
                 textMesh = damageTextObj.AddComponent<TMPro.TextMeshProUGUI>();
             }
 
-            // 获取RectTransform
             rectTransform = damageTextObj.GetComponent<RectTransform>();
             if (rectTransform == null)
             {
@@ -588,43 +254,36 @@ public class BattleAnimation : MonoBehaviour
         }
         else
         {
-            // 回退到动态创建（向后兼容）
             damageTextObj = new GameObject("BattleDamageText");
             damageTextObj.transform.SetParent(_canvas.transform);
             damageTextObj.transform.position = targetPosition;
 
-            // 添加TextMeshPro组件
             textMesh = damageTextObj.AddComponent<TMPro.TextMeshProUGUI>();
             textMesh.fontSize = 48;
             textMesh.color = Color.red;
             textMesh.alignment = TMPro.TextAlignmentOptions.Center;
 
-            // 设置RectTransform
             rectTransform = damageTextObj.GetComponent<RectTransform>();
             rectTransform.sizeDelta = new Vector2(200, 100);
         }
 
-        // 设置伤害数值
         if (textMesh != null)
         {
             textMesh.text = damage.ToString();
         }
 
-        // DOTween动画：向上飘动 + 淡出
         Sequence damageSequence = DOTween.Sequence();
         damageSequence.Append(
-            rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, 1.0f)
+            rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, DAMAGE_FLOAT_DURATION)
                 .SetEase(Ease.OutQuad)
         );
         if (textMesh != null)
         {
             damageSequence.Join(
-                textMesh.DOFade(0f, 1.0f).SetEase(Ease.InQuad)
+                textMesh.DOFade(0f, DAMAGE_FLOAT_DURATION).SetEase(Ease.InQuad)
             );
         }
         damageSequence.OnComplete(() => Destroy(damageTextObj));
-
-        // Debug.Log($"[BattleAnimation] 显示伤害数字: {damage} (使用{(damageTextPrefab != null ? "Prefab" : "动态创建")})");
     }
 
     #endregion

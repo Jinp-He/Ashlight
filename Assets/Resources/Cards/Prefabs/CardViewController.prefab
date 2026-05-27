@@ -530,8 +530,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 3
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 72ccec6473c72c647b80ee6565d518ac, type: 2}
-  m_sharedMaterial: {fileID: -2431782479523869334, guid: 72ccec6473c72c647b80ee6565d518ac, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
+  m_sharedMaterial: {fileID: 9038812693520946310, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -916,7 +916,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.19215688, g: 0.22352943, b: 0.29803923, a: 1}
+  m_Color: {r: 0, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1221,8 +1221,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 1.4470062, y: -164.112}
-  m_SizeDelta: {x: -38.722, y: -430.077}
+  m_AnchoredPosition: {x: 1.4470062, y: -164.11212}
+  m_SizeDelta: {x: -38.721985, y: -430.077}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &5412673114985368468
 CanvasRenderer:
@@ -2045,6 +2045,7 @@ MonoBehaviour:
   descriptionViewControllerPrefab: {fileID: 1718052173079804665, guid: 0def1198c3a25a44daa225fc3f941036, type: 3}
   hoverScale: 1.8
   scaleDuration: 0.2
+  hoverLiftDistance: 80
   descriptionOffset: {x: 300, y: 0}
   hoverSortingOrder: 100
   dragScale: 1.8

@@ -214,22 +214,41 @@ namespace Scripts.UI
         {
             if (_unitState == null || BuffBase == null) return;
 
-            // TODO: 实现Buff图标的显示
-            // 清空现有Buff
+            // 清空现有 Buff 图标
             foreach (Transform child in BuffBase)
             {
                 Destroy(child.gameObject);
             }
 
-            // 添加新的Buff图标
-            if (_unitState.Buffs != null)
+            if (_unitState.Buffs == null || _unitState.Buffs.Count == 0) return;
+
+            var prefab = ResolveBuffPrefab();
+            if (prefab == null)
             {
-                foreach (var buff in _unitState.Buffs)
-                {
-                    // TODO: 实例化Buff图标预制体
-                    //Debug.Log($"[Character] Buff: {buff.BuffId}, 持续: {buff.Duration}回合");
-                }
+                Debug.LogWarning($"[Character] 找不到 UI_Buff prefab：Resources/{BuffPrefabResourcePath}");
+                return;
             }
+
+            foreach (var buff in _unitState.Buffs)
+            {
+                if (buff == null) continue;
+                // Resources.Load<UI_Buff> + Instantiate 重载直接返回 UI_Buff，免 GetComponent
+                // 第三个参数 worldPositionStays=false 对 UI 元素必须（沿用 prefab anchored 设定）
+                var ui = Instantiate(prefab, BuffBase, false);
+                ui.Initialize(buff);
+            }
+        }
+
+        private const string BuffPrefabResourcePath = "UI/BattleScene/UI_Buff";
+        private static UI_Buff _cachedBuffPrefab;
+
+        private static UI_Buff ResolveBuffPrefab()
+        {
+            if (_cachedBuffPrefab == null)
+            {
+                _cachedBuffPrefab = Resources.Load<UI_Buff>(BuffPrefabResourcePath);
+            }
+            return _cachedBuffPrefab;
         }
 
         /// <summary>

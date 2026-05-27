@@ -23,6 +23,28 @@ namespace Ashlight.Battle
         public static BattleManager Instance { get; private set; }
 
         /// <summary>
+        /// 待加载的遭遇战 ID：VictoryPanel "继续" 按钮设置后重载 BattleScene，
+        /// 新的 UI_BattleScene 启动时会优先使用此 ID（消费后清空）。
+        /// 静态字段跨场景重载持续存在。
+        /// </summary>
+        public static string PendingEncounterId { get; set; }
+
+        /// <summary>
+        /// 消费并返回待加载的遭遇战 ID（消费后清空）。
+        /// </summary>
+        public static string ConsumePendingEncounterId()
+        {
+            string id = PendingEncounterId;
+            PendingEncounterId = null;
+            return id;
+        }
+
+        /// <summary>
+        /// BattleEndedEvent 是否已发送过，用于保证仅发送一次。
+        /// </summary>
+        private bool _battleEndEventRaised;
+
+        /// <summary>
         /// 当前战斗状态快照
         /// </summary>
         public BattleStateSnapshot CurrentState { get; private set; }
@@ -97,6 +119,7 @@ namespace Ashlight.Battle
             }
 
             Instance = this;
+            _battleEndEventRaised = false;
 
             // 初始化 ATB 核心引擎
             ActionBarResolver = new ActionBarResolver();
@@ -108,6 +131,30 @@ namespace Ashlight.Battle
 
             // 保留旧引擎（过渡期兼容）
             Resolver = new TimelineResolver();
+        }
+
+        private void Update()
+        {
+            RaiseBattleEndedIfNeeded();
+        }
+
+        /// <summary>
+        /// 检测 IsBattleEnded 是否刚刚从 false 翻到 true，是则发送一次 BattleEndedEvent。
+        /// 集中在 Update 里轮询，避免在散落各处的 CheckBattleEnd 后重复埋点。
+        /// </summary>
+        private void RaiseBattleEndedIfNeeded()
+        {
+            if (_battleEndEventRaised || CurrentState == null || !CurrentState.IsBattleEnded)
+            {
+                return;
+            }
+
+            _battleEndEventRaised = true;
+            GameEvent.Publish(new BattleEndedEvent
+            {
+                IsPlayerVictory = CurrentState.IsPlayerVictory
+            });
+            Debug.Log($"[BattleManager] 战斗结束事件已发布，玩家胜利: {CurrentState.IsPlayerVictory}");
         }
 
         /// <summary>
@@ -128,6 +175,7 @@ namespace Ashlight.Battle
             CurrentState = new BattleStateSnapshot();
             ClearPendingEnemyIntent();
             ClearPendingPlayerExecution();
+            _battleEndEventRaised = false;
 
             // 1. 创建玩家单位
             CreatePlayerUnits(battleInfo.PlayerCharacters);
@@ -1097,13 +1145,6 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var pickedTarget = CurrentState.PlayerUnits.FirstOrDefault(u => u != null && !u.IsDead);
-            if (pickedTarget == null)
-            {
-                Debug.LogWarning("[BattleManager] 敌人回合未找到可用玩家目标");
-                return false;
-            }
-
             int selectedIndex = Random.Range(0, candidateSkills.Count);
             selectedSkill = candidateSkills[selectedIndex];
             if (selectedSkill == null)
@@ -1111,7 +1152,21 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            target = pickedTarget;
+            // 目标选择：根据技能的 TargetType 决定
+            //   AllEnemy（全体）→ 仅用任一活着的玩家做"承载 UnitId"，AOE 真正铺开在 DamageCommand 里
+            //   SingleEnemy（单体）→ 在活着的玩家中随机选
+            //   其他 → 默认随机选活着的玩家
+            var alivePlayers = CurrentState.PlayerUnits
+                .Where(u => u != null && !u.IsDead)
+                .ToList();
+            if (alivePlayers.Count == 0)
+            {
+                Debug.LogWarning("[BattleManager] 敌人回合未找到可用玩家目标");
+                return false;
+            }
+
+            int targetIdx = Random.Range(0, alivePlayers.Count);
+            target = alivePlayers[targetIdx];
             return true;
         }
 
@@ -1291,8 +1346,13 @@ namespace Ashlight.Battle
                         int placePosition = TimelineTrack.TrackLength - totalSlots;
 
                         // 将技能转换为 TimelineBlock 列表
-                        // 目标选择：默认选择第一个玩家单位（后续可以扩展为更智能的目标选择）
-                        string targetId = CurrentState.PlayerUnits.Count > 0 ? CurrentState.PlayerUnits[0].UnitId : null;
+                        // 目标选择：在活着的玩家中随机选一个；AOE 由 DamageCommand 内部展开
+                        var alivePlayers = CurrentState.PlayerUnits
+                            .Where(u => u != null && !u.IsDead)
+                            .ToList();
+                        string targetId = alivePlayers.Count > 0
+                            ? alivePlayers[Random.Range(0, alivePlayers.Count)].UnitId
+                            : null;
                         var blocks = converter.ConvertEnemySkill(skillInfo, enemyUnit.UnitId, targetId);
 
                         // 检查时间轴位置是否可用

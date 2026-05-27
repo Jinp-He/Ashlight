@@ -74,8 +74,22 @@ namespace Ashlight.Battle.Core.Engine
                 {
                     if (state.IsBattleEnded) break;
 
-                    // 检查能量是否足够（暂时使用固定消耗 1 能量，待配置表 EnergyCost 字段就绪后替换）
                     int energyCost = GetCardEnergyCost(action.CardInfo);
+
+                    // CardCost（减费）：每次消耗一层 CardCost，下张牌费用 -V
+                    var cardCostBuff = unit.GetBuff("CardCost");
+                    if (cardCostBuff != null)
+                    {
+                        int reduction = Mathf.Max(0, Mathf.RoundToInt(cardCostBuff.Value));
+                        if (reduction > 0)
+                        {
+                            int reduced = Mathf.Min(reduction, energyCost);
+                            energyCost -= reduced;
+                            Debug.Log($"[TurnResolver] {unitId} [减费] -{reduced} 能量 (原 {energyCost + reduced})");
+                        }
+                        unit.RemoveBuff("CardCost");
+                    }
+
                     if (unit.CurrentEnergy < energyCost)
                     {
                         Debug.Log($"[TurnResolver] {unitId} 能量不足 ({unit.CurrentEnergy}/{energyCost})，需要过载或跳过");
@@ -119,20 +133,69 @@ namespace Ashlight.Battle.Core.Engine
         }
 
         /// <summary>
-        /// 处理回合开始 Buff（预留扩展）
+        /// 处理回合开始 Buff（Burn/Poison 真伤，Regen 回血）
+        /// 真伤无视护甲，直接扣 CurrentHp
         /// </summary>
         private void ProcessTurnStartBuff(BattleStateSnapshot state, UnitState unit, BuffState buff)
         {
-            // 预留：根据 BuffId 判断是否有回合开始触发效果
-            // 如：中毒在回合开始时扣血、再生在回合开始时恢复等
+            switch (buff.BuffId)
+            {
+                case "Burn":
+                {
+                    int dmg = Mathf.Max(0, Mathf.RoundToInt(buff.Value));
+                    if (dmg <= 0) break;
+                    unit.CurrentHp -= dmg;
+                    if (unit.CurrentHp <= 0) { unit.CurrentHp = 0; unit.IsDead = true; }
+                    Debug.Log($"[TurnResolver] {unit.UnitId} 燃烧造成 {dmg} 伤害 (剩余 HP: {unit.CurrentHp})");
+                    break;
+                }
+                case "Poison":
+                {
+                    int dmg = Mathf.Max(0, Mathf.RoundToInt(buff.Value));
+                    if (dmg > 0)
+                    {
+                        unit.CurrentHp -= dmg;
+                        if (unit.CurrentHp <= 0) { unit.CurrentHp = 0; unit.IsDead = true; }
+                        Debug.Log($"[TurnResolver] {unit.UnitId} 中毒造成 {dmg} 伤害 (剩余 HP: {unit.CurrentHp})");
+                    }
+                    // 中毒 V 每回合衰减 1
+                    buff.Value = Mathf.Max(0f, buff.Value - 1f);
+                    if (buff.Value <= 0f)
+                    {
+                        unit.RemoveBuff("Poison");
+                    }
+                    break;
+                }
+                case "Regen":
+                {
+                    int heal = Mathf.Max(0, Mathf.RoundToInt(buff.Value));
+                    if (heal <= 0) break;
+                    int actual = unit.Heal(heal);
+                    Debug.Log($"[TurnResolver] {unit.UnitId} 再生恢复 {actual} 生命 (当前 HP: {unit.CurrentHp})");
+                    break;
+                }
+            }
         }
 
         /// <summary>
-        /// 刷新能量
+        /// 刷新能量（基础能量 + 充能 buff）
         /// </summary>
         private void RefreshEnergy(UnitState unit)
         {
             unit.CurrentEnergy = unit.BaseEnergy;
+
+            var energized = unit.GetBuff("Energized");
+            if (energized != null)
+            {
+                int bonus = Mathf.Max(0, Mathf.RoundToInt(energized.Value));
+                if (bonus > 0)
+                {
+                    unit.CurrentEnergy += bonus;
+                    Debug.Log($"[TurnResolver] {unit.UnitId} 充能 +{bonus} 能量");
+                }
+                unit.RemoveBuff("Energized");
+            }
+
             Debug.Log($"[TurnResolver] {unit.UnitId} 能量刷新: {unit.CurrentEnergy}");
         }
 

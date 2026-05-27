@@ -1983,7 +1983,7 @@ Transform:
   - {fileID: 790688313}
   - {fileID: 1265879503}
   m_Father: {fileID: 4874984058266360017}
-  m_RootOrder: 3
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1239917363
 GameObject:
@@ -2822,7 +2822,7 @@ RectTransform:
   - {fileID: 1831913254608291438}
   - {fileID: 190638095}
   m_Father: {fileID: 4874984058266360017}
-  m_RootOrder: 4
+  m_RootOrder: 5
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -3861,7 +3861,7 @@ RectTransform:
   - {fileID: 323636583}
   - {fileID: 1858986523}
   m_Father: {fileID: 4874984058266360017}
-  m_RootOrder: 5
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -4506,9 +4506,9 @@ Transform:
   - {fileID: 120781228}
   - {fileID: 1473429295}
   - {fileID: 7869027543572924450}
+  - {fileID: 643129609597099499}
   - {fileID: 1114374057}
   - {fileID: 1669704345}
-  - {fileID: 643129609597099499}
   - {fileID: 5204381504632636650}
   - {fileID: 1256928875}
   - {fileID: 808120789}
@@ -4837,7 +4837,17 @@ MonoBehaviour:
   timelineTrackPrefab: {fileID: 1266222384735868427, guid: 8f3450fa82768d14589ce4cc4b7caf1f, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
   testCardCount: 3
-  testEncounterId: E001
+  testEncounterId: E002
+  testEncounterSequence:
+  - E001
+  - E002
+  - E003
+  - E004
+  testAutoAdvance: 1
+  testAutoAdvanceDelay: 1.5
+  testLoopAfterLast: 1
+  testAutoRetryOnDefeat: 1
+  victoryPanel: {fileID: 0}
 --- !u!114 &6012153738832363701
 MonoBehaviour:
   m_ObjectHideFlags: 0
