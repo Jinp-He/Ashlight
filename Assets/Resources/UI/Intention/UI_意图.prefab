@@ -246,7 +246,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 207, y: 19}
+  m_AnchoredPosition: {x: 0, y: 19}
   m_SizeDelta: {x: 10, y: 10}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &198839103306648339
@@ -432,8 +432,14 @@ MonoBehaviour:
   _imgState: {fileID: 217180959546714670}
   _imgShield: {fileID: 4446712473059115783}
   _imgAttack: {fileID: 3490179994691619407}
+  _coordRoot: {fileID: 0}
+  _coordTemplate: {fileID: 0}
   _imgLinkPiece: {fileID: 782624066241812892}
-  _coordDots: []
+  _defaultTotalCoords: 4
+  _dotSpacing: 60
+  _descriptionViewControllerPrefab: {fileID: 0}
+  _tooltipMouseOffset: {x: 120, y: 0}
+  _tooltipFollowMouse: 1
 --- !u!1 &5622023231273042131
 GameObject:
   m_ObjectHideFlags: 0
@@ -711,7 +717,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 216, y: 19}
+  m_AnchoredPosition: {x: 0, y: 19}
   m_SizeDelta: {x: 12, y: 10}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4874633145294053124
