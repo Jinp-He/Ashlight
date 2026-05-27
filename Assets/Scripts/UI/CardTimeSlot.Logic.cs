@@ -67,7 +67,6 @@ namespace Scripts.UI
 
         /// <summary>
         /// 初始化并加载卡牌数据
-        /// 根据CardRuntimeState调整三个Image的长度为 100 * Channeling
         /// </summary>
         /// <param name="cardRuntimeState">卡牌运行时状态</param>
         public void InitLoad(CardRuntimeState cardRuntimeState)
@@ -89,27 +88,16 @@ namespace Scripts.UI
                 return;
             }
 
-            // 获取Channeling值
-            int channeling = cardInfo.Channeling;
-            int duration = cardInfo.Duration;
-            int recoil = cardInfo.Recoil;   
-            // 计算目标长度：100 * Channeling
-            float targetLength = 100f * channeling;
-            float durationLength = 100f * duration;
-            float recoilLength = 100f * recoil;
+            float slotLength = 100f;
 
-            // 调整三个Image的长度
-            SetImageLength(Channeling, targetLength);
-            SetImageLength(Duration, durationLength);
-            SetImageLength(Recoil, recoilLength);
+            SetImageLength(Channeling, 0f);
+            SetImageLength(Duration, slotLength);
+            SetImageLength(Recoil, 0f);
 
-            // 更新卡牌名称
             UpdateCardName(cardInfo.Name);
-
-            // 更新卡牌 MiniSprite
             UpdateMiniSprite(cardRuntimeState.CardId);
 
-            Debug.Log($"[CardTimeSlot] 初始化完成，卡牌ID: {cardRuntimeState.CardId}, 名称: {cardInfo.Name}, Channeling: {channeling}, 长度: {targetLength}");
+            Debug.Log($"[CardTimeSlot] 初始化完成，卡牌ID: {cardRuntimeState.CardId}, 名称: {cardInfo.Name}, CardType: {cardInfo.CardType}");
         }
         
         /// <summary>

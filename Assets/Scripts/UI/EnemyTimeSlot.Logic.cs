@@ -87,10 +87,10 @@ namespace Scripts.UI
             _attacker = attacker;
             _target = target;
 
-            // 获取Channeling、Duration、Recoil值
-            int channeling = enemySkillInfo.Channeling;
-            int duration = enemySkillInfo.Duration;
-            int recoil = enemySkillInfo.Recoil;
+            int executingCost = enemySkillInfo.ExecutingCost;
+            int channeling = 0;
+            int duration = executingCost;
+            int recoil = 0;
 
             // 计算目标长度：每个单位 100 像素
             float channelingLength = 100f * channeling;

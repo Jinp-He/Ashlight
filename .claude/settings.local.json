@@ -7,7 +7,18 @@
       "Bash(wc:*)",
       "Bash(cmd /c gen.bat)",
       "Bash(dotnet:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(pwd)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(awk '/m_Sprite: \\\\{fileID: 21300000, guid: ffd2e6cf4b4e58f43bba6ee25d770af7/{found=NR} END{print \"found at \"found}' \"F:/Ashlight/Assets/Resources/Enemy/Prefab/EnemyPrefab.prefab\")"
     ]
   }
 }

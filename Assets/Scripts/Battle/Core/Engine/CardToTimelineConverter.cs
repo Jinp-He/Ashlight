@@ -30,38 +30,11 @@ namespace Ashlight.Battle.Core.Engine
 
             var blocks = new List<TimelineBlock>();
 
-            int currentIndex = 0;
+            var commands = ConvertEffectsToCommands(card.Effects);
+            blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, card.Id, commands));
+            blocks[0].IsLastBlock = true;
 
-            // 1. 创建Startup阶段Blocks（引导期，无Commands）
-            for (int i = 0; i < card.Channeling; i++)
-            {
-                blocks.Add(CreateBlock(PhaseEnum.Startup, ownerId, targetId, card.Id, null));
-                currentIndex++;
-            }
-
-            // 2. 创建Active阶段Blocks（生效期，包含Commands）
-            for (int i = 0; i < card.Duration; i++)
-            {
-                // 只在第一个Active格子执行Commands
-                List<ICommand> commands = (i == 0) ? ConvertEffectsToCommands(card.Effects) : null;
-                blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, card.Id, commands));
-                currentIndex++;
-            }
-
-            // 3. 创建Recoil阶段Blocks（后摇期，无Commands）
-            for (int i = 0; i < card.Recoil; i++)
-            {
-                blocks.Add(CreateBlock(PhaseEnum.Recoil, ownerId, targetId, card.Id, null));
-                currentIndex++;
-            }
-
-            // 4. 标记最后一个Block（用于判断卡牌执行完毕）
-            if (blocks.Count > 0)
-            {
-                blocks[blocks.Count - 1].IsLastBlock = true;
-            }
-
-            Debug.Log($"[CardToTimelineConverter] 卡牌 {card.Name} 转换为 {blocks.Count} 个Blocks (Channeling:{card.Channeling}, Duration:{card.Duration}, Recoil:{card.Recoil})");
+            Debug.Log($"[CardToTimelineConverter] 卡牌 {card.Name} 转换为 {blocks.Count} 个Blocks (CardType:{card.CardType})");
 
             return blocks;
         }

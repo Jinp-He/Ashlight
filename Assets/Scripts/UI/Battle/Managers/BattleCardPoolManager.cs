@@ -108,12 +108,9 @@ namespace Scripts.UI
 
             var deckSystem = _battleManager.CurrentState.DeckSystem;
 
-            // 收集所有卡牌（抽牌堆 + 弃牌堆 + 手牌 + 使用中）
+            // 收集所有卡牌（各角色牌堆 + 旧堆 + 手牌 + 使用中 + 移除区）
             var allCards = new List<CardRuntimeState>();
-            allCards.AddRange(deckSystem.DrawPile);
-            allCards.AddRange(deckSystem.DiscardPile);
-            allCards.AddRange(deckSystem.Hand);
-            allCards.AddRange(deckSystem.InPlayPile);
+            deckSystem.CollectAllCardsForPool(allCards);
 
             Debug.Log($"[BattleCardPoolManager] 开始初始化卡牌池，共 {allCards.Count} 张卡牌");
 

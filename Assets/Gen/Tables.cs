@@ -16,6 +16,7 @@ public partial class Tables
 {
     public TbCustomColor TbCustomColor {get; }
     public TbNounDictionary TbNounDictionary {get; }
+    public TbBuffInfo TbBuffInfo {get; }
     public Character.TbCharaterInfo TbCharaterInfo {get; }
     public Character.TbCardInfo_backup TbCardInfoBackup {get; }
     public Character.TbCardInfo TbCardInfo {get; }
@@ -27,6 +28,7 @@ public partial class Tables
     {
         TbCustomColor = new TbCustomColor(loader("tbcustomcolor"));
         TbNounDictionary = new TbNounDictionary(loader("tbnoundictionary"));
+        TbBuffInfo = new TbBuffInfo(loader("tbbuffinfo"));
         TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
         TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
         TbCardInfo = new Character.TbCardInfo(loader("character_tbcardinfo"));
@@ -40,6 +42,7 @@ public partial class Tables
     {
         TbCustomColor.ResolveRef(this);
         TbNounDictionary.ResolveRef(this);
+        TbBuffInfo.ResolveRef(this);
         TbCharaterInfo.ResolveRef(this);
         TbCardInfoBackup.ResolveRef(this);
         TbCardInfo.ResolveRef(this);

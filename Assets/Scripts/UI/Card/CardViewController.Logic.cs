@@ -28,11 +28,15 @@ namespace Scripts.UI
         [Header("悬停设置")]
         [SerializeField]
         [Tooltip("悬停时的缩放比例")]
-        private float hoverScale = 1.8f;
+        private float hoverScale = 2f;
 
         [SerializeField]
         [Tooltip("缩放动画时长")]
         private float scaleDuration = 0.2f;
+
+        [SerializeField]
+        [Tooltip("悬停时向上偏移距离（像素）")]
+        private float hoverLiftDistance = 80f;
 
         [SerializeField]
         [Tooltip("描述面板相对于卡牌的偏移（像素）")]
@@ -61,12 +65,28 @@ namespace Scripts.UI
         [Tooltip("合法目标的变暗颜色（拖动时合法目标会变暗）")]
         private Color validTargetDimColor = new Color(0.5f, 0.5f, 0.5f, 1f);
 
+        [SerializeField]
+        [Tooltip("能量不足时左上角能量文本的变色颜色")]
+        private Color insufficientEnergyColor = new Color(1f, 0.25f, 0.25f, 1f);
+
+        [SerializeField]
+        [Tooltip("执行（延时）卡牌左上角能量底图颜色")]
+        private Color executionCostTint = new Color(1f, 0.55f, 0.2f, 1f);
+
         #endregion
 
         #region 私有字段
 
         private CardInfo _currentCard;
         private DescriptionMode _displayMode = DescriptionMode.View;
+
+        // 记录 Txt_LeftCost 默认颜色，用于能量足够时恢复
+        private Color _defaultLeftCostColor;
+        private bool _defaultLeftCostColorCaptured = false;
+
+        // 记录 Img_CostLeft 默认颜色，用于非执行牌时恢复
+        private Color _defaultLeftCostImageColor;
+        private bool _defaultLeftCostImageColorCaptured = false;
 
         /// <summary>
         /// 当前关联的 CardRuntimeState 的 InstanceId（用于对象池关联）
@@ -75,6 +95,7 @@ namespace Scripts.UI
         private Vector3 _originalScale;
         private Vector3 _originalCardScale; // Card子对象的原始缩放
         private Tween _scaleTween;
+        private Tween _hoverMoveTween;
         private DescriptionViewController _descriptionView;
         private Canvas _parentCanvas;
         private string _currentHoveredLink = string.Empty;
@@ -84,6 +105,8 @@ namespace Scripts.UI
         private int _originalSiblingIndex;
         private Canvas _hoverCanvas;
         private bool _isHovering = false;
+        private RectTransform _rectTransform;
+        private Vector2 _hoverBaseAnchoredPosition;
 
         // 拖拽相关
         private bool _isDragging = false;
@@ -100,6 +123,14 @@ namespace Scripts.UI
         
         // 卡片锁定状态（被执行后不可移动）
         private bool _isLocked = false;
+
+        /// <summary>
+        /// 本回合已打出执行牌后，其余执行牌被压制（变暗、不可交互）
+        /// </summary>
+        private bool _executionSuppressed = false;
+
+        private readonly System.Collections.Generic.List<UnityEngine.UI.Graphic> _executionTintGraphics = new System.Collections.Generic.List<UnityEngine.UI.Graphic>();
+        private readonly System.Collections.Generic.List<Color> _executionTintColors = new System.Collections.Generic.List<Color>();
         
         // 时间轴相关（当 Card 在时间轴上时使用）
         private Timeline.TimelineTrackView _parentTrack;
@@ -181,6 +212,11 @@ namespace Scripts.UI
             {
                 _hoverCanvas = gameObject.AddComponent<Canvas>();
             }
+            _rectTransform = GetComponent<RectTransform>();
+            if (_rectTransform != null)
+            {
+                _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
+            }
             
             // 添加GraphicRaycaster（用于接收鼠标事件）
             if (gameObject.GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
@@ -250,6 +286,7 @@ namespace Scripts.UI
             // 清理动画
             _scaleTween?.Kill();
             _positionTween?.Kill();
+            _hoverMoveTween?.Kill();
 
             // 清理描述面板
             if (_descriptionView != null)
@@ -346,6 +383,11 @@ namespace Scripts.UI
             if (_isLocked)
             {
                 UnlockCard();
+            }
+
+            if (_executionSuppressed)
+            {
+                SetExecutionSuppressed(false);
             }
 
             // 重置视觉状态
@@ -454,6 +496,68 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 执行牌已打出后：将其余执行牌变暗并禁止悬停/拖拽（本回合内）
+        /// </summary>
+        public void SetExecutionSuppressed(bool suppressed)
+        {
+            if (suppressed && _executionSuppressed)
+                return;
+            if (!suppressed && !_executionSuppressed)
+                return;
+
+            if (suppressed)
+            {
+                _executionSuppressed = true;
+                _isHovering = false;
+                _scaleTween?.Kill();
+                ForceResetHoverLift();
+                if (Img_Outline != null)
+                {
+                    Img_Outline.gameObject.SetActive(false);
+                }
+
+                if (Card != null && Card.transform != null)
+                {
+                    Card.transform.localScale = _originalCardScale;
+                }
+
+                RestoreCard();
+                HideDescription();
+
+                _executionTintGraphics.Clear();
+                _executionTintColors.Clear();
+                foreach (var g in GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                {
+                    if (g == null)
+                        continue;
+                    _executionTintGraphics.Add(g);
+                    _executionTintColors.Add(g.color);
+                    var c = g.color;
+                    g.color = new Color(c.r * 0.32f, c.g * 0.32f, c.b * 0.32f, c.a);
+                }
+
+                if (_canvasGroup != null)
+                    _canvasGroup.blocksRaycasts = false;
+            }
+            else
+            {
+                for (int i = 0; i < _executionTintGraphics.Count; i++)
+                {
+                    var g = _executionTintGraphics[i];
+                    if (g != null && i < _executionTintColors.Count)
+                        g.color = _executionTintColors[i];
+                }
+
+                _executionTintGraphics.Clear();
+                _executionTintColors.Clear();
+                _executionSuppressed = false;
+
+                if (_canvasGroup != null)
+                    _canvasGroup.blocksRaycasts = true;
+            }
+        }
+
+        /// <summary>
         /// 设置锁定状态的视觉效果（变暗）
         /// </summary>
         private void SetLockedVisual()
@@ -537,16 +641,36 @@ namespace Scripts.UI
                 Txt_CardTag.text = GetTargetTypeText(_currentCard.TargetType);
             }
 
-            // 设置左侧消耗（引导时间）
+            // 设置左侧消耗（能量）
             if (Txt_LeftCost != null)
             {
-                Txt_LeftCost.text = _currentCard.Duration.ToString();
+                Txt_LeftCost.text = _currentCard.Energy.ToString();
             }
 
-            // 设置右侧消耗（后摇）
+            // 根据玩家当前能量刷新左上角颜色
+            RefreshEnergyAffordability();
+
+            // 设置右侧消耗（卡牌类型）
+            bool isExecution = _currentCard.CardType == cfg.CardTypeEnum.Execution;
             if (Txt_RightCost != null)
             {
-                Txt_RightCost.text = _currentCard.Recoil.ToString();
+                Txt_RightCost.text = isExecution ? "执" : "迅";
+            }
+
+            // 执行（延时）卡牌左上角能量底图变橙色
+            if (Img_CostLeft != null)
+            {
+                if (!_defaultLeftCostImageColorCaptured)
+                {
+                    _defaultLeftCostImageColor = Img_CostLeft.color;
+                    _defaultLeftCostImageColorCaptured = true;
+                }
+                Img_CostLeft.color = isExecution ? executionCostTint : _defaultLeftCostImageColor;
+                Debug.Log($"[CardViewController] {_currentCard.Name} CardType={_currentCard.CardType} isExecution={isExecution} Img_CostLeft.color={Img_CostLeft.color}");
+            }
+            else
+            {
+                Debug.LogWarning($"[CardViewController] {_currentCard.Name} Img_CostLeft 为 null，无法设置类型底色");
             }
 
             // 设置稀有度显示
@@ -622,7 +746,14 @@ namespace Scripts.UI
             if (_isDragging)
                 return;
 
+            if (_executionSuppressed)
+                return;
+
             _isHovering = true;
+            if (_rectTransform != null)
+            {
+                _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
+            }
 
             // 显示轮廓
             if (Img_Outline != null)
@@ -640,6 +771,7 @@ namespace Scripts.UI
                 _scaleTween = Card.transform.DOScale(_originalCardScale * hoverScale, scaleDuration)
                     .SetEase(Ease.OutBack);
             }
+            PlayHoverLift(true);
         }
 
         /// <summary>
@@ -669,6 +801,7 @@ namespace Scripts.UI
                 _scaleTween = Card.transform.DOScale(_originalCardScale, scaleDuration)
                     .SetEase(Ease.OutBack);
             }
+            PlayHoverLift(false);
 
             // 隐藏描述面板
             HideDescription();
@@ -723,6 +856,32 @@ namespace Scripts.UI
             Debug.Log("[CardViewController] 卡牌恢复原始层级");
         }
 
+        /// <summary>
+        /// 播放悬停位移动画（向上/回落）
+        /// </summary>
+        private void PlayHoverLift(bool entering)
+        {
+            if (_rectTransform == null) return;
+
+            _hoverMoveTween?.Kill();
+            Vector2 targetPos = entering
+                ? _hoverBaseAnchoredPosition + new Vector2(0f, hoverLiftDistance)
+                : _hoverBaseAnchoredPosition;
+
+            _hoverMoveTween = _rectTransform.DOAnchorPos(targetPos, scaleDuration)
+                .SetEase(Ease.OutCubic);
+        }
+
+        /// <summary>
+        /// 立即重置悬停位移，避免状态切换后残留偏移
+        /// </summary>
+        private void ForceResetHoverLift()
+        {
+            if (_rectTransform == null) return;
+            _hoverMoveTween?.Kill();
+            _rectTransform.anchoredPosition = _hoverBaseAnchoredPosition;
+        }
+
         #endregion
 
         #region 拖拽处理（战斗模式）
@@ -744,7 +903,20 @@ namespace Scripts.UI
                 return;
             }
 
+            if (_executionSuppressed)
+            {
+                return;
+            }
+
+            // 能量不足时禁止从手牌拖出（已经放到时间轴上的牌不受影响，那张牌的能量已被扣除）
+            if (_cardDragState != CardDragState.OnTime && !HasEnoughEnergyForCard())
+            {
+                Debug.Log($"[CardViewController] 能量不足，无法拖拽: {_currentCard?.Name} (需求={_currentCard?.Energy})");
+                return;
+            }
+
             _isDragging = true;
+            ForceResetHoverLift();
 
             // 根据 Card 的状态决定拖拽行为
             if (_cardDragState == CardDragState.OnTime)
@@ -1263,7 +1435,7 @@ namespace Scripts.UI
                     Debug.Log($"[CardViewController] 在TimeSlot上释放卡牌: {_currentCard.Name}, 索引: {slotIndex}, 轨道: {track.name}");
                 }
                 
-                int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+                int totalSlots = 1;
                 
                 // 检查位置（使用与高亮显示相同的 slotIndex）
                 bool canPlaceByPosition = track.GetTrack().CanPlaceCard(slotIndex, totalSlots);
@@ -1502,6 +1674,60 @@ namespace Scripts.UI
         {
             return _currentCard.BelongTo;
         }
+
+        /// <summary>
+        /// 判断该卡牌的所属单位是否拥有足够的能量
+        /// 解析失败或战斗数据不可用时返回 true（不误禁拖拽）
+        /// </summary>
+        private bool HasEnoughEnergyForCard()
+        {
+            if (_currentCard == null)
+            {
+                return true;
+            }
+
+            var battleManager = Ashlight.Battle.BattleManager.Instance;
+            if (battleManager == null || battleManager.CurrentState == null)
+            {
+                return true;
+            }
+
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (string.IsNullOrEmpty(ownerUnitId))
+            {
+                return true;
+            }
+
+            var unit = battleManager.CurrentState.GetUnitById(ownerUnitId);
+            if (unit == null)
+            {
+                return true;
+            }
+
+            return unit.CurrentEnergy >= _currentCard.Energy;
+        }
+
+        /// <summary>
+        /// 根据玩家能量刷新左上角能量文本颜色
+        /// 能量不足：变为 <see cref="insufficientEnergyColor"/>
+        /// 能量足够：恢复默认颜色
+        /// </summary>
+        public void RefreshEnergyAffordability()
+        {
+            if (Txt_LeftCost == null || _currentCard == null)
+            {
+                return;
+            }
+
+            if (!_defaultLeftCostColorCaptured)
+            {
+                _defaultLeftCostColor = Txt_LeftCost.color;
+                _defaultLeftCostColorCaptured = true;
+            }
+
+            bool affordable = HasEnoughEnergyForCard();
+            Txt_LeftCost.color = affordable ? _defaultLeftCostColor : insufficientEnergyColor;
+        }
         
         /// <summary>
         /// 检查卡牌所属角色是否与时间轴匹配
@@ -1585,7 +1811,7 @@ namespace Scripts.UI
             ClearTimelineHighlight();
             
             // 计算卡牌占用的格子数
-            int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+            int totalSlots = 1;
             
             // 检查是否可以放置（位置检查）
             bool canPlaceByPosition = track.GetTrack().CanPlaceCard(slotIndex, totalSlots);
@@ -1995,7 +2221,7 @@ namespace Scripts.UI
                 var track = targetSlot.GetParentTrack();
                 if (track != null && _currentCard != null)
                 {
-                    int totalSlots = _currentCard.Channeling + _currentCard.Duration + _currentCard.Recoil;
+                    int totalSlots = 1;
                     
                     // 检查是否可以放置（位置检查）
                     bool canPlaceByPosition = track.GetTrack().CanPlaceCard(targetSlot.SlotIndex, totalSlots);
@@ -2544,26 +2770,41 @@ namespace Scripts.UI
 
             if (targetObj == null || _currentCard == null)
             {
+                // 群体目标类型：鼠标离开时，把所有合法目标恢复成 dim 状态
+                if (_currentCard != null)
+                {
+                    if (_currentCard.TargetType == cfg.TargetTypeEnum.AllAlly)
+                    {
+                        CharacterEnum ownerCharacterId = GetOwnerCharacterId();
+                        var allies = _targetManager?.GetAllValidAllies(ownerCharacterId);
+                        if (allies != null)
+                        {
+                            foreach (var ally in allies)
+                            {
+                                if (ally != null)
+                                {
+                                    ally.SetColor(validTargetDimColor);
+                                }
+                            }
+                        }
+                    }
+                    else if (_currentCard.TargetType == cfg.TargetTypeEnum.AllEnemy)
+                    {
+                        var enemies = _targetManager?.GetAllValidEnemies();
+                        if (enemies != null)
+                        {
+                            foreach (var enemy in enemies)
+                            {
+                                if (enemy != null)
+                                {
+                                    enemy.SetColor(validTargetDimColor);
+                                }
+                            }
+                        }
+                    }
+                }
                 _previousHoveredTarget = null;
                 return;
-            }
-
-            // 如果目标合法，恢复其颜色为白色（选中状态）
-            if (isValid)
-            {
-                var character = targetObj.GetComponent<Character>();
-                var enemy = targetObj.GetComponent<Enemy>();
-
-                if (character != null)
-                {
-                    character.SetColor(Color.white);
-                    character.ShowIndicator(Color.green);
-                }
-                else if (enemy != null)
-                {
-                    enemy.SetColor(Color.white);
-                    enemy.ShowIndicator(Color.green);
-                }
             }
 
             // 保存当前悬停的目标
@@ -2572,7 +2813,7 @@ namespace Scripts.UI
             // 检查是否为群体目标类型
             if (_currentCard.TargetType == cfg.TargetTypeEnum.AllAlly)
             {
-                // 高亮所有合法队友（群体目标类型总是显示合法的目标，所以总是显示绿色）
+                // 高亮所有合法队友：全部变白 + 绿色指示
                 CharacterEnum ownerCharacterId = GetOwnerCharacterId();
                 var allies = _targetManager?.GetAllValidAllies(ownerCharacterId);
                 if (allies != null)
@@ -2581,6 +2822,7 @@ namespace Scripts.UI
                     {
                         if (ally != null)
                         {
+                            ally.SetColor(Color.white);
                             ally.ShowIndicator(Color.green);
                         }
                     }
@@ -2588,7 +2830,7 @@ namespace Scripts.UI
             }
             else if (_currentCard.TargetType == cfg.TargetTypeEnum.AllEnemy)
             {
-                // 高亮所有合法敌人（群体目标类型总是显示合法的目标，所以总是显示绿色）
+                // 高亮所有合法敌人：全部变白 + 绿色指示
                 var enemies = _targetManager?.GetAllValidEnemies();
                 if (enemies != null)
                 {
@@ -2596,6 +2838,7 @@ namespace Scripts.UI
                     {
                         if (enemy != null)
                         {
+                            enemy.SetColor(Color.white);
                             enemy.ShowIndicator(Color.green);
                         }
                     }
@@ -2603,9 +2846,26 @@ namespace Scripts.UI
             }
             else
             {
-                // 单目标 - 如果目标非法，不显示Indicator
-                if (!isValid)
+                // 单目标 - 如果目标合法，设为白色并显示绿色指示
+                if (isValid)
                 {
+                    var character = targetObj.GetComponent<Character>();
+                    var enemy = targetObj.GetComponent<Enemy>();
+
+                    if (character != null)
+                    {
+                        character.SetColor(Color.white);
+                        character.ShowIndicator(Color.green);
+                    }
+                    else if (enemy != null)
+                    {
+                        enemy.SetColor(Color.white);
+                        enemy.ShowIndicator(Color.green);
+                    }
+                }
+                else
+                {
+                    // 非法目标不显示Indicator
                     return;
                 }
             }
@@ -2714,18 +2974,33 @@ namespace Scripts.UI
                 return;
             }
 
-            bool success = battleManager.TryPlayCardImmediately(_currentCard, ownerUnitId, targetId, InstanceId);
+            bool isExecutionCard = _currentCard != null && _currentCard.CardType == CardTypeEnum.Execution;
+            bool success;
+            if (isExecutionCard)
+            {
+                success = battleManager.TryQueuePlayerExecutionCard(_currentCard, ownerUnitId, targetId, InstanceId, out _);
+            }
+            else
+            {
+                success = battleManager.TryPlayCardImmediately(_currentCard, ownerUnitId, targetId, InstanceId);
+            }
+
             if (!success)
             {
-                Debug.LogWarning("[CardViewController] 立即执行卡牌失败，恢复手牌状态");
+                Debug.LogWarning("[CardViewController] 打牌失败，恢复手牌状态");
                 RestoreCardToHandState();
                 return;
             }
 
             var battleScene = FindObjectOfType<UI_BattleScene>();
+            if (isExecutionCard)
+            {
+                battleScene?.OnPlayerPlayedExecutionCard(this, ownerUnitId);
+            }
+
             battleScene?.ConsumeHandCard(this);
 
-            Debug.Log($"[CardViewController] 立即执行卡牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}");
+            Debug.Log($"[CardViewController] 出牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}, execution={isExecutionCard}");
         }
 
         /// <summary>

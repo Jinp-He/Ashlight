@@ -21,14 +21,14 @@ public sealed partial class CardInfo : Luban.BeanBase
         { if(!_buf["Name"].IsString) { throw new SerializationException(); }  Name = _buf["Name"]; }
         { if(!_buf["Description"].IsString) { throw new SerializationException(); }  Description = _buf["Description"]; }
         { var __json0 = _buf["Effects"]; if(!__json0.IsArray) { throw new SerializationException(); } Effects = new System.Collections.Generic.List<Effect>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { Effect __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.Effect.DeserializeEffect(__e0);  }  Effects.Add(__v0); }   }
-        { if(!_buf["Channeling"].IsNumber) { throw new SerializationException(); }  Channeling = _buf["Channeling"]; }
-        { if(!_buf["Duration"].IsNumber) { throw new SerializationException(); }  Duration = _buf["Duration"]; }
-        { if(!_buf["Recoil"].IsNumber) { throw new SerializationException(); }  Recoil = _buf["Recoil"]; }
+        { if(!_buf["CardType"].IsNumber) { throw new SerializationException(); }  CardType = (CardTypeEnum)_buf["CardType"].AsInt; }
         { if(!_buf["BelongTo"].IsNumber) { throw new SerializationException(); }  BelongTo = (CharacterEnum)_buf["BelongTo"].AsInt; }
         { if(!_buf["TargetType"].IsNumber) { throw new SerializationException(); }  TargetType = (TargetTypeEnum)_buf["TargetType"].AsInt; }
         { if(!_buf["Rarity"].IsNumber) { throw new SerializationException(); }  Rarity = (RarityEnum)_buf["Rarity"].AsInt; }
         { var _j = _buf["AssetPath"]; if (_j.Tag != JSONNodeType.None && _j.Tag != JSONNodeType.NullValue) { { if(!_j.IsString) { throw new SerializationException(); }  AssetPath = _j; } } else { AssetPath = null; } }
         { if(!_buf["IsLocked"].IsBoolean) { throw new SerializationException(); }  IsLocked = _buf["IsLocked"]; }
+        { if(!_buf["Energy"].IsNumber) { throw new SerializationException(); }  Energy = _buf["Energy"]; }
+        { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
     }
 
     public static CardInfo DeserializeCardInfo(JSONNode _buf)
@@ -40,14 +40,14 @@ public sealed partial class CardInfo : Luban.BeanBase
     public readonly string Name;
     public readonly string Description;
     public readonly System.Collections.Generic.List<Effect> Effects;
-    public readonly int Channeling;
-    public readonly int Duration;
-    public readonly int Recoil;
+    public readonly CardTypeEnum CardType;
     public readonly CharacterEnum BelongTo;
     public readonly TargetTypeEnum TargetType;
     public readonly RarityEnum Rarity;
     public readonly string AssetPath;
     public readonly bool IsLocked;
+    public readonly int Energy;
+    public readonly int ExecutingCost;
    
     public const int __ID__ = 804331843;
     public override int GetTypeId() => __ID__;
@@ -64,14 +64,14 @@ public sealed partial class CardInfo : Luban.BeanBase
         + "Name:" + Name + ","
         + "Description:" + Description + ","
         + "Effects:" + Luban.StringUtil.CollectionToString(Effects) + ","
-        + "Channeling:" + Channeling + ","
-        + "Duration:" + Duration + ","
-        + "Recoil:" + Recoil + ","
+        + "CardType:" + CardType + ","
         + "BelongTo:" + BelongTo + ","
         + "TargetType:" + TargetType + ","
         + "Rarity:" + Rarity + ","
         + "AssetPath:" + AssetPath + ","
         + "IsLocked:" + IsLocked + ","
+        + "Energy:" + Energy + ","
+        + "ExecutingCost:" + ExecutingCost + ","
         + "}";
     }
 }

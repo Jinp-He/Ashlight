@@ -160,6 +160,11 @@ namespace Ashlight.Common.Events
         /// 是否为预解算模式（预解算时不播放动画）
         /// </summary>
         public bool IsPrediction;
+
+        /// <summary>
+        /// 为 true 时不播放战斗演出（例如 ATB 下打出执行牌仅宣告出牌，效果在执行轨再结算）
+        /// </summary>
+        public bool SkipBattleAnimation;
     }
 
     /// <summary>
@@ -190,5 +195,17 @@ namespace Ashlight.Common.Events
     public struct AfterTimelineAdvanceEvent
     {
         // 空事件，只用作信号
+    }
+
+    /// <summary>
+    /// 战斗结束事件
+    /// 当 BattleStateSnapshot.IsBattleEnded 首次从 false 变为 true 时由 BattleManager 发布一次
+    /// </summary>
+    public struct BattleEndedEvent
+    {
+        /// <summary>
+        /// 玩家是否胜利（true=全部敌人死亡且至少一个玩家存活）
+        /// </summary>
+        public bool IsPlayerVictory;
     }
 }

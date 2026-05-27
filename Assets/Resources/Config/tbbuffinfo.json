@@ -1,0 +1,230 @@
+[
+  {
+    "Id": "Channeling",
+    "Name": "引导",
+    "Description": "正在引导 {T} 格，中途被打断则施法失败",
+    "Polarity": 2,
+    "DefaultDuration": -1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Recoil",
+    "Name": "僵直",
+    "Description": "僵直中，剩余 {T} 格无法行动",
+    "Polarity": 1,
+    "DefaultDuration": -1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "ReduceDmg",
+    "Name": "减伤",
+    "Description": "受到的伤害降低 {V}%，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_ReduceDmg",
+    "Polarity": 0,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Chill",
+    "Name": "冰冻",
+    "Description": "行动延迟，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Chill",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 3,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Stun",
+    "Name": "晕眩",
+    "Description": "无法行动，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Stun",
+    "Polarity": 1,
+    "DefaultDuration": 1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Vulnerable",
+    "Name": "易伤",
+    "Description": "受到的伤害提高 {V}%，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Vulnerable",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "ReduceChannel",
+    "Name": "引导缩短",
+    "Description": "下一次引导时间缩短 {V} 格",
+    "IconPath": "UI/Buff/Icon_ReduceChannel",
+    "Polarity": 0,
+    "DefaultDuration": 1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Root",
+    "Name": "禁锢",
+    "Description": "无法移动，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Root",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "DrawCard",
+    "Name": "灵感",
+    "Description": "下回合开始时多抽 {V} 张牌",
+    "IconPath": "UI/Buff/Icon_DrawCard",
+    "Polarity": 0,
+    "DefaultDuration": 1,
+    "MaxStack": 3,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "Taunt",
+    "Name": "嘲讽",
+    "Description": "敌人优先攻击你",
+    "IconPath": "UI/Buff/Icon_Taunt",
+    "Polarity": 0,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Taunted",
+    "Name": "被嘲讽",
+    "Description": "必须攻击发动嘲讽的角色",
+    "IconPath": "UI/Buff/Icon_Taunted",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Stagger",
+    "Name": "破韧",
+    "Description": "累计承受 {V} 点伤害将打断行动",
+    "IconPath": "UI/Buff/Icon_Stagger",
+    "Polarity": 1,
+    "DefaultDuration": -1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Block",
+    "Name": "格挡",
+    "Description": "受到 {V} 次伤害将打断行动",
+    "IconPath": "UI/Buff/Icon_Block",
+    "Polarity": 1,
+    "DefaultDuration": -1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Strength",
+    "Name": "力量",
+    "Description": "攻击伤害 +{V}，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Strength",
+    "Polarity": 0,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Weak",
+    "Name": "虚弱",
+    "Description": "造成的伤害降低 {V}%，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Weak",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Frail",
+    "Name": "脆弱",
+    "Description": "获得的护甲降低 {V}%，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Frail",
+    "Polarity": 1,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Dexterity",
+    "Name": "敏捷",
+    "Description": "防御牌额外 +{V} 护甲，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Dexterity",
+    "Polarity": 0,
+    "DefaultDuration": 2,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Regen",
+    "Name": "再生",
+    "Description": "每回合开始回复 {V} 点生命，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Regen",
+    "Polarity": 0,
+    "DefaultDuration": 3,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Energized",
+    "Name": "充能",
+    "Description": "下回合开始 +{V} 能量",
+    "IconPath": "UI/Buff/Icon_Energized",
+    "Polarity": 0,
+    "DefaultDuration": 1,
+    "MaxStack": 3,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "CardCost",
+    "Name": "减费",
+    "Description": "下一张牌费用 -{V}",
+    "IconPath": "UI/Buff/Icon_CardCost",
+    "Polarity": 0,
+    "DefaultDuration": 1,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Poison",
+    "Name": "中毒",
+    "Description": "每回合开始受到 {V} 点伤害，{V} 随之衰减 1",
+    "IconPath": "UI/Buff/Icon_Poison",
+    "Polarity": 1,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "Burn",
+    "Name": "燃烧",
+    "Description": "每回合开始受到 {V} 点伤害，剩余 {T} 回合",
+    "IconPath": "UI/Buff/Icon_Burn",
+    "Polarity": 1,
+    "DefaultDuration": 3,
+    "MaxStack": 1,
+    "RefreshOnReapply": true
+  },
+  {
+    "Id": "Artifact",
+    "Name": "圣物",
+    "Description": "抵消下一次 debuff，剩余 {V} 次",
+    "IconPath": "UI/Buff/Icon_Artifact",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
+  }
+]

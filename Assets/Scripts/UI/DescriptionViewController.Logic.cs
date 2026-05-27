@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
 using UnityEngine;
 using cfg;
 using cfg.Enemy;
+using Ashlight.Battle.Core.Data;
 using Ashlight.Config;
 
 namespace Scripts.UI
@@ -96,6 +98,31 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 显示Buff描述：标题=Buff.Name，正文=Buff.Description，
+        /// {T}/{V}/{S} 占位符按 BuffState 替换；无 BuffState 时使用配置默认值/留空。
+        /// </summary>
+        public void Show(BuffInfo buffInfo, BuffState buffState = null)
+        {
+            if (buffInfo == null)
+            {
+                Hide();
+                return;
+            }
+
+            if (Txt_EntryName != null)
+            {
+                Txt_EntryName.text = buffInfo.Name;
+            }
+
+            if (Txt_Entry != null)
+            {
+                Txt_Entry.text = ReplaceBuffPlaceholders(buffInfo.Description, buffInfo, buffState);
+            }
+
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>
         /// 隐藏名词描述
         /// </summary>
         public void Hide()
@@ -129,6 +156,38 @@ namespace Scripts.UI
             }
 
             return tables.TbNounDictionary.GetOrDefault(nounName);
+        }
+
+        /// <summary>
+        /// 替换Buff描述中的占位符：{T}=剩余回合，{V}=数值，{S}=层数
+        /// 数值用 #921303 染色，缺省时显示 "?"
+        /// </summary>
+        private static string ReplaceBuffPlaceholders(string text, BuffInfo info, BuffState state)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            return Regex.Replace(text, @"\{([A-Z])\}", match =>
+            {
+                string code = match.Groups[1].Value;
+                string value = code switch
+                {
+                    "T" => state != null
+                        ? state.RemainingDuration.ToString()
+                        : (info != null && info.DefaultDuration > 0 ? info.DefaultDuration.ToString() : "?"),
+                    "V" => state != null ? FormatBuffValue(state.Value) : "?",
+                    "S" => state != null ? state.StackCount.ToString() : "1",
+                    _ => match.Value
+                };
+                return $"<color=#921303>{value}</color>";
+            });
+        }
+
+        private static string FormatBuffValue(float value)
+        {
+            // 整数直接显示，否则保留1位小数
+            return value == Mathf.Floor(value)
+                ? ((int)value).ToString()
+                : value.ToString("0.#");
         }
 
         #endregion

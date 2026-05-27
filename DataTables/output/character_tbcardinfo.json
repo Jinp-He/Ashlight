@@ -1,0 +1,795 @@
+[
+  {
+    "Id": "Rocket001",
+    "Name": "打击",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Rocket002",
+    "Name": "迅猛打击",
+    "Description": "造成{A}点伤害。若目标处于[执行]中，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "conditions": "Channeling|Recoil",
+        "multiplier": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Rocket003",
+    "Name": "旋风斩",
+    "Description": "对所有敌人造成{A}点伤害，每造成一次伤害，获得{D}点护甲",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": true
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 3,
+        "per_hit": true
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket004",
+    "Name": "巨龙撞击",
+    "Description": "造成 {A} 点伤害并 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "Stun"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket005",
+    "Name": "守护",
+    "Description": "使友方角色获得 {D} 点高额护甲。",
+    "Effects": [
+      {
+        "$type": "InterceptEffect",
+        "EffectType": 1,
+        "shield_value": 20
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 0,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Rocket006",
+    "Name": "挺身而出",
+    "Description": "[执行] 3。执行期间无法攻击，但 [嘲讽] 全体并大幅减伤。",
+    "Effects": [
+      {
+        "$type": "TauntEffect",
+        "EffectType": 4,
+        "target": "All"
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "ReduceDmg",
+        "value": 0.5
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket007",
+    "Name": "吞噬痛苦",
+    "Description": "回复自己在执行期间所受到的所有伤害。",
+    "Effects": [
+      {
+        "$type": "ClearRecoilEffect",
+        "EffectType": 4
+      },
+      {
+        "$type": "HealEffect",
+        "EffectType": 3,
+        "value": 8
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Rocket008",
+    "Name": "挫志怒吼",
+    "Description": "使所有敌人意图 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 1
+      },
+      {
+        "$type": "CollisionEffect",
+        "EffectType": 5,
+        "result": "Stun"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Rocket009",
+    "Name": "交错打击",
+    "Description": "造成 {A} 点伤害，如果敌人在执行，额外造成 {A:1} 点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 8,
+        "condition_type": "IsAttacking"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Irene001",
+    "Name": "火球术",
+    "Description": "造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 1
+  },
+  {
+    "Id": "Irene002",
+    "Name": "冰霜震击",
+    "Description": "造成 {A} 点伤害，并 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "None"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 1
+  },
+  {
+    "Id": "Irene003",
+    "Name": "奥术飞弹",
+    "Description": "造成 3 次 {A} 点伤害，目标随机。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene004",
+    "Name": "寒冰护甲",
+    "Description": "获得 {D} 点护甲，并施加 [寒冷] (受击时 [推迟] 来源)。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 10,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Chill",
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene005",
+    "Name": "炎爆术",
+    "Description": "造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 25,
+        "conditions": "Burn",
+        "multiplier": 2
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 5
+  },
+  {
+    "Id": "Irene006",
+    "Name": "暴风雪",
+    "Description": "对所有敌人造成 {A} 点伤害并 [推迟] 1 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": true
+      },
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 4
+  },
+  {
+    "Id": "Irene007",
+    "Name": "深度冻结",
+    "Description": "如果敌方在执行，使目标 [晕眩] 1 回合.",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Stun",
+        "value": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Irene008",
+    "Name": "时间扭曲",
+    "Description": "下一张 [执行] 卡牌的执行时间减少 {F} 格。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "ReduceChannel",
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene009",
+    "Name": "连锁闪电",
+    "Description": "对所有敌人造成 {A} 点伤害。若目标处于 [执行] 中，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "conditions": "Channeling|Recoil",
+        "multiplier": 2
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 3
+  },
+  {
+    "Id": "Irene010",
+    "Name": "冰封领域",
+    "Description": "对所有敌人造成 {A} 点伤害并 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 18,
+        "is_aoe": true
+      },
+      {
+        "$type": "TimeShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": 2
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Chill",
+        "value": 2
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 3,
+    "ExecutingCost": 5
+  },
+  {
+    "Id": "Irene011",
+    "Name": "魔力脉冲",
+    "Description": "造成 {A} 点伤害。若目标正在执行轨上，额外造成 {A:1} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 8,
+        "condition_type": "InExecution"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Irene012",
+    "Name": "元素爆发",
+    "Description": "造成 {A} 点伤害。若自身上回合未出执行牌，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 14,
+        "conditions": "SkippedLastExecution",
+        "multiplier": 2
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 1
+  },
+  {
+    "Id": "Zhouzhou001",
+    "Name": "快速射击",
+    "Description": "造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Zhouzhou002",
+    "Name": "强力击",
+    "Description": "造成 {A} 点伤害并 [推迟] {T} 格。若发生碰撞，造成 [晕眩]。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 2,
+        "collision_result": "Stun"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou003",
+    "Name": "二连矢",
+    "Description": "连续造成 2 次 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou004",
+    "Name": "多重射击",
+    "Description": "对所有敌人造成 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": true
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 4,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou005",
+    "Name": "狙击",
+    "Description": "造成 {A} 点致命伤害。若目标满血，伤害翻倍。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 25,
+        "conditions": "FullHP",
+        "multiplier": 2
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 4
+  },
+  {
+    "Id": "Zhouzhou006",
+    "Name": "后撤步",
+    "Description": "造成 {A} 点伤害并使目标 [推迟] {T} 格。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "PushCollisionEffect",
+        "EffectType": 2,
+        "shift_value": 1,
+        "collision_result": "None"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Zhouzhou007",
+    "Name": "捕兽夹",
+    "Description": "造成 {A} 点伤害并施加 [定身] (无法移动)。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Root",
+        "value": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou008",
+    "Name": "致命射击",
+    "Description": "造成 {A} 点伤害。如果目标正在 [执行] 或 [攻击]，额外造成 {A:1} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 12,
+        "condition_type": "IsAttacking"
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  },
+  {
+    "Id": "Zhouzhou009",
+    "Name": "剑雨",
+    "Description": "对所有敌人造成 3 次 {A} 点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 5
+  },
+  {
+    "Id": "Zhouzhou010",
+    "Name": "猎人印记",
+    "Description": "使目标下一次受到的伤害增加 {F}%。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Zhouzhou011",
+    "Name": "急速装填",
+    "Description": "立刻清除自身所有 [僵直]，并抽 1 张牌。",
+    "Effects": [
+      {
+        "$type": "ClearRecoilEffect",
+        "EffectType": 6
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "DrawCard",
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0
+  },
+  {
+    "Id": "Zhouzhou012",
+    "Name": "穿云箭",
+    "Description": "造成 {A} 点伤害。本次攻击无视护甲，且无法被 [拦截]。",
+    "Effects": [
+      {
+        "$type": "AttackExtraEffect",
+        "EffectType": 0,
+        "damage": 18,
+        "conditions": "Pierce",
+        "multiplier": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 2
+  }
+]

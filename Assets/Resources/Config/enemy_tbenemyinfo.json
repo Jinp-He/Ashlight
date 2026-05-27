@@ -3,7 +3,8 @@
     "Id": "Enemy001",
     "Name": "小兵",
     "AlternativePath": "DogKnight",
-    "Hp": 50,
+    "Hp": 100,
+    "Speed": 5,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -19,8 +20,9 @@
   {
     "Id": "Enemy002",
     "Name": "小兵2",
-    "AlternativePath": "DogKnight",
-    "Hp": 30,
+    "AlternativePath": "Mafe",
+    "Hp": 70,
+    "Speed": 5,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -28,6 +30,114 @@
             "EnemyIntentionType": 0,
             "EnemySkillIndex": "ES002",
             "TimeSlot": 6
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "Enemy003",
+    "Name": "重装步兵",
+    "AlternativePath": "DogKnight",
+    "Hp": 140,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES005",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES003",
+            "TimeSlot": 8
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 2,
+            "EnemySkillIndex": "ES001",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "Enemy004",
+    "Name": "冰焰法师",
+    "AlternativePath": "Wangg",
+    "Hp": 65,
+    "Speed": 5,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES007",
+            "TimeSlot": 4
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES004",
+            "TimeSlot": 5
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 3,
+            "EnemySkillIndex": "ES008",
+            "TimeSlot": 10
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "Enemy005",
+    "Name": "急袭兵",
+    "AlternativePath": "Remy",
+    "Hp": 55,
+    "Speed": 7,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES006",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 3,
+            "EnemySkillIndex": "ES009",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 4,
+            "EnemySkillIndex": "ES010",
+            "TimeSlot": 3
           }
         ]
       }

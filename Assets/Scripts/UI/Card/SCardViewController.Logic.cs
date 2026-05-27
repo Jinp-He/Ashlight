@@ -163,16 +163,16 @@ namespace Scripts.UI
                 Txt_CardName.text = _currentCard.Name;
             }
 
-            // 设置左侧消耗（引导时间）
+            // 设置左侧消耗（能量）
             if (Txt_LeftCost != null)
             {
-                Txt_LeftCost.text = _currentCard.Channeling.ToString();
+                Txt_LeftCost.text = _currentCard.Energy.ToString();
             }
 
-            // 设置右侧消耗（后摇）
+            // 设置右侧消耗（卡牌类型）
             if (Txt_RightCost != null)
             {
-                Txt_RightCost.text = _currentCard.Recoil.ToString();
+                Txt_RightCost.text = _currentCard.CardType == cfg.CardTypeEnum.Swift ? "迅" : "执";
             }
 
             // 根据卡牌稀有度显示对应的框架

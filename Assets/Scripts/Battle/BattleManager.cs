@@ -9,6 +9,7 @@ using Ashlight.Config;
 using Ashlight.State.Runtime;
 using Ashlight.Systems.Character;
 using cfg;
+using cfg.Enemy;
 using UnityEngine;
 
 namespace Ashlight.Battle
@@ -22,6 +23,28 @@ namespace Ashlight.Battle
         public static BattleManager Instance { get; private set; }
 
         /// <summary>
+        /// 待加载的遭遇战 ID：VictoryPanel "继续" 按钮设置后重载 BattleScene，
+        /// 新的 UI_BattleScene 启动时会优先使用此 ID（消费后清空）。
+        /// 静态字段跨场景重载持续存在。
+        /// </summary>
+        public static string PendingEncounterId { get; set; }
+
+        /// <summary>
+        /// 消费并返回待加载的遭遇战 ID（消费后清空）。
+        /// </summary>
+        public static string ConsumePendingEncounterId()
+        {
+            string id = PendingEncounterId;
+            PendingEncounterId = null;
+            return id;
+        }
+
+        /// <summary>
+        /// BattleEndedEvent 是否已发送过，用于保证仅发送一次。
+        /// </summary>
+        private bool _battleEndEventRaised;
+
+        /// <summary>
         /// 当前战斗状态快照
         /// </summary>
         public BattleStateSnapshot CurrentState { get; private set; }
@@ -32,7 +55,7 @@ namespace Ashlight.Battle
         public BattleStateSnapshot InitialSnapshot { get; private set; }
 
         /// <summary>
-        /// 时间轴解算器
+        /// 时间轴解算器（过渡期保留，后续清理）
         /// </summary>
         public TimelineResolver Resolver { get; private set; }
 
@@ -56,6 +79,37 @@ namespace Ashlight.Battle
         /// </summary>
         public int CurrentRound { get; private set; }
 
+        /// <summary>
+        /// 敌人规划轨结束、执行轨尚未结算时暂存的技能与目标（按 unitId 索引，支持多敌人同时在执行轨）
+        /// </summary>
+        private readonly Dictionary<string, (EnemySkillInfo Skill, string TargetUnitId)> _pendingEnemyIntents
+            = new Dictionary<string, (EnemySkillInfo, string)>();
+        private cfg.Character.CardInfo _pendingPlayerExecutionCard;
+        private string _pendingPlayerExecutionTargetUnitId;
+        private string _pendingPlayerExecutionCasterUnitId;
+
+        // ========== ATB 引擎组件 ==========
+
+        /// <summary>
+        /// 行动条推进解算器
+        /// </summary>
+        public ActionBarResolver ActionBarResolver { get; private set; }
+
+        /// <summary>
+        /// 回合解算器
+        /// </summary>
+        public TurnResolver TurnResolver { get; private set; }
+
+        /// <summary>
+        /// 卡牌结算器
+        /// </summary>
+        public CardPlayResolver CardPlayResolver { get; private set; }
+
+        /// <summary>
+        /// 敌人意图轴/执行轴推进解算器
+        /// </summary>
+        public EnemyIntentAxisResolver EnemyIntentAxisResolver { get; private set; }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -65,11 +119,42 @@ namespace Ashlight.Battle
             }
 
             Instance = this;
+            _battleEndEventRaised = false;
 
-            // 初始化核心引擎
-            Resolver = new TimelineResolver();
+            // 初始化 ATB 核心引擎
+            ActionBarResolver = new ActionBarResolver();
+            CardPlayResolver = new CardPlayResolver();
+            TurnResolver = new TurnResolver(CardPlayResolver, ActionBarResolver);
+            EnemyIntentAxisResolver = new EnemyIntentAxisResolver();
             Predictor = new BattlePredictor();
             PredictionManager = new BattlePredictionManager(this);
+
+            // 保留旧引擎（过渡期兼容）
+            Resolver = new TimelineResolver();
+        }
+
+        private void Update()
+        {
+            RaiseBattleEndedIfNeeded();
+        }
+
+        /// <summary>
+        /// 检测 IsBattleEnded 是否刚刚从 false 翻到 true，是则发送一次 BattleEndedEvent。
+        /// 集中在 Update 里轮询，避免在散落各处的 CheckBattleEnd 后重复埋点。
+        /// </summary>
+        private void RaiseBattleEndedIfNeeded()
+        {
+            if (_battleEndEventRaised || CurrentState == null || !CurrentState.IsBattleEnded)
+            {
+                return;
+            }
+
+            _battleEndEventRaised = true;
+            GameEvent.Publish(new BattleEndedEvent
+            {
+                IsPlayerVictory = CurrentState.IsPlayerVictory
+            });
+            Debug.Log($"[BattleManager] 战斗结束事件已发布，玩家胜利: {CurrentState.IsPlayerVictory}");
         }
 
         /// <summary>
@@ -88,6 +173,9 @@ namespace Ashlight.Battle
 
             // 创建新的战斗状态快照
             CurrentState = new BattleStateSnapshot();
+            ClearPendingEnemyIntent();
+            ClearPendingPlayerExecution();
+            _battleEndEventRaised = false;
 
             // 1. 创建玩家单位
             CreatePlayerUnits(battleInfo.PlayerCharacters);
@@ -145,7 +233,12 @@ namespace Ashlight.Battle
                     Defense = 0,
                     IsPlayerUnit = true,
                     IsDead = false,
-                    Track = new TimelineTrack(characterId) // 玩家单位拥有独立时间轴，记录角色ID
+                    Track = new TimelineTrack(characterId),
+                    Speed = Mathf.Max(1, characterConfig.Speed),
+                    BaseEnergy = Mathf.Max(0, characterConfig.Energy),
+                    BaseDrawCount = Mathf.Max(0, characterConfig.Draw),
+                    ActionBar = new ActionBarState(),
+                    Overload = new OverloadState()
                 };
 
                 CurrentState.PlayerUnits.Add(unitState);
@@ -185,7 +278,12 @@ namespace Ashlight.Battle
                     Defense = 0,
                     IsPlayerUnit = false,
                     IsDead = false,
-                    Track = null // 敌人不使用独立时间轴，使用SharedEnemyTrack
+                    Track = null,
+                    Speed = Mathf.Max(1, enemyInfo.Speed),
+                    BaseEnergy = 2,
+                    BaseDrawCount = 0,
+                    ActionBar = new ActionBarState(),
+                    Overload = new OverloadState()
                 };
 
                 CurrentState.EnemyUnits.Add(unitState);
@@ -230,13 +328,10 @@ namespace Ashlight.Battle
             }
 
             // 初始化卡组系统
-            CurrentState.DeckSystem.Initialize(allCards);
-
-            // 洗牌
-            CurrentState.DeckSystem.ShuffleDeck();
+            CurrentState.DeckSystem.Initialize(allCards, characters);
 
             // 抽取初始手牌
-            CurrentState.DeckSystem.DrawCard(initialDrawCount);
+            //CurrentState.DeckSystem.DrawCard(initialDrawCount);
         }
 
         /// <summary>
@@ -368,8 +463,8 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
-        /// 立即执行卡牌（不进入玩家时间轴）
-        /// 保留 ICommand 系统：仍通过 CardToTimelineConverter 生成并执行 Commands。
+        /// 立即执行卡牌（ATB 版本）
+        /// 通过 CardPlayResolver 直接结算，不再经过 Timeline 时间轴
         /// </summary>
         /// <param name="cardInfo">卡牌配置</param>
         /// <param name="ownerId">施法者单位ID（如 player_0）</param>
@@ -390,6 +485,12 @@ namespace Ashlight.Battle
                 return false;
             }
 
+            if (cardInfo.CardType == CardTypeEnum.Execution)
+            {
+                Debug.LogWarning($"[BattleManager] 执行牌不能走立即结算入口: {cardInfo.Id}");
+                return false;
+            }
+
             if (string.IsNullOrEmpty(ownerId))
             {
                 Debug.LogError("[BattleManager] 无法立即执行卡牌：ownerId 为空");
@@ -403,47 +504,46 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var converter = new CardToTimelineConverter();
-            var blocks = converter.ConvertCard(cardInfo, ownerId, targetId);
-            if (blocks == null || blocks.Count == 0)
+            if (!string.IsNullOrEmpty(CurrentState.CurrentTurnUnitId) && CurrentState.CurrentTurnUnitId != ownerId)
             {
-                Debug.LogWarning($"[BattleManager] 卡牌转换失败，无法执行: {cardInfo.Id}");
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：当前回合单位为 {CurrentState.CurrentTurnUnitId}，非 {ownerId}");
                 return false;
             }
 
-            // 立即执行只取 Active 阶段携带命令的 Block（与原时间轴触发点一致）。
-            var activeBlock = blocks.FirstOrDefault(b => b != null && b.Phase == PhaseEnum.Active && b.Commands != null && b.Commands.Count > 0);
-            if (activeBlock == null)
+            int energyCost = GetCardEnergyCost(cardInfo);
+            if (owner.CurrentEnergy < energyCost)
             {
-                Debug.LogWarning($"[BattleManager] 卡牌没有可执行命令: {cardInfo.Id}");
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：能量不足 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
                 return false;
             }
 
-            bool isAttackCard = activeBlock.Commands.Any(c => c is DamageCommand);
+            // 发布卡牌执行事件（用于 UI 动画触发）
+            var commands = CardPlayResolver.GenerateCommands(cardInfo);
+            bool isAttackCard = commands.Any(c => c is DamageCommand);
+            // 执行牌：仅打出时尚未进入“执行动作”阶段，不播放战斗演出（与 Timeline 解算时的演出区分）
+            bool skipBattleAnimation = cardInfo.CardType == CardTypeEnum.Execution;
             GameEvent.Publish(new CardExecutedEvent
             {
                 CasterId = ownerId,
                 TargetId = targetId,
                 CardId = cardInfo.Id,
                 IsAttackCard = isAttackCard,
-                IsPrediction = false
+                IsPrediction = false,
+                SkipBattleAnimation = skipBattleAnimation
             });
 
-            foreach (var command in activeBlock.Commands)
-            {
-                if (command == null)
-                {
-                    continue;
-                }
+            // 通过 CardPlayResolver 直接结算卡牌效果
+            bool success = CardPlayResolver.PlayCard(CurrentState, cardInfo, ownerId, targetId);
 
-                command.Execute(CurrentState, ownerId, targetId);
-                if (CurrentState.IsBattleEnded)
-                {
-                    break;
-                }
+            if (!success)
+            {
+                Debug.LogWarning($"[BattleManager] 卡牌结算失败: {cardInfo.Id}");
+                return false;
             }
 
-            // 从手牌消费这张卡（立即进入弃牌堆）。
+            owner.CurrentEnergy -= energyCost;
+
+            // 从手牌消费这张卡
             bool consumed = false;
             if (!string.IsNullOrEmpty(instanceId))
             {
@@ -462,7 +562,6 @@ namespace Ashlight.Battle
 
             CurrentState.CheckBattleEnd();
 
-            // 即时出牌后刷新下一步预测，保持UI提示与当前状态一致。
             if (PredictionManager != null)
             {
                 PredictionManager.TriggerPrediction("卡牌立即执行");
@@ -472,8 +571,123 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
-        /// 开始玩家回合
-        /// 玩家回合开始时，每个敌人从他的IntentionList中选择一个并将其放在EnemySharedTimeTrack中
+        /// 挂起一张执行牌：出牌阶段仅消耗资源并锁定动作，真正效果在执行轨结束时触发。
+        /// </summary>
+        public bool TryQueuePlayerExecutionCard(
+            cfg.Character.CardInfo cardInfo,
+            string ownerId,
+            string targetId,
+            string instanceId,
+            out int executingCost)
+        {
+            executingCost = 1;
+
+            if (CurrentState == null)
+            {
+                Debug.LogError("[BattleManager] 无法挂起执行牌：CurrentState 为 null");
+                return false;
+            }
+
+            if (cardInfo == null || cardInfo.CardType != CardTypeEnum.Execution)
+            {
+                Debug.LogError("[BattleManager] 无法挂起执行牌：cardInfo 无效或不是执行牌");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(ownerId) || string.IsNullOrEmpty(targetId))
+            {
+                Debug.LogError("[BattleManager] 无法挂起执行牌：ownerId 或 targetId 为空");
+                return false;
+            }
+
+            if (HasPendingPlayerExecutionCard())
+            {
+                Debug.LogWarning($"[BattleManager] 当前已有玩家挂起的执行牌，无法再次挂起: owner={ownerId}");
+                return false;
+            }
+
+            var owner = CurrentState.GetUnitById(ownerId);
+            var target = CurrentState.GetUnitById(targetId);
+            if (owner == null || owner.IsDead || !owner.IsPlayerUnit)
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：施法者无效 ownerId={ownerId}");
+                return false;
+            }
+
+            if (target == null || target.IsDead)
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：目标无效 targetId={targetId}");
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(CurrentState.CurrentTurnUnitId) && CurrentState.CurrentTurnUnitId != ownerId)
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：当前回合单位为 {CurrentState.CurrentTurnUnitId}，非 {ownerId}");
+                return false;
+            }
+
+            int energyCost = GetCardEnergyCost(cardInfo);
+            if (owner.CurrentEnergy < energyCost)
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：能量不足 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
+                return false;
+            }
+
+            owner.CurrentEnergy -= energyCost;
+            executingCost = Mathf.Max(1, cardInfo.ExecutingCost);
+
+            bool consumed = false;
+            if (!string.IsNullOrEmpty(instanceId))
+            {
+                consumed = CurrentState.DeckSystem.UseCardByInstanceId(instanceId);
+            }
+
+            if (!consumed)
+            {
+                consumed = CurrentState.DeckSystem.UseCardByCardId(cardInfo.Id);
+            }
+
+            if (!consumed)
+            {
+                Debug.LogWarning($"[BattleManager] 执行牌挂起失败：手牌消费失败 cardId={cardInfo.Id}, instanceId={instanceId}");
+                owner.CurrentEnergy += energyCost;
+                return false;
+            }
+
+            _pendingPlayerExecutionCard = cardInfo;
+            _pendingPlayerExecutionTargetUnitId = targetId;
+            _pendingPlayerExecutionCasterUnitId = ownerId;
+
+            if (PredictionManager != null)
+            {
+                PredictionManager.TriggerPrediction("执行牌挂起");
+            }
+
+            return true;
+        }
+
+        public bool HasPendingPlayerExecutionCard(string unitId = null)
+        {
+            if (_pendingPlayerExecutionCard == null || string.IsNullOrEmpty(_pendingPlayerExecutionCasterUnitId))
+            {
+                return false;
+            }
+
+            return string.IsNullOrEmpty(unitId) || _pendingPlayerExecutionCasterUnitId == unitId;
+        }
+
+        public int GetPendingPlayerExecutionCost(string unitId)
+        {
+            if (!HasPendingPlayerExecutionCard(unitId))
+            {
+                return 1;
+            }
+
+            return Mathf.Max(1, _pendingPlayerExecutionCard.ExecutingCost);
+        }
+
+        /// <summary>
+        /// 开始玩家回合（兼容旧入口：默认选择第一个存活玩家）
         /// </summary>
         public void StartPlayerTurn()
         {
@@ -483,8 +697,587 @@ namespace Ashlight.Battle
                 return;
             }
 
-            CurrentRound++;
+            var firstAlivePlayer = CurrentState.PlayerUnits.FirstOrDefault(u => u != null && !u.IsDead);
+            if (firstAlivePlayer == null)
+            {
+                Debug.LogWarning("[BattleManager] 没有可行动的玩家单位");
+                return;
+            }
 
+            StartPlayerTurn(firstAlivePlayer.UnitId, true);
+        }
+
+        /// <summary>
+        /// 开始指定玩家单位回合，抽牌和能量由角色基础数据决定
+        /// </summary>
+        public void StartPlayerTurn(string unitId, bool generateEnemyIntentions)
+        {
+            if (CurrentState == null)
+            {
+                Debug.LogError("[BattleManager] 无法开始玩家回合：当前战斗状态为null");
+                return;
+            }
+
+            var playerUnit = CurrentState.GetUnitById(unitId);
+            if (playerUnit == null || playerUnit.IsDead || !playerUnit.IsPlayerUnit)
+            {
+                Debug.LogWarning($"[BattleManager] 无法开始玩家回合，单位无效: {unitId}");
+                return;
+            }
+
+            ClearPendingPlayerExecution(unitId);
+
+            // 全场暂停：冻结所有其他单位推进
+            CurrentState.IsGlobalPaused = true;
+
+            CurrentRound++;
+            CurrentState.CurrentTurnUnitId = unitId;
+
+            playerUnit.CurrentEnergy = Mathf.Max(0, playerUnit.BaseEnergy);
+            if (CurrentState.DeckSystem != null)
+            {
+                // 新玩家回合开始时替换手牌：避免战斗初始抽牌 + 本回合抽牌叠加，或多角色连续行动时手牌累加
+                DiscardCurrentHand();
+                DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
+            }
+
+            if (generateEnemyIntentions)
+            {
+                GenerateEnemyIntentionsForCurrentRound();
+            }
+
+            if (PredictionManager != null)
+            {
+                PredictionManager.TriggerPrediction("回合开始");
+            }
+            else
+            {
+                Debug.LogWarning("[BattleManager] PredictionManager为null，无法触发预解算");
+            }
+        }
+
+        public void StartPlayerTurn(string unitId)
+        {
+            StartPlayerTurn(unitId, true);
+        }
+
+        /// <summary>
+        /// 玩家手动结束回合：结算执行牌 → 弃手牌 → 解除全场暂停 → 重置ATB
+        /// </summary>
+        public void OnPlayerEndTurn(string unitId)
+        {
+            if (CurrentState == null || string.IsNullOrEmpty(unitId))
+            {
+                return;
+            }
+
+            var playerUnit = CurrentState.GetUnitById(unitId);
+            if (playerUnit == null || playerUnit.IsDead || !playerUnit.IsPlayerUnit)
+            {
+                return;
+            }
+
+            // 1. 结算执行牌（如果有）
+            if (HasPendingPlayerExecutionCard(unitId))
+            {
+                ExecutePendingPlayerCardAfterExecutionTrack(unitId);
+            }
+
+            // 2. 弃掉剩余手牌
+            DiscardCurrentHand();
+
+            // 3. 清除回合标记
+            CurrentState.CurrentTurnUnitId = null;
+
+            // 4. 重置该玩家ATB
+            if (ActionBarResolver != null)
+            {
+                ActionBarResolver.RestartUnitActionBar(playerUnit);
+            }
+
+            // 5. 解除全场暂停
+            CurrentState.IsGlobalPaused = false;
+
+            Debug.Log($"[BattleManager] 玩家回合结束，全场恢复: {unitId}");
+        }
+
+        /// <summary>
+        /// 开始指定敌方单位回合
+        /// </summary>
+        public void StartEnemyTurn(string unitId)
+        {
+            if (CurrentState == null)
+            {
+                Debug.LogError("[BattleManager] 无法开始敌人回合：当前战斗状态为null");
+                return;
+            }
+
+            var enemyUnit = CurrentState.GetUnitById(unitId);
+            if (enemyUnit == null || enemyUnit.IsDead || enemyUnit.IsPlayerUnit)
+            {
+                Debug.LogWarning($"[BattleManager] 无法开始敌人回合，单位无效: {unitId}");
+                return;
+            }
+
+            CurrentState.CurrentTurnUnitId = unitId;
+            enemyUnit.CurrentEnergy = Mathf.Max(0, enemyUnit.BaseEnergy);
+            Debug.Log($"[BattleManager] 敌人回合开始（能量已刷新，伤害等在执行轨结束时结算）: {unitId}, 能量={enemyUnit.CurrentEnergy}");
+        }
+
+        /// <summary>
+        /// 敌人ATB到达行动点后：选定技能，进入意图轴
+        /// 替代旧的 TryPrepareEnemyIntentAfterPlanning + 等待执行轨 的流程
+        /// </summary>
+        /// <returns>是否成功进入意图轴</returns>
+        public bool StartEnemyIntentAxis(string unitId, out EnemySkillInfo preparedSkill, out string targetUnitId)
+        {
+            preparedSkill = null;
+            targetUnitId = null;
+
+            if (CurrentState == null)
+            {
+                return false;
+            }
+
+            var enemyUnit = CurrentState.GetUnitById(unitId);
+            if (enemyUnit == null || enemyUnit.IsDead || enemyUnit.IsPlayerUnit)
+            {
+                return false;
+            }
+
+            if (!TryPickEnemySkillAndTarget(enemyUnit, out var selectedSkill, out var target))
+            {
+                return false;
+            }
+
+            int intentAxisLength = Mathf.Max(1, selectedSkill.ExecutingCost);
+            int executeAxisLength = 1;
+
+            EnemyIntentAxisResolver.StartIntentAxis(
+                enemyUnit, selectedSkill.Id, target.UnitId,
+                intentAxisLength, executeAxisLength
+            );
+
+            // 同时存入旧字典以保持向后兼容（UI层可能仍在读取）
+            _pendingEnemyIntents[unitId] = (selectedSkill, target.UnitId);
+
+            preparedSkill = selectedSkill;
+            targetUnitId = target.UnitId;
+            return true;
+        }
+
+        /// <summary>
+        /// 每 tick 推进所有敌人的意图轴/执行轴，并对完成的敌人执行技能效果
+        /// UI 层在主循环中调用此方法
+        /// </summary>
+        /// <returns>本 tick 内触发了技能效果的敌人ID列表</returns>
+        public List<string> TickEnemyAxes()
+        {
+            var firedEnemyIds = new List<string>();
+
+            if (CurrentState == null || CurrentState.IsBattleEnded || EnemyIntentAxisResolver == null)
+            {
+                return firedEnemyIds;
+            }
+
+            var completedEnemies = EnemyIntentAxisResolver.AdvanceEnemyAxes(CurrentState);
+            foreach (var enemy in completedEnemies)
+            {
+                if (ExecuteCompletedEnemySkill(enemy))
+                {
+                    firedEnemyIds.Add(enemy.UnitId);
+                }
+
+                // 重置阶段并重启ATB
+                EnemyIntentAxisResolver.ResetPhase(enemy);
+                if (ActionBarResolver != null)
+                {
+                    ActionBarResolver.RestartUnitActionBar(enemy);
+                }
+
+                if (CurrentState.IsBattleEnded)
+                {
+                    break;
+                }
+            }
+
+            return firedEnemyIds;
+        }
+
+        /// <summary>
+        /// 执行完成执行轴的敌人技能（从 UnitState 中读取待执行数据）
+        /// </summary>
+        private bool ExecuteCompletedEnemySkill(UnitState enemy)
+        {
+            if (enemy == null || string.IsNullOrEmpty(enemy.PendingSkillId) || string.IsNullOrEmpty(enemy.PendingTargetId))
+            {
+                return false;
+            }
+
+            // 从旧字典获取完整技能信息
+            if (!_pendingEnemyIntents.TryGetValue(enemy.UnitId, out var intent))
+            {
+                Debug.LogWarning($"[BattleManager] 敌人执行轴完成但未找到待执行技能: {enemy.UnitId}");
+                return false;
+            }
+
+            var target = CurrentState.GetUnitById(enemy.PendingTargetId);
+            if (target == null || target.IsDead)
+            {
+                ClearPendingEnemyIntent(enemy.UnitId);
+                return false;
+            }
+
+            var skill = intent.Skill;
+            ClearPendingEnemyIntent(enemy.UnitId);
+            ExecuteEnemySkillInternal(enemy, skill, target);
+            return true;
+        }
+
+        /// <summary>
+        /// 规划轨结束时调用：随机确定本回合技能与目标，供 UI 展示并进入执行轨；不造成伤害。
+        /// [旧接口，保留向后兼容，新代码应使用 StartEnemyIntentAxis]
+        /// </summary>
+        /// <returns>是否成功生成待执行意图</returns>
+        public bool TryPrepareEnemyIntentAfterPlanning(string unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId)
+        {
+            executingCost = 1;
+            preparedSkill = null;
+            targetUnitId = null;
+
+            if (CurrentState == null)
+            {
+                return false;
+            }
+
+            var enemyUnit = CurrentState.GetUnitById(unitId);
+            if (enemyUnit == null || enemyUnit.IsDead || enemyUnit.IsPlayerUnit)
+            {
+                return false;
+            }
+
+            if (!TryPickEnemySkillAndTarget(enemyUnit, out var selectedSkill, out var target))
+            {
+                return false;
+            }
+
+            const int skillEnergyCost = 1;
+            if (enemyUnit.CurrentEnergy < skillEnergyCost)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人能量不足，无法准备技能: {enemyUnit.UnitId}");
+                return false;
+            }
+
+            var converter = new EnemySkillToTimelineConverter();
+            var blocks = converter.ConvertEnemySkill(selectedSkill, enemyUnit.UnitId, target.UnitId);
+            var commandList = blocks
+                .Where(b => b != null && b.Commands != null && b.Commands.Count > 0)
+                .SelectMany(b => b.Commands)
+                .Where(c => c != null)
+                .OrderByDescending(c => c.GetPriority())
+                .ToList();
+
+            if (commandList.Count == 0)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人技能没有可执行指令，无法准备: {selectedSkill.Id}");
+                return false;
+            }
+
+            _pendingEnemyIntents[unitId] = (selectedSkill, target.UnitId);
+            preparedSkill = selectedSkill;
+            targetUnitId = target.UnitId;
+            executingCost = Mathf.Max(1, selectedSkill.ExecutingCost);
+            return true;
+        }
+
+        /// <summary>
+        /// 执行轨到达终点时调用：结算待执行的敌人技能（伤害与指令）。
+        /// </summary>
+        public bool ExecutePendingEnemyAfterExecutionTrack(string unitId)
+        {
+            if (CurrentState == null || string.IsNullOrEmpty(unitId))
+            {
+                return false;
+            }
+
+            if (!_pendingEnemyIntents.TryGetValue(unitId, out var intent))
+            {
+                return false;
+            }
+
+            var enemyUnit = CurrentState.GetUnitById(unitId);
+            var target = CurrentState.GetUnitById(intent.TargetUnitId);
+            if (enemyUnit == null || enemyUnit.IsDead || target == null || target.IsDead)
+            {
+                ClearPendingEnemyIntent(unitId);
+                return false;
+            }
+
+            var skill = intent.Skill;
+            ClearPendingEnemyIntent(unitId);
+            ExecuteEnemySkillInternal(enemyUnit, skill, target);
+            return true;
+        }
+
+        /// <summary>
+        /// 执行轨到达终点时调用：结算玩家挂起的执行牌（效果与动画在此时发生）。
+        /// </summary>
+        public bool ExecutePendingPlayerCardAfterExecutionTrack(string unitId)
+        {
+            if (CurrentState == null || string.IsNullOrEmpty(unitId))
+            {
+                ClearPendingPlayerExecution();
+                return false;
+            }
+
+            if (_pendingPlayerExecutionCasterUnitId != unitId || _pendingPlayerExecutionCard == null)
+            {
+                ClearPendingPlayerExecution();
+                return false;
+            }
+
+            var owner = CurrentState.GetUnitById(unitId);
+            var target = CurrentState.GetUnitById(_pendingPlayerExecutionTargetUnitId);
+            if (owner == null || owner.IsDead || target == null || target.IsDead)
+            {
+                ClearPendingPlayerExecution();
+                return false;
+            }
+
+            var card = _pendingPlayerExecutionCard;
+            string targetId = _pendingPlayerExecutionTargetUnitId;
+            ClearPendingPlayerExecution();
+
+            var commands = CardPlayResolver.GenerateCommands(card);
+            bool isAttackCard = commands.Any(c => c is DamageCommand);
+            GameEvent.Publish(new CardExecutedEvent
+            {
+                CasterId = owner.UnitId,
+                TargetId = targetId,
+                CardId = card.Id,
+                IsAttackCard = isAttackCard,
+                IsPrediction = false,
+                SkipBattleAnimation = false
+            });
+
+            bool success = CardPlayResolver.PlayCard(CurrentState, card, owner.UnitId, targetId);
+            if (!success)
+            {
+                Debug.LogWarning($"[BattleManager] 执行轨结算玩家执行牌失败: {card.Id}");
+                return false;
+            }
+
+            CurrentState.CheckBattleEnd();
+
+            if (PredictionManager != null)
+            {
+                PredictionManager.TriggerPrediction("玩家执行轨结算");
+            }
+
+            return true;
+        }
+
+        private void ClearPendingEnemyIntent()
+        {
+            _pendingEnemyIntents.Clear();
+        }
+
+        private void ClearPendingEnemyIntent(string unitId)
+        {
+            if (!string.IsNullOrEmpty(unitId))
+                _pendingEnemyIntents.Remove(unitId);
+        }
+
+        public bool HasPendingEnemyIntent(string unitId)
+        {
+            return !string.IsNullOrEmpty(unitId) && _pendingEnemyIntents.ContainsKey(unitId);
+        }
+
+        private void ClearPendingPlayerExecution(string unitId = null)
+        {
+            if (!string.IsNullOrEmpty(unitId) && _pendingPlayerExecutionCasterUnitId != unitId)
+            {
+                return;
+            }
+
+            _pendingPlayerExecutionCard = null;
+            _pendingPlayerExecutionTargetUnitId = null;
+            _pendingPlayerExecutionCasterUnitId = null;
+        }
+
+        private bool TryPickEnemySkillAndTarget(UnitState enemyUnit, out EnemySkillInfo selectedSkill, out UnitState target)
+        {
+            selectedSkill = null;
+            target = null;
+
+            if (CurrentState == null || enemyUnit == null || enemyUnit.IsDead)
+            {
+                return false;
+            }
+
+            var enemyInfo = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(enemyUnit.ConfigId);
+            if (enemyInfo == null || enemyInfo.IntentionSet == null || enemyInfo.IntentionSet.Count == 0)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人缺少意图配置，跳过行动: {enemyUnit.ConfigId}");
+                return false;
+            }
+
+            var candidateSkills = new List<EnemySkillInfo>();
+            foreach (var intentionGroup in enemyInfo.IntentionSet)
+            {
+                if (intentionGroup?.EnemyIntentionList == null)
+                {
+                    continue;
+                }
+
+                foreach (var intention in intentionGroup.EnemyIntentionList)
+                {
+                    if (intention?.EnemySkillIndex_Ref != null)
+                    {
+                        candidateSkills.Add(intention.EnemySkillIndex_Ref);
+                    }
+                }
+            }
+
+            if (candidateSkills.Count == 0)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人没有可用技能，跳过行动: {enemyUnit.ConfigId}");
+                return false;
+            }
+
+            int selectedIndex = Random.Range(0, candidateSkills.Count);
+            selectedSkill = candidateSkills[selectedIndex];
+            if (selectedSkill == null)
+            {
+                return false;
+            }
+
+            // 目标选择：根据技能的 TargetType 决定
+            //   AllEnemy（全体）→ 仅用任一活着的玩家做"承载 UnitId"，AOE 真正铺开在 DamageCommand 里
+            //   SingleEnemy（单体）→ 在活着的玩家中随机选
+            //   其他 → 默认随机选活着的玩家
+            var alivePlayers = CurrentState.PlayerUnits
+                .Where(u => u != null && !u.IsDead)
+                .ToList();
+            if (alivePlayers.Count == 0)
+            {
+                Debug.LogWarning("[BattleManager] 敌人回合未找到可用玩家目标");
+                return false;
+            }
+
+            int targetIdx = Random.Range(0, alivePlayers.Count);
+            target = alivePlayers[targetIdx];
+            return true;
+        }
+
+        private void ExecuteEnemySkillInternal(UnitState enemyUnit, EnemySkillInfo selectedSkill, UnitState target)
+        {
+            if (CurrentState == null || enemyUnit == null || target == null || selectedSkill == null)
+            {
+                return;
+            }
+
+            const int skillEnergyCost = 1;
+            if (enemyUnit.CurrentEnergy < skillEnergyCost)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人能量不足，无法执行技能: {enemyUnit.UnitId}");
+                return;
+            }
+
+            var converter = new EnemySkillToTimelineConverter();
+            var blocks = converter.ConvertEnemySkill(selectedSkill, enemyUnit.UnitId, target.UnitId);
+            var commands = blocks
+                .Where(b => b != null && b.Commands != null && b.Commands.Count > 0)
+                .SelectMany(b => b.Commands)
+                .Where(c => c != null)
+                .OrderByDescending(c => c.GetPriority())
+                .ToList();
+
+            if (commands.Count == 0)
+            {
+                Debug.LogWarning($"[BattleManager] 敌人技能没有可执行指令: {selectedSkill.Id}");
+                return;
+            }
+
+            bool isAttackSkill = commands.Any(c => c is DamageCommand);
+            GameEvent.Publish(new CardExecutedEvent
+            {
+                CasterId = enemyUnit.UnitId,
+                TargetId = target.UnitId,
+                CardId = selectedSkill.Id,
+                IsAttackCard = isAttackSkill,
+                IsPrediction = false
+            });
+
+            enemyUnit.CurrentEnergy -= skillEnergyCost;
+            foreach (var command in commands)
+            {
+                command.Execute(CurrentState, enemyUnit.UnitId, target.UnitId);
+                if (CurrentState.IsBattleEnded)
+                {
+                    break;
+                }
+            }
+
+            CurrentState.CheckBattleEnd();
+
+            if (PredictionManager != null)
+            {
+                PredictionManager.TriggerPrediction("敌人执行轨结算");
+            }
+        }
+
+        public void EndCurrentTurn()
+        {
+            if (CurrentState == null)
+            {
+                return;
+            }
+
+            CurrentState.CurrentTurnUnitId = null;
+
+            // 安全兜底：确保全场暂停被解除（兼容旧 UI 调用路径）
+            if (CurrentState.IsGlobalPaused)
+            {
+                CurrentState.IsGlobalPaused = false;
+            }
+        }
+
+        public void DiscardCurrentHand()
+        {
+            if (CurrentState?.DeckSystem == null)
+            {
+                return;
+            }
+
+            CurrentState.DeckSystem.DiscardAllHand();
+        }
+
+        private void DrawCardsForPlayerUnit(UnitState playerUnit, int drawCount)
+        {
+            if (CurrentState?.DeckSystem == null || playerUnit == null || drawCount <= 0)
+            {
+                return;
+            }
+
+            var deck = CurrentState.DeckSystem;
+            var characterId = playerUnit.GetCharacterId();
+            if (!characterId.HasValue)
+            {
+                deck.DrawCard(drawCount);
+                return;
+            }
+
+            deck.DrawCardForCharacter(characterId.Value, drawCount);
+        }
+
+        private int GetCardEnergyCost(cfg.Character.CardInfo card)
+        {
+            return card == null ? 0 : card.Energy;
+        }
+
+        private void GenerateEnemyIntentionsForCurrentRound()
+        {
             // 确保敌人共享时间轴存在（不清空，保留上回合未执行完的技能）
             if (CurrentState.SharedEnemyTrack == null)
             {
@@ -548,13 +1341,18 @@ namespace Ashlight.Battle
 
                         var skillInfo = intention.EnemySkillIndex_Ref;
                         // 计算技能总长度
-                        int totalSlots = skillInfo.Channeling + skillInfo.Duration + skillInfo.Recoil;
+                        int totalSlots = skillInfo.ExecutingCost;
                         // 意图出现在时间轴最右方（从右边往左边推进）
                         int placePosition = TimelineTrack.TrackLength - totalSlots;
 
                         // 将技能转换为 TimelineBlock 列表
-                        // 目标选择：默认选择第一个玩家单位（后续可以扩展为更智能的目标选择）
-                        string targetId = CurrentState.PlayerUnits.Count > 0 ? CurrentState.PlayerUnits[0].UnitId : null;
+                        // 目标选择：在活着的玩家中随机选一个；AOE 由 DamageCommand 内部展开
+                        var alivePlayers = CurrentState.PlayerUnits
+                            .Where(u => u != null && !u.IsDead)
+                            .ToList();
+                        string targetId = alivePlayers.Count > 0
+                            ? alivePlayers[Random.Range(0, alivePlayers.Count)].UnitId
+                            : null;
                         var blocks = converter.ConvertEnemySkill(skillInfo, enemyUnit.UnitId, targetId);
 
                         // 检查时间轴位置是否可用
@@ -596,16 +1394,6 @@ namespace Ashlight.Battle
                     }
                 }
             }
-
-            // 回合开始时触发预解算，显示本回合的血量预测
-            if (PredictionManager != null)
-            {
-                PredictionManager.TriggerPrediction("回合开始");
-            }
-            else
-            {
-                Debug.LogWarning("[BattleManager] PredictionManager为null，无法触发预解算");
-            }
         }
 
         /// <summary>
@@ -639,7 +1427,19 @@ namespace Ashlight.Battle
             // 1. 弃掉所有手牌
             CurrentState.DeckSystem.DiscardAllHand();
 
-            // 2. 抽取固定5张新牌
+            // 2. 抽取固定5张新牌（按当前回合玩家所属角色牌堆）
+            var turnUnitId = CurrentState.CurrentTurnUnitId;
+            if (!string.IsNullOrEmpty(turnUnitId))
+            {
+                var unit = CurrentState.GetUnitById(turnUnitId);
+                var cid = unit?.GetCharacterId();
+                if (cid.HasValue)
+                {
+                    CurrentState.DeckSystem.DrawCardForCharacter(cid.Value, 5);
+                    return;
+                }
+            }
+
             CurrentState.DeckSystem.DrawCard(5);
         }
 
@@ -790,6 +1590,81 @@ namespace Ashlight.Battle
             Debug.Log("<color=cyan>========== 【时间轴状态汇总结束】==========");
         }
 
+        // ========== ATB 新增方法 ==========
+
+        /// <summary>
+        /// ATB：推进行动条直到有单位获得行动权
+        /// </summary>
+        /// <returns>获得行动权的单位ID</returns>
+        public string AdvanceActionBarUntilAction()
+        {
+            if (CurrentState == null || CurrentState.IsBattleEnded)
+            {
+                return null;
+            }
+
+            return ActionBarResolver.AdvanceUntilAction(CurrentState);
+        }
+
+        /// <summary>
+        /// ATB：执行指定单位的完整回合
+        /// </summary>
+        public bool ExecuteUnitTurn(string unitId, List<CardAction> cardActions)
+        {
+            if (CurrentState == null || CurrentState.IsBattleEnded)
+            {
+                return false;
+            }
+
+            CurrentRound++;
+            return TurnResolver.ExecuteTurn(CurrentState, unitId, cardActions);
+        }
+
+        /// <summary>
+        /// ATB：为当前行动单位执行过载
+        /// </summary>
+        public bool RequestOverload(string unitId, int bonusEnergy = 2)
+        {
+            if (CurrentState == null)
+            {
+                return false;
+            }
+
+            var unit = CurrentState.GetUnitById(unitId);
+            if (unit == null || unit.IsDead)
+            {
+                return false;
+            }
+
+            return TurnResolver.ProcessOverload(CurrentState, unit, bonusEnergy);
+        }
+
+        /// <summary>
+        /// ATB：预测卡牌效果
+        /// </summary>
+        public PredictionResult PredictCardEffect(cfg.Character.CardInfo cardInfo, string ownerId, string targetId)
+        {
+            if (CurrentState == null || cardInfo == null)
+            {
+                return new PredictionResult();
+            }
+
+            return Predictor.SimulateCard(CurrentState, cardInfo, ownerId, targetId);
+        }
+
+        /// <summary>
+        /// ATB：获取预测的行动顺序
+        /// </summary>
+        public List<string> GetPredictedActionOrder(int lookAhead = 5)
+        {
+            if (CurrentState == null)
+            {
+                return new List<string>();
+            }
+
+            return ActionBarResolver.PredictActionOrder(CurrentState, lookAhead);
+        }
+
         /// <summary>
         /// 获取调试信息
         /// </summary>
@@ -803,7 +1678,8 @@ namespace Ashlight.Battle
             return $"回合: {CurrentRound}, " +
                    $"玩家单位: {CurrentState.PlayerUnits.Count}, " +
                    $"敌人单位: {CurrentState.EnemyUnits.Count}, " +
-                   $"当前时间: {CurrentState.CurrentTimeIndex}, " +
+                   $"ATB回合数: {CurrentState.TurnCount}, " +
+                   $"当前行动: {CurrentState.CurrentTurnUnitId ?? "无"}, " +
                    $"战斗结束: {CurrentState.IsBattleEnded}, " +
                    $"卡组: {CurrentState.DeckSystem?.GetDebugInfo()}";
         }

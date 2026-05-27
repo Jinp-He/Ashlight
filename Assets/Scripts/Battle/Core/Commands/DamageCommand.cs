@@ -62,8 +62,10 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            int actualDamage = target.TakeDamage(Damage);
-            Debug.Log($"[DamageCommand] {targetId} 受到 {actualDamage} 点伤害 (护甲吸收: {Damage - actualDamage})");
+            var attacker = state.GetUnitById(ownerId);
+            int adjustedDamage = ApplyAttackerModifiers(attacker, Damage);
+            int actualDamage = target.TakeDamage(adjustedDamage);
+            Debug.Log($"[DamageCommand] {targetId} 受到 {actualDamage} 点伤害 (基础: {Damage}, 攻方修正后: {adjustedDamage})");
 
             // 发布攻击执行事件，用于触发动画
             GameEvent.Publish(new AttackExecutedEvent
@@ -86,9 +88,11 @@ namespace Ashlight.Battle.Core.Commands
                 ? state.GetAliveEnemyUnits()
                 : state.GetAlivePlayerUnits();
 
+            int adjustedDamage = ApplyAttackerModifiers(owner, Damage);
+
             foreach (var target in targets)
             {
-                int actualDamage = target.TakeDamage(Damage);
+                int actualDamage = target.TakeDamage(adjustedDamage);
                 Debug.Log($"[DamageCommand] AOE: {target.UnitId} 受到 {actualDamage} 点伤害");
 
                 // 发布攻击执行事件（每个目标单独发布）
@@ -104,6 +108,27 @@ namespace Ashlight.Battle.Core.Commands
 
             // 检查战斗是否结束
             state.CheckBattleEnd();
+        }
+
+        /// <summary>
+        /// 攻方 buff 修正：Strength +V 加值，Weak -V% 衰减
+        /// </summary>
+        private static int ApplyAttackerModifiers(UnitState attacker, int baseDamage)
+        {
+            if (attacker == null || baseDamage <= 0) return baseDamage;
+
+            float modified = baseDamage;
+            var strength = attacker.GetBuff("Strength");
+            if (strength != null)
+            {
+                modified += strength.Value;
+            }
+            var weak = attacker.GetBuff("Weak");
+            if (weak != null)
+            {
+                modified *= Mathf.Max(0f, 1f - weak.Value / 100f);
+            }
+            return Mathf.Max(0, Mathf.RoundToInt(modified));
         }
 
         public int GetPriority()

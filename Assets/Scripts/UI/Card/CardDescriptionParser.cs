@@ -222,7 +222,7 @@ namespace Scripts.UI
 
         /// <summary>
         /// 替换 [] 标签为卡牌属性
-        /// 支持格式：[Channeling], [Duration], [Recoil], [TargetType] 等
+        /// 支持格式：[Energy], [CardType], [TargetType] 等
         /// </summary>
         private static string ReplaceBracketTags(string text, CardInfo cardInfo)
         {
@@ -236,16 +236,12 @@ namespace Scripts.UI
 
                 switch (propertyName)
                 {
-                    case "Channeling":
-                        value = cardInfo.Channeling.ToString();
+                    case "Energy":
+                        value = cardInfo.Energy.ToString();
                         break;
 
-                    case "Duration":
-                        value = cardInfo.Duration.ToString();
-                        break;
-
-                    case "Recoil":
-                        value = cardInfo.Recoil.ToString();
+                    case "CardType":
+                        value = cardInfo.CardType == cfg.CardTypeEnum.Swift ? "迅捷" : "执行";
                         break;
 
                     case "TargetType":

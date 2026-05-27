@@ -51,6 +51,23 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public bool IsPrediction { get; set; }
 
+        // ========== ATB 系统新增字段 ==========
+
+        /// <summary>
+        /// 当前回合行动单位ID（ATB 系统中标识谁正在执行回合）
+        /// </summary>
+        public string CurrentTurnUnitId { get; set; }
+
+        /// <summary>
+        /// 总回合数（所有单位的回合累计）
+        /// </summary>
+        public int TurnCount { get; set; }
+
+        /// <summary>
+        /// 全场暂停标志（玩家回合时为true，冻结所有其他单位推进）
+        /// </summary>
+        public bool IsGlobalPaused { get; set; }
+
         public BattleStateSnapshot()
         {
             PlayerUnits = new List<UnitState>();
@@ -61,6 +78,9 @@ namespace Ashlight.Battle.Core.Data
             IsBattleEnded = false;
             IsPlayerVictory = false;
             IsPrediction = false;
+            CurrentTurnUnitId = null;
+            TurnCount = 0;
+            IsGlobalPaused = false;
         }
 
         /// <summary>
@@ -133,6 +153,9 @@ namespace Ashlight.Battle.Core.Data
                 IsBattleEnded = this.IsBattleEnded,
                 IsPlayerVictory = this.IsPlayerVictory,
                 IsPrediction = this.IsPrediction,
+                CurrentTurnUnitId = this.CurrentTurnUnitId,
+                TurnCount = this.TurnCount,
+                IsGlobalPaused = this.IsGlobalPaused,
                 PlayerUnits = new List<UnitState>(),
                 EnemyUnits = new List<UnitState>()
             };
