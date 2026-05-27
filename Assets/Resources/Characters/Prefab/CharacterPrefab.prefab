@@ -143,7 +143,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 310567470130180445, guid: c458d16eb72d3994fa78bb76ea34da70, type: 3}
+  m_Sprite: {fileID: 8483517084245669901, guid: 6d9a5d2e498643044a68a9254d3d743a, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -521,7 +521,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -7461985252567508643, guid: c458d16eb72d3994fa78bb76ea34da70, type: 3}
+  m_Sprite: {fileID: -6441833193550529627, guid: 6d9a5d2e498643044a68a9254d3d743a, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -706,12 +706,12 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -6847287200510276198, guid: c458d16eb72d3994fa78bb76ea34da70, type: 3}
+  m_Sprite: {fileID: 8483517084245669901, guid: 6d9a5d2e498643044a68a9254d3d743a, type: 3}
   m_Type: 3
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 0
-  m_FillAmount: 1
+  m_FillAmount: 0
   m_FillClockwise: 1
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
@@ -767,7 +767,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 20, y: -76}
+  m_AnchoredPosition: {x: 27.3, y: -82.2}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4643064548467497188
@@ -928,8 +928,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -114.4}
-  m_SizeDelta: {x: 120, y: 16.3666}
+  m_AnchoredPosition: {x: 0, y: -132.2}
+  m_SizeDelta: {x: 130, y: 55}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4643064549090671243
 MonoBehaviour:
@@ -1103,11 +1103,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4510329229613744479, guid: 4ed53469e0450dd438b71706f597677c, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 47
+      value: 49.5
       objectReference: {fileID: 0}
     - target: {fileID: 4510329229613744479, guid: 4ed53469e0450dd438b71706f597677c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -132
+      value: -129
       objectReference: {fileID: 0}
     - target: {fileID: 4510329229613744479, guid: 4ed53469e0450dd438b71706f597677c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -1123,7 +1123,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6741906072859171040, guid: 4ed53469e0450dd438b71706f597677c, type: 3}
       propertyPath: m_ColorIntensity
-      value: 0.079418585
+      value: 0.48102257
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 4ed53469e0450dd438b71706f597677c, type: 3}
