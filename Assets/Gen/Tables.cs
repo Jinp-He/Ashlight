@@ -17,24 +17,24 @@ public partial class Tables
     public TbCustomColor TbCustomColor {get; }
     public TbNounDictionary TbNounDictionary {get; }
     public TbBuffInfo TbBuffInfo {get; }
-    public Character.TbCharaterInfo TbCharaterInfo {get; }
-    public Character.TbCardInfo_backup TbCardInfoBackup {get; }
     public Character.TbCardInfo TbCardInfo {get; }
+    public Character.TbCardInfo_backup TbCardInfoBackup {get; }
+    public Character.TbCharaterInfo TbCharaterInfo {get; }
     public Enemy.TbEncounter TbEncounter {get; }
-    public Enemy.TbEnemySkillInfo TbEnemySkillInfo {get; }
     public Enemy.TbEnemyInfo TbEnemyInfo {get; }
+    public Enemy.TbEnemySkillInfo TbEnemySkillInfo {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
     {
         TbCustomColor = new TbCustomColor(loader("tbcustomcolor"));
         TbNounDictionary = new TbNounDictionary(loader("tbnoundictionary"));
         TbBuffInfo = new TbBuffInfo(loader("tbbuffinfo"));
-        TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
-        TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
         TbCardInfo = new Character.TbCardInfo(loader("character_tbcardinfo"));
+        TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
+        TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
         TbEncounter = new Enemy.TbEncounter(loader("enemy_tbencounter"));
-        TbEnemySkillInfo = new Enemy.TbEnemySkillInfo(loader("enemy_tbenemyskillinfo"));
         TbEnemyInfo = new Enemy.TbEnemyInfo(loader("enemy_tbenemyinfo"));
+        TbEnemySkillInfo = new Enemy.TbEnemySkillInfo(loader("enemy_tbenemyskillinfo"));
         ResolveRef();
     }
     
@@ -43,12 +43,12 @@ public partial class Tables
         TbCustomColor.ResolveRef(this);
         TbNounDictionary.ResolveRef(this);
         TbBuffInfo.ResolveRef(this);
-        TbCharaterInfo.ResolveRef(this);
-        TbCardInfoBackup.ResolveRef(this);
         TbCardInfo.ResolveRef(this);
+        TbCardInfoBackup.ResolveRef(this);
+        TbCharaterInfo.ResolveRef(this);
         TbEncounter.ResolveRef(this);
-        TbEnemySkillInfo.ResolveRef(this);
         TbEnemyInfo.ResolveRef(this);
+        TbEnemySkillInfo.ResolveRef(this);
     }
 }
 

@@ -173,6 +173,7 @@ namespace Scripts.UI
         private TargetArrowRenderer _targetArrow;
         private TargetSelectionManager _targetManager;
         private GameObject _currentTargetObject;
+        private GameObject _lastValidTargetObject;
         private bool _isTargeting = false;
         
         // 目标颜色管理
@@ -371,6 +372,7 @@ namespace Scripts.UI
         {
             // 重置拖拽状态为 OnHand
             SetCardDragState(CardDragState.OnHand);
+            _lastValidTargetObject = null;
 
             // 清除时间轴信息
             _parentTrack = null;
@@ -1179,6 +1181,8 @@ namespace Scripts.UI
                 UpdateTargetHighlighting(targetObj, isValid);
 
                 _currentTargetObject = targetObj;
+                if (isValid && targetObj != null)
+                    _lastValidTargetObject = targetObj;
             }
             else
             {
@@ -1342,33 +1346,34 @@ namespace Scripts.UI
                 _previousHoveredTarget = null;
 
                 // 验证并放置卡牌
-                if (_currentTargetObject != null)
+                // 优先使用当前帧检测到的目标，若为null则回退到拖拽过程中最后一次有效目标
+                GameObject resolvedTarget = _currentTargetObject ?? _lastValidTargetObject;
+                if (resolvedTarget != null)
                 {
                     CharacterEnum ownerCharacterId = GetOwnerCharacterId();
-                    bool isValid = _targetManager?.IsValidTarget(_currentTargetObject, _currentCard.TargetType, ownerCharacterId) ?? false;
-                    Debug.Log($"[CardViewController] OnEndDragOnHand 目标选择: target={_currentTargetObject.name}, isValid={isValid}, ownerId={ownerCharacterId}, targetType={_currentCard?.TargetType}");
+                    bool isValid = _targetManager?.IsValidTarget(resolvedTarget, _currentCard.TargetType, ownerCharacterId) ?? false;
+                    Debug.Log($"[CardViewController] OnEndDragOnHand 目标选择: target={resolvedTarget.name}, isValid={isValid}, ownerId={ownerCharacterId}, targetType={_currentCard?.TargetType}");
 
                     if (isValid)
                     {
                         // 放置到目标时间轴的slot 0
                         string ownerId = ownerCharacterId.ToString();
-                        PlaceCardOnTargetTimeline(_currentTargetObject, ownerId);
+                        PlaceCardOnTargetTimeline(resolvedTarget, ownerId);
                     }
                     else
                     {
                         Debug.LogWarning("[CardViewController] 目标无效，已恢复到手牌");
-                        // 非法目标,恢复到手牌状态
                         RestoreCardToHandState();
                     }
                 }
                 else
                 {
                     Debug.LogWarning("[CardViewController] 未选择目标，已恢复到手牌");
-                    // 未选择目标,恢复到手牌状态
                     RestoreCardToHandState();
                 }
 
                 _currentTargetObject = null;
+                _lastValidTargetObject = null;
             }
             else
             {
@@ -2528,13 +2533,43 @@ namespace Scripts.UI
             if (_descriptionView == null || string.IsNullOrEmpty(nounName))
                 return;
 
-            // 显示描述
-            _descriptionView.Show(nounName);
+            // 从当前卡牌 Effects 里找到与该名词对应的 BuffEffect value
+            float? buffValue = FindBuffValueForNoun(nounName);
+
+            _descriptionView.Show(nounName, buffValue);
 
             // 设置描述面板位置（卡牌右侧）
             Vector3 cardPosition = transform.position;
             Vector3 descPosition = cardPosition + new Vector3(descriptionOffset.x, descriptionOffset.y, 0f);
             _descriptionView.SetPosition(descPosition);
+        }
+
+        /// <summary>
+        /// 从卡牌 Effects 中查找与 nounName 对应的 BuffEffect 数值
+        /// 通过 TbBuffInfo.Name == nounName 找到 BuffInfo.Id，再匹配 BuffEffect.BuffId
+        /// </summary>
+        private float? FindBuffValueForNoun(string nounName)
+        {
+            if (_currentCard?.Effects == null) return null;
+
+            var tables = Ashlight.Config.ConfigLoader.Tables;
+            if (tables?.TbBuffInfo == null) return null;
+
+            // 找到名称对应的 BuffInfo
+            cfg.BuffInfo targetBuffInfo = null;
+            foreach (var buff in tables.TbBuffInfo.DataList)
+            {
+                if (buff.Name == nounName) { targetBuffInfo = buff; break; }
+            }
+            if (targetBuffInfo == null) return null;
+
+            // 在卡牌 Effects 里找第一个匹配 BuffId 的 BuffEffect
+            foreach (var effect in _currentCard.Effects)
+            {
+                if (effect is cfg.BuffEffect buffEffect && buffEffect.BuffId == targetBuffInfo.Id)
+                    return buffEffect.Value;
+            }
+            return null;
         }
 
         /// <summary>

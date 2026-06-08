@@ -34,7 +34,8 @@ namespace Scripts.UI
         /// 显示名词描述
         /// </summary>
         /// <param name="nounName">名词名称</param>
-        public void Show(string nounName)
+        /// <param name="buffValue">可选：来自卡牌效果的 buff 数值，用于替换描述中的 {V}</param>
+        public void Show(string nounName, float? buffValue = null)
         {
             if (string.IsNullOrEmpty(nounName))
             {
@@ -59,7 +60,10 @@ namespace Scripts.UI
 
             if (Txt_Entry != null)
             {
-                Txt_Entry.text = nounDict.Desc;
+                // 查找对应 BuffInfo 以替换 {T}；用传入的 buffValue 替换 {V}
+                var buffInfo = GetBuffInfoByName(nounName);
+                string desc = ReplaceNounPlaceholders(nounDict.Desc, buffInfo, buffValue);
+                Txt_Entry.text = desc;
             }
 
             // 显示面板
@@ -142,6 +146,46 @@ namespace Scripts.UI
         #endregion
 
         #region 私有方法
+
+        /// <summary>
+        /// 替换名词描述中的占位符：{T}=BuffInfo.DefaultDuration，{V}=传入的 buffValue
+        /// </summary>
+        private static string ReplaceNounPlaceholders(string text, cfg.BuffInfo buffInfo, float? buffValue)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            return Regex.Replace(text, @"\{([A-Z])\}", match =>
+            {
+                string code = match.Groups[1].Value;
+                string value = code switch
+                {
+                    "T" => buffInfo != null && buffInfo.DefaultDuration > 0
+                        ? buffInfo.DefaultDuration.ToString()
+                        : match.Value,
+                    "V" => buffValue.HasValue
+                        ? FormatBuffValue(buffValue.Value)
+                        : match.Value,
+                    _ => match.Value
+                };
+                return $"<color=#921303>{value}</color>";
+            });
+        }
+
+        /// <summary>
+        /// 通过名词名称查找对应的 BuffInfo（按 Name 字段匹配）
+        /// </summary>
+        private static cfg.BuffInfo GetBuffInfoByName(string nounName)
+        {
+            var tables = ConfigLoader.Tables;
+            if (tables?.TbBuffInfo == null) return null;
+
+            foreach (var buff in tables.TbBuffInfo.DataList)
+            {
+                if (buff.Name == nounName)
+                    return buff;
+            }
+            return null;
+        }
 
         /// <summary>
         /// 从配置中获取名词描述

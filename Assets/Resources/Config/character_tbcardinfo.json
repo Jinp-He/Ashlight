@@ -290,7 +290,7 @@
   {
     "Id": "Irene004",
     "Name": "寒冰护甲",
-    "Description": "获得 {D} 点护甲，并施加 [寒冷] (受击时 [推迟] 来源)。",
+    "Description": "获得 {D} 点护甲，并施加 [寒冷] 。",
     "Effects": [
       {
         "$type": "DefenseEffect",
@@ -646,7 +646,7 @@
   {
     "Id": "Zhouzhou007",
     "Name": "捕兽夹",
-    "Description": "造成 {A} 点伤害并施加 [定身] (无法移动)。",
+    "Description": "造成 {A} 点伤害并施加 [定身] 。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -795,7 +795,7 @@
   {
     "Id": "Rocket010",
     "Name": "破韧斩",
-    "Description": "造成 {A} 点伤害，并对目标施加 [破韧] {V}（累计承受 {V} 点伤害后行动被打断）。",
+    "Description": "造成 {A} 点伤害，并对目标施加 [破韧] {V}。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -821,7 +821,7 @@
   {
     "Id": "Rocket011",
     "Name": "战吼",
-    "Description": "获得 [力量] {V}（攻击伤害 +{V}，持续 2 回合）。",
+    "Description": "获得 [力量] {V}。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -841,7 +841,7 @@
   {
     "Id": "Rocket012",
     "Name": "盾墙之姿",
-    "Description": "获得 {D} 点护甲，并获得 [敏捷] {V}（防御牌额外 +{V} 护甲）。",
+    "Description": "获得 {D} 点护甲，并获得 [敏捷] {V}。",
     "Effects": [
       {
         "$type": "InterceptEffect",
@@ -866,7 +866,7 @@
   {
     "Id": "Rocket013",
     "Name": "粉碎一击",
-    "Description": "造成 {A} 点伤害，并使目标 [晕眩] {V} 回合（打断其正在执行的行动）。",
+    "Description": "造成 {A} 点伤害，并使目标 [晕眩] {V} 回合。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -892,7 +892,7 @@
   {
     "Id": "Irene013",
     "Name": "灼热印记",
-    "Description": "造成 {A} 点伤害，并施加 [燃烧] {V}（每回合开始受到 {V} 点伤害，持续 3 回合）。",
+    "Description": "造成 {A} 点伤害，并施加 [燃烧] {V}。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -918,7 +918,7 @@
   {
     "Id": "Irene014",
     "Name": "法术屏障",
-    "Description": "获得 [圣物] {V}（接下来 {V} 次 debuff 被自动抵消）。",
+    "Description": "获得 [圣物] {V}。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -938,7 +938,7 @@
   {
     "Id": "Irene015",
     "Name": "元素涌动",
-    "Description": "获得 [充能] {V}（下回合开始 +{V} 能量）。",
+    "Description": "获得 [充能] {V}。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -958,7 +958,7 @@
   {
     "Id": "Irene016",
     "Name": "凋零诅咒",
-    "Description": "对目标施加 [虚弱] {V}%（造成伤害降低）和 [脆弱] {V:1}%（受到的伤害提高）。",
+    "Description": "对目标施加 [虚弱] {V}%和 [脆弱] {V:1}%。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -984,7 +984,7 @@
   {
     "Id": "Zhouzhou013",
     "Name": "蛇毒矢",
-    "Description": "造成 {A} 点伤害，并施加 [中毒] {V}（每回合开始受到 {V} 点伤害并衰减 1）。",
+    "Description": "造成 {A} 点伤害，并施加 [中毒] {V}。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -1010,7 +1010,7 @@
   {
     "Id": "Zhouzhou014",
     "Name": "闪避姿态",
-    "Description": "获得 [敏捷] {V}（防御牌额外 +{V} 护甲，持续 2 回合）。",
+    "Description": "获得 [敏捷] {V}。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -1030,7 +1030,7 @@
   {
     "Id": "Zhouzhou015",
     "Name": "断筋箭",
-    "Description": "造成 {A} 点伤害，施加 [脆弱] {V}%（获得护甲降低）和 [禁锢] {V:1}（无法移动）。",
+    "Description": "造成 {A} 点伤害，施加 [脆弱] {V}%和 [禁锢] {V:1}。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -1062,7 +1062,7 @@
   {
     "Id": "Zhouzhou016",
     "Name": "战术准备",
-    "Description": "获得 [灵感] {V}（下回合多抽 {V} 张牌）和 [减费] {V:1}（下一张牌费用 -{V:1}）。",
+    "Description": "获得 [灵感] {V}和 [减费] {V:1}。",
     "Effects": [
       {
         "$type": "BuffEffect",

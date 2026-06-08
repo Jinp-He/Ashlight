@@ -138,6 +138,8 @@ namespace Scripts.UI
                 case "H": return EffectEnum.Heal;
                 case "B": return EffectEnum.Buff;
                 case "N": return EffectEnum.Null;
+                case "F": return EffectEnum.Fill;
+                case "V": return EffectEnum.Fill; // {V} 是描述里对 buff 数值的别名，对应 Fill(F) 类型
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未知的效果类型代码: {code}");
                     return EffectEnum.Null;
