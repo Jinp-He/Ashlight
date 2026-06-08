@@ -151,24 +151,32 @@ namespace Scripts.UI
             if (_coordTemplate == null) return;
             n = Mathf.Max(1, n);
 
-            // 模板自身算第 0 个
+            // 首次：从 CoordPoints（HorizontalLayoutGroup 容器）收集所有已预置的点
             if (_coordDots.Count == 0)
             {
-                _coordDots.Add(_coordTemplate);
-                PlaceCoordAt(_coordTemplate, 0);
+                var layoutParent = _coordTemplate.transform.parent;
+                if (layoutParent != null)
+                {
+                    foreach (Transform child in layoutParent)
+                    {
+                        var img = child.GetComponent<Image>();
+                        if (img != null) _coordDots.Add(img);
+                    }
+                }
+                // 兜底：至少把模板加进去
+                if (_coordDots.Count == 0)
+                    _coordDots.Add(_coordTemplate);
             }
 
-            // 不够则克隆
+            // 如果预置点不够，再克隆（HorizontalLayoutGroup 会自动排列）
             while (_coordDots.Count < n)
             {
-                int idx = _coordDots.Count;
                 var clone = Instantiate(_coordTemplate, _coordTemplate.transform.parent);
-                clone.name = $"Img_Coord{idx}";
-                PlaceCoordAt(clone, idx);
+                clone.name = $"Img_Coord{_coordDots.Count}";
                 _coordDots.Add(clone);
             }
 
-            // 已有的：前 n 个显示，超出的隐藏
+            // 前 n 个显示，超出的隐藏
             for (int i = 0; i < _coordDots.Count; i++)
             {
                 bool on = i < n;
@@ -306,6 +314,14 @@ namespace Scripts.UI
 
         // ===== 内部：图标 / 数值 / 坐标 =====
 
+        /// <summary>
+        /// 构建坐标点掩码。
+        /// CoordPoint 顺序与战斗位置**相反**：
+        ///   战斗位置 pos（0起）→ 点位索引 = (totalSlots - 1 - pos)
+        /// 例：totalSlots=4 时，战斗位置3→点0，战斗位置4→点1（均1起）
+        /// AOE：全部点亮 + LinkPiece 横跨所有点。
+        /// 单体：仅对应点亮，LinkPiece 隐藏。
+        /// </summary>
         private static bool[] BuildTargetMask(int targetSlot, int totalSlots, bool isAoe)
         {
             if (totalSlots <= 0) return null;
@@ -316,7 +332,9 @@ namespace Scripts.UI
             }
             else if (targetSlot >= 0 && targetSlot < totalSlots)
             {
-                mask[targetSlot] = true;
+                // 战斗位置与 CoordPoint 顺序相反
+                int dotIndex = (totalSlots - 1) - targetSlot;
+                mask[dotIndex] = true;
             }
             return mask;
         }
@@ -406,7 +424,10 @@ namespace Scripts.UI
 
         /// <summary>
         /// 连接条覆盖第 firstActive 到 lastActive 个坐标点之间的区间。
-        /// 假设 link piece pivot = (0.5, 0.5)。
+        /// CoordLinkPiece pivot=(0,0) 左对齐：
+        ///   anchoredPosition.x = 第一个激活点中心的父级本地 x
+        ///   sizeDelta.x        = 最后一个激活点中心 x − 第一个激活点中心 x
+        /// 位置通过 InverseTransformPoint 从世界坐标换算，与 HorizontalLayoutGroup 解耦。
         /// </summary>
         private void UpdateLinkPieceRange(int firstActive, int lastActive)
         {
@@ -425,28 +446,33 @@ namespace Scripts.UI
             _imgLinkPiece.color = ActiveColor;
 
             var rt = _imgLinkPiece.rectTransform;
-            var tplPos = _coordTemplate.rectTransform.anchoredPosition;
+            var linkParent = rt.parent;
 
-            // 居中放在 firstActive..lastActive 之间
-            float centerX = tplPos.x + (firstActive + lastActive) * 0.5f * _dotSpacing;
-            float width = (lastActive - firstActive) * _dotSpacing;
+            // 取两端点的世界坐标，转换到 CoordLinkPiece 父级的本地空间
+            Vector2 p0 = DotCenterInLocal(firstActive, linkParent);
+            Vector2 p1 = DotCenterInLocal(lastActive, linkParent);
 
-            rt.anchoredPosition = new Vector2(centerX, tplPos.y);
+            // pivot=(0,0)：anchoredPosition.x = 起点 x，宽度 = 终点 x - 起点 x
+            float startX = p0.x;
+            float width  = p1.x - p0.x;
+
+            rt.anchoredPosition = new Vector2(startX, rt.anchoredPosition.y);
             var size = rt.sizeDelta;
             size.x = width;
             rt.sizeDelta = size;
         }
 
-        // 把第 idx 个坐标点放在 (template.x + idx * spacing, template.y)
-        private void PlaceCoordAt(Image dot, int idx)
+        /// <summary>将第 idx 个坐标点的世界坐标转为目标 Transform 的本地坐标</summary>
+        private Vector2 DotCenterInLocal(int idx, Transform targetParent)
         {
-            if (dot == null || _coordTemplate == null) return;
-            var tpl = _coordTemplate.rectTransform;
-            var rt = dot.rectTransform;
-            var pos = tpl.anchoredPosition;
-            pos.x += idx * _dotSpacing;
-            rt.anchoredPosition = pos;
+            if (idx < 0 || idx >= _coordDots.Count || _coordDots[idx] == null)
+                return Vector2.zero;
+            var lp = targetParent.InverseTransformPoint(_coordDots[idx].transform.position);
+            return new Vector2(lp.x, lp.y);
         }
+
+        // CoordPoints 有 HorizontalLayoutGroup，位置由布局自动管理，此方法保留空实现以兼容旧调用
+        private void PlaceCoordAt(Image dot, int idx) { }
 
         // ===== 内部：自动绑定 & 工具 =====
 
@@ -474,10 +500,17 @@ namespace Scripts.UI
                 _coordRoot = transform.Find("Coord");
             if (_coordRoot != null)
             {
+                // prefab 中连接块名字是 CoordLinkPiece，不是 Img_linkPiece
                 if (_imgLinkPiece == null)
-                    _imgLinkPiece = FindByName<Image>(_coordRoot, "Img_linkPiece");
+                    _imgLinkPiece = FindByName<Image>(_coordRoot, "CoordLinkPiece");
+
+                // 坐标点在 Coord/CoordPoints/ 下，不在 Coord 直接子级
                 if (_coordTemplate == null)
-                    _coordTemplate = FindByName<Image>(_coordRoot, "Img_Coord0");
+                {
+                    var coordPoints = FindByName<Transform>(_coordRoot, "CoordPoints");
+                    if (coordPoints != null)
+                        _coordTemplate = FindByName<Image>(coordPoints, "Img_Coord0");
+                }
             }
         }
 

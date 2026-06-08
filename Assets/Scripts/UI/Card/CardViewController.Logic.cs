@@ -255,7 +255,9 @@ namespace Scripts.UI
             // 创建描述面板实例
             if (descriptionViewControllerPrefab != null && _parentCanvas != null)
             {
-                GameObject descObj = Instantiate(descriptionViewControllerPrefab, _parentCanvas.transform);
+                // tooltip 挂到专用的高层级 overlay Canvas 下，避免嵌套 Canvas 干扰父 Canvas 的射线检测
+                Transform tooltipParent = GetOrCreateTooltipCanvas(_parentCanvas);
+                GameObject descObj = Instantiate(descriptionViewControllerPrefab, tooltipParent);
                 _descriptionView = descObj.GetComponent<DescriptionViewController>();
                 if (_descriptionView != null)
                 {
@@ -2581,6 +2583,34 @@ namespace Scripts.UI
             {
                 _descriptionView.Hide();
             }
+        }
+
+        /// <summary>
+        /// 获取或创建专用 tooltip Canvas（sortingOrder 高于卡牌悬停层级）。
+        /// 挂在场景根级，避免嵌套 Canvas 干扰父 Canvas 的射线检测。
+        /// </summary>
+        private Transform GetOrCreateTooltipCanvas(Canvas referenceCanvas)
+        {
+            const string tooltipCanvasName = "TooltipCanvas";
+            const int tooltipSortingOrder = 500;
+
+            // 先从场景里找已有的 TooltipCanvas
+            var existing = GameObject.Find(tooltipCanvasName);
+            if (existing != null)
+                return existing.transform;
+
+            // 不存在则创建
+            var go = new GameObject(tooltipCanvasName);
+            var canvas = go.AddComponent<Canvas>();
+            canvas.renderMode = referenceCanvas != null ? referenceCanvas.renderMode : RenderMode.ScreenSpaceOverlay;
+            if (referenceCanvas != null && referenceCanvas.renderMode == RenderMode.ScreenSpaceCamera)
+                canvas.worldCamera = referenceCanvas.worldCamera;
+            canvas.sortingOrder = tooltipSortingOrder;
+
+            go.AddComponent<UnityEngine.UI.CanvasScaler>();
+            go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            return go.transform;
         }
 
         /// <summary>

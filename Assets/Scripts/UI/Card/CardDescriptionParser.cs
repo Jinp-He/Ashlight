@@ -196,7 +196,9 @@ namespace Scripts.UI
                     return timeShiftAllEffect.ShiftValue.ToString();
 
                 case BuffEffect buffEffect:
-                    return buffEffect.Value.ToString("F1"); // Buff值保留一位小数
+                    // 整数显示为整数，非整数保留一位小数
+                    float bv = buffEffect.Value;
+                    return (bv == Mathf.Floor(bv)) ? ((int)bv).ToString() : bv.ToString("0.#");
 
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");
