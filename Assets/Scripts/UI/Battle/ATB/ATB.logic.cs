@@ -13,6 +13,44 @@ namespace Scripts.UI
     /// 双轨 ATB 条：PlanningATBSlot（规划轨）+ ExecutingATBSlot（执行轨）
     /// 所有单位在规划轨前进；到达终点后，敌人/打出执行牌的玩家进入执行轨
     /// </summary>
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 【设计说明：ATB 系统的演化——从实时推进到离散回合制】
+    //
+    // ▌原始设计（实时 ATB / Real-Time Active Time Battle）
+    //   每帧调用 Tick(deltaTime)，所有单位图标在规划轨（PlanningATBSlot）
+    //   以 advanceSpeed 的速度向 X=0 推进；到达终点后触发 OnPlanningComplete，
+    //   玩家进入出牌阶段（ATB.Pause），敌人则进入执行轨（ExecutingATBSlot），
+    //   执行完成后由 OnExecutionComplete 回调结算，再调用 ATB.Resume() 恢复前进。
+    //   图标的初始 X 位置由 speed 字段决定：speed 越高起点越靠近 0（先手）。
+    //
+    // ▌新设计（离散回合制 / Discrete Turn-Based）
+    //   游戏节奏从"连续流动"改为"逐回合触发"，类似 STS（Slay the Spire）的行动顺序列表。
+    //   核心变化：
+    //     1. 不再每帧调用 Tick()（或仅对执行轨保留 Tick）。
+    //        规划轨图标**不自动前进**，由外部显式触发。
+    //     2. TriggerNextUnit()
+    //        找到规划轨中距终点最近的图标，瞬移至 X=0，触发 OnPlanningComplete。
+    //        用于：战斗开始时触发第一个单位、每次回合结束后触发下一个单位。
+    //     3. SetPositionBySlots(unitId, slots)
+    //        将指定单位的规划轨图标设置到 -slots * segmentWidth 处。
+    //        表示"该单位在 N 个行动之后才再次行动"。
+    //        用于：玩家/敌人回合结束时，根据打出的卡牌消耗格数重新排队。
+    //     4. AtbIconRuntime.LastExecutingCost
+    //        记录最近一次进入执行轨的消耗格数，供 ResetIconToPlanning 决定新位置。
+    //
+    //   外部调用约定（UI_BattleScene.Logic.cs 应遵循）：
+    //     · 战斗初始化：InitializeByUnits → ATB.Pause() → ATB.TriggerNextUnit()
+    //     · 玩家结束回合（Swift 牌/跳过）：
+    //         ATB.SkipExecutingTrack → ATB.SetPositionBehindAll(id,1) → ATB.TriggerNextUnit()
+    //     · 玩家打出执行牌，回合结束：
+    //         ATB.MoveToExecutingTrack → ATB.Resume()（执行轨仍需 Tick 驱动）
+    //         执行完成后不再调用 Resume，由 StartPlayerTurn 重新开启回合
+    //     · 敌人执行完成：
+    //         ATB.TriggerNextUnit() → (Tick 随后调用 ResetIconToPlanning，用 SetPositionBehindAll 逻辑排队)
+    //
+    //   执行轨（ExecutingATBSlot）仍然依赖 Tick() 推进，因此 Update 中保留了
+    //   ATB.Tick(deltaTime) 的调用，但规划轨推进改为显式触发。
+    // ═══════════════════════════════════════════════════════════════════════════
     public partial class ATB : MonoBehaviour
     {
         private const float DefaultAdvanceSpeed = 180f;
@@ -67,6 +105,13 @@ namespace Scripts.UI
 
         public bool IsPaused { get; private set; }
 
+        /// <summary>
+        /// 【回合制】中止 TriggerNextUnit 的自动连续推进。
+        /// 战斗结束时置 true，避免结算中途打死玩家/敌人后循环仍继续触发后续回合。
+        /// 战斗初始化（RebuildIconsFromUnits）时重置为 false。
+        /// </summary>
+        public bool AutoAdvanceSuspended { get; set; }
+
         private class AtbIconRuntime
         {
             public string UnitId;
@@ -74,12 +119,25 @@ namespace Scripts.UI
             public int Speed;
             public RectTransform Rect;
             public Image IconImage;
-            public float StartX;
+            public float StartX;       // 仅用于视觉：= -Slots * segmentWidth
             public AtbTrack CurrentTrack;
             /// <summary>
             /// 进入执行轨后的保护时间：避免 segmentWidth=0 或布局把 anchoredPosition 拉回 0 时，同一帧即触发 OnExecutionComplete。
             /// </summary>
             public float BlockExecutionCompleteUntil;
+
+            /// <summary>
+            /// 【回合制 · 核心】当前离行动还有几格（整数）。
+            /// · 规划轨：Slots = 下次行动需等待的格数；1 = 最近，越大越晚。
+            /// · 执行轨：Slots = 本次执行牌的消耗格数（用于执行完成后重置位置）。
+            /// · 视觉位置由此换算：anchoredPosition.x = -Slots × segmentWidth。
+            /// </summary>
+            public int Slots;
+
+            /// <summary>
+            /// 【回合制】最近一次进入执行轨时所用的消耗格数，执行完成后 ResetIconToPlanning 读取它来设置 Slots。
+            /// </summary>
+            public int LastExecutingCost;
         }
 
         private void Awake()
@@ -93,6 +151,7 @@ namespace Scripts.UI
             ClearPlayerIcons();
             ClearEnemyIcons();
             _activeIcons.Clear();
+            AutoAdvanceSuspended = false;
 
             if (playerUnits != null)
             {
@@ -118,6 +177,17 @@ namespace Scripts.UI
             RebuildIconsFromUnits(playerUnits, enemyUnits);
         }
 
+        /// <summary>
+        /// 【旧：实时 ATB 推进驱动器】每帧由外部（Update）调用，驱动所有图标向 X=0 前进。
+        ///
+        /// ── 回合制模式下的使用约定 ──
+        ///   规划轨（Planning）：不再依赖此方法自动推进。
+        ///     外部改为调用 TriggerNextUnit() 触发下一个单位。
+        ///   执行轨（Executing）：仍然需要此方法推进（ATB.Resume() 后 Tick 运行 → 图标向 0 滑动 → 触发 OnExecutionComplete）。
+        ///
+        ///   因此在回合制模式下，Update 仍保留 ATB.Tick(Time.deltaTime)，但规划轨图标
+        ///   由于始终处于 IsPaused=true 状态而不会自行移动；只在执行轨阶段调用 ATB.Resume() 后才会推进。
+        /// </summary>
         public void Tick(float deltaTime)
         {
             if (IsPaused || _activeIcons.Count == 0 || deltaTime <= 0f)
@@ -180,17 +250,17 @@ namespace Scripts.UI
                 return;
             }
 
+            // 【离散回合制】进入执行轨 = 宣告意图，排到第 executingCost 格等待。
+            // 不再用像素位置 + Tick 实时滑动，而是用 Slots 参与统一队列；
+            // 当 TriggerNextUnit 推进到它（Slots 归零）时，触发 OnExecutionComplete 结算。
             icon.CurrentTrack = AtbTrack.Executing;
             icon.Rect.SetParent(ExecutingATBSlot.transform, false);
+            icon.Slots = Mathf.Max(1, executingCost);
+            icon.LastExecutingCost = executingCost;
+            icon.BlockExecutionCompleteUntil = 0f;
+            SyncVisualFromSlots(icon);
 
-            float w = Mathf.Max(1f, Mathf.Abs(segmentWidth));
-            float startX = -w * Mathf.Max(1, executingCost);
-            icon.StartX = startX;
-            icon.Rect.anchoredPosition = new Vector2(startX, iconBaseY);
-            // 进入执行轨后至少经过一帧 + 短延迟才允许触发“执行完成”，与规划结束解耦
-            icon.BlockExecutionCompleteUntil = Time.unscaledTime + 0.12f;
-
-            Debug.Log($"[ATB] MoveToExecuting unitId={unitId}, executingCost={executingCost}, startX={startX}");
+            //Debug.Log($"[ATB] MoveToExecuting unitId={unitId}, executingCost={executingCost}, slots={icon.Slots}");
         }
 
         /// <summary>
@@ -234,6 +304,237 @@ namespace Scripts.UI
             _activeIcons.Clear();
         }
 
+        // ────────────────────────────────────────────────────────────────
+        #region 公共查询 API
+
+        /// <summary>
+        /// 行动顺序条目（供 TurnOrderView 使用）
+        /// </summary>
+        public struct TurnOrderEntry
+        {
+            public string UnitId;
+            public bool   IsPlayer;
+            /// <summary>排序键（越小越靠前/越先行动）；执行轨单位为负数区间，按剩余进度细分</summary>
+            public float  DistanceTo0;
+            public AtbTrack Track;
+            /// <summary>
+            /// 分组键（供 TurnOrderView 判断是否同一组、是否插分隔条）。
+            /// 执行轨单位统一为 -1（共享同一条执行轨，聚成一组不分隔）；
+            /// 规划轨单位 = Slots（同格同组）。
+            /// </summary>
+            public int    GroupKey;
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // 【回合制驱动 API】
+        // ────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 【回合制驱动 · 单轨离散队列】推进到下一个该行动的单位。
+        ///
+        /// 规划轨和执行轨共用同一个 Slots 队列（Slots 越小越先行动）：
+        ///   · 规划轨单位轮到 → 触发 OnPlanningComplete（玩家出牌 / 敌人宣告意图进执行轨）。
+        ///   · 执行轨单位轮到 → 触发 OnExecutionComplete（结算其宣告的攻击）。
+        ///
+        /// 每次推进会先“快进时间”：把所有单位 Slots 一起减去最小值，使当前回合归零。
+        ///
+        /// 本方法是一个循环，会自动连续处理“无需玩家输入”的回合（敌人宣告意图、敌人执行结算、
+        /// 敌人无技能跳过），直到轮到一个需要玩家操作的回合才停下返回；
+        /// 因此回调里 **不要** 再调用 TriggerNextUnit（否则重入）。
+        ///
+        /// 停下条件：
+        ///   · 规划轨触发后该单位仍是玩家且仍在规划轨（= 玩家出牌回合）。
+        ///   · 执行轨触发后该单位是玩家（= 玩家执行牌结算后开新回合）。
+        /// </summary>
+        /// <returns>成功停在某个玩家回合返回 true；无单位可触发返回 false。</returns>
+        public bool TriggerNextUnit()
+        {
+            const int Safety = 256; // 防止全员敌人时无限自动推进
+            for (int guard = 0; guard < Safety; guard++)
+            {
+                // 战斗已结束（结算中途触发）→ 立即停止自动推进
+                if (AutoAdvanceSuspended)
+                    return false;
+
+                // 找 Slots 最小的单位（两条轨一起参与）
+                AtbIconRuntime next = null;
+                int minSlots = int.MaxValue;
+                for (int i = 0; i < _activeIcons.Count; i++)
+                {
+                    var icon = _activeIcons[i];
+                    if (icon?.Rect == null) continue;
+                    if (icon.Slots < minSlots)
+                    {
+                        minSlots = icon.Slots;
+                        next = icon;
+                    }
+                }
+
+                if (next == null)
+                {
+                    Debug.LogWarning("[ATB] TriggerNextUnit: 无可触发单位");
+                    return false;
+                }
+
+                // 【时间推进】所有单位 Slots 一起减去 minSlots，当前回合归零
+                if (minSlots > 0)
+                {
+                    for (int i = 0; i < _activeIcons.Count; i++)
+                    {
+                        var icon = _activeIcons[i];
+                        if (icon?.Rect == null) continue;
+                        icon.Slots -= minSlots;
+                        SyncVisualFromSlots(icon);
+                    }
+                }
+
+                next.Slots = 0;
+                SyncVisualFromSlots(next);
+
+                if (next.CurrentTrack == AtbTrack.Executing)
+                {
+                    // 轮到执行轨单位 → 结算它宣告的攻击
+                    Debug.Log($"[ATB] TriggerNextUnit → {next.UnitId} 执行结算 (advanced {minSlots})");
+                    bool wasPlayer = next.IsPlayer;
+                    OnExecutionComplete?.Invoke(next.UnitId, next.IsPlayer);
+                    // 玩家执行牌结算后会开启新回合 → 停下等玩家；敌人结算后自动继续
+                    if (wasPlayer) return true;
+                    continue;
+                }
+                else
+                {
+                    Debug.Log($"[ATB] TriggerNextUnit → {next.UnitId} 规划完成 (advanced {minSlots})");
+                    OnPlanningComplete?.Invoke(next.UnitId, next.IsPlayer);
+                    // 玩家出牌回合：单位仍在规划轨且是玩家 → 停下等玩家操作
+                    if (next.IsPlayer && next.CurrentTrack == AtbTrack.Planning)
+                        return true;
+                    // 敌人（宣告意图进执行轨 / 无技能已重排）→ 自动继续
+                    continue;
+                }
+            }
+
+            Debug.LogWarning("[ATB] TriggerNextUnit: 达到安全上限，停止自动推进（可能没有玩家单位）");
+            return true;
+        }
+
+        /// <summary>
+        /// 【回合制驱动】将指定单位的规划轨图标设置到距终点 <paramref name="slots"/> 格处（绝对位置）。
+        /// 注意：此方法使用绝对格数，不考虑其他单位的当前位置。
+        /// 若要将单位放到队列末尾（保证不早于其他人行动），应使用 <see cref="SetPositionBehindAll"/>。
+        /// </summary>
+        public void SetPositionBySlots(string unitId, int slots)
+        {
+            EnsureTrackSlotsBound();
+            var icon = FindIcon(unitId);
+            if (icon == null)
+            {
+                Debug.LogWarning($"[ATB] SetPositionBySlots 未找到图标: {unitId}");
+                return;
+            }
+
+            // 若不在规划轨则先拉回
+            if (icon.CurrentTrack != AtbTrack.Planning)
+            {
+                icon.CurrentTrack = AtbTrack.Planning;
+                if (PlanningATBSlot != null)
+                    icon.Rect.SetParent(PlanningATBSlot.transform, false);
+                icon.BlockExecutionCompleteUntil = 0f;
+            }
+
+            // 允许 0（= 立刻行动，如玩家执行牌结算后开新回合）
+            icon.Slots = Mathf.Max(0, slots);
+            SyncVisualFromSlots(icon);
+            Debug.Log($"[ATB] SetPositionBySlots unitId={unitId}, slots={icon.Slots}");
+        }
+
+        /// <summary>
+        /// 【回合制驱动】将指定单位排到当前所有规划轨单位的最后面，
+        /// 再额外后退 <paramref name="costSlots"/> 格。
+        ///
+        /// 这是回合制的标准"回合结束"操作：
+        ///   · 无论其他单位在哪里，本单位一定排在最后
+        ///   · costSlots = 卡牌消耗格数，表示"等 N 轮才能再行动"
+        ///
+        /// 解决了 SetPositionBySlots 的固定值问题：
+        ///   如果所有单位都在 -77，SetPositionBySlots(id,1) 会把本单位放回 -77（并列第一），
+        ///   而 SetPositionBehindAll 会把它放到 -77-77 = -154（队列末尾）。
+        /// </summary>
+        public void SetPositionBehindAll(string unitId, int costSlots = 1)
+        {
+            EnsureTrackSlotsBound();
+            var icon = FindIcon(unitId);
+            if (icon == null)
+            {
+                Debug.LogWarning($"[ATB] SetPositionBehindAll 未找到图标: {unitId}");
+                return;
+            }
+
+            // 找规划轨中（排除自身）Slots 最大的
+            int maxSlots = 0;
+            for (int i = 0; i < _activeIcons.Count; i++)
+            {
+                var other = _activeIcons[i];
+                if (other == icon || other?.Rect == null) continue;
+                if (other.CurrentTrack != AtbTrack.Planning) continue;
+                if (other.Slots > maxSlots) maxSlots = other.Slots;
+            }
+
+            // 若不在规划轨则先拉回
+            if (icon.CurrentTrack != AtbTrack.Planning)
+            {
+                icon.CurrentTrack = AtbTrack.Planning;
+                if (PlanningATBSlot != null)
+                    icon.Rect.SetParent(PlanningATBSlot.transform, false);
+                icon.BlockExecutionCompleteUntil = 0f;
+            }
+
+            icon.Slots = maxSlots + Mathf.Max(1, costSlots);
+            SyncVisualFromSlots(icon);
+            Debug.Log($"[ATB] SetPositionBehindAll unitId={unitId}, costSlots={costSlots}, newSlots={icon.Slots} (maxOtherSlots={maxSlots})");
+        }
+
+        // ────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 返回当前所有单位按行动先后排列的列表（最先行动的在最前）
+        /// </summary>
+        public List<TurnOrderEntry> GetSortedTurnOrder()
+        {
+            var result = new List<TurnOrderEntry>(_activeIcons.Count);
+
+            for (int i = 0; i < _activeIcons.Count; i++)
+            {
+                var icon = _activeIcons[i];
+                if (icon?.Rect == null) continue;
+
+                // 【离散回合制】两条轨统一用 Slots 排序/分组。
+                // 执行轨单位（已宣告意图）也停在第 Slots 格，由攻击图标区分，
+                // 而不是跳到最前——这样“待执行的敌人排在第 N 个回合上”才正确体现。
+                result.Add(new TurnOrderEntry
+                {
+                    UnitId      = icon.UnitId,
+                    IsPlayer    = icon.IsPlayer,
+                    DistanceTo0 = icon.Slots,
+                    Track       = icon.CurrentTrack,
+                    GroupKey    = icon.Slots
+                });
+            }
+
+            // 稳定排序：主键相等时按原始注册顺序（i）兜底，避免每帧顺序乱跳导致卡片闪烁
+            var indexed = new List<(TurnOrderEntry e, int idx)>(result.Count);
+            for (int i = 0; i < result.Count; i++) indexed.Add((result[i], i));
+            indexed.Sort((a, b) =>
+            {
+                int c = a.e.DistanceTo0.CompareTo(b.e.DistanceTo0);
+                return c != 0 ? c : a.idx.CompareTo(b.idx);
+            });
+            for (int i = 0; i < result.Count; i++) result[i] = indexed[i].e;
+            return result;
+        }
+
+        #endregion
+        // ────────────────────────────────────────────────────────────────
+
         #region Internal
 
         private AtbIconRuntime FindIcon(string unitId)
@@ -257,10 +558,15 @@ namespace Scripts.UI
             if (PlanningATBSlot != null && icon.Rect.parent != PlanningATBSlot.transform)
                 icon.Rect.SetParent(PlanningATBSlot.transform, false);
 
-            float startX = CalculateStartXBySpeed(icon.Speed);
-            icon.StartX = startX;
-            float xOffset = CalculateXOffsetForOverlap(startX);
-            icon.Rect.anchoredPosition = new Vector2(startX + xOffset, iconBaseY);
+            // 【回合制】用 Slots 重置位置（整数格，视觉坐标由 SyncVisualFromSlots 换算）
+            // · LastExecutingCost > 0：执行牌结算后，Slots = 执行牌消耗格数（绝对位置，不依赖他人）
+            // · LastExecutingCost == 0：Swift/跳过路径，按速度公式决定 Slots
+            if (icon.LastExecutingCost > 0)
+                icon.Slots = icon.LastExecutingCost;
+            else
+                icon.Slots = CalculateInitialSlots(icon.Speed);
+
+            SyncVisualFromSlots(icon);
             icon.BlockExecutionCompleteUntil = 0f;
         }
 
@@ -293,18 +599,20 @@ namespace Scripts.UI
                 return;
             }
 
-            float startX = CalculateStartXBySpeed(speed);
-            float xOffset = CalculateXOffsetForOverlap(startX);
+            int initialSlots = CalculateInitialSlots(speed);
+            float startX     = -initialSlots * Mathf.Max(1f, Mathf.Abs(segmentWidth));
+            float xOffset    = CalculateXOffsetForOverlap(startX);
             rect.anchoredPosition = new Vector2(startX + xOffset, iconBaseY);
 
             _activeIcons.Add(new AtbIconRuntime
             {
-                UnitId = unitId,
-                IsPlayer = isPlayer,
-                Speed = Mathf.Max(1, speed),
-                Rect = rect,
+                UnitId    = unitId,
+                IsPlayer  = isPlayer,
+                Speed     = Mathf.Max(1, speed),
+                Slots     = initialSlots,   // 【回合制】格子数是逻辑本体
+                Rect      = rect,
                 IconImage = instance.GetComponent<Image>(),
-                StartX = startX,
+                StartX    = startX,
                 CurrentTrack = AtbTrack.Planning,
                 BlockExecutionCompleteUntil = 0f
             });
@@ -331,12 +639,29 @@ namespace Scripts.UI
             return sign * level * overlapSeparation;
         }
 
+        /// <summary>
+        /// 将图标的视觉坐标同步为 Slots × segmentWidth，Slots 是唯一逻辑来源。
+        /// </summary>
+        private void SyncVisualFromSlots(AtbIconRuntime icon)
+        {
+            float w = Mathf.Max(1f, Mathf.Abs(segmentWidth));
+            float x = -icon.Slots * w;
+            icon.StartX = x;
+            icon.Rect.anchoredPosition = new Vector2(x, iconBaseY);
+        }
+
+        /// <summary>
+        /// 根据速度计算初始 Slots（速度越高起点格越靠前）
+        /// </summary>
+        private int CalculateInitialSlots(int speed)
+        {
+            return Mathf.Clamp(Mathf.Max(1, speed), 1, Mathf.Max(1, maxSpeedForPosition));
+        }
+
         private float CalculateStartXBySpeed(int speed)
         {
-            int safeSpeed = Mathf.Max(1, speed);
-            int clampedSpeed = Mathf.Clamp(safeSpeed, 1, Mathf.Max(1, maxSpeedForPosition));
             float w = Mathf.Max(1f, Mathf.Abs(segmentWidth));
-            return -w * clampedSpeed;
+            return -w * CalculateInitialSlots(speed);
         }
 
         private static void DestroyIconList(List<GameObject> list)

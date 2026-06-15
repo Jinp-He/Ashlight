@@ -25,6 +25,7 @@ namespace Scripts.UI
         public Button Btn_PaikuBase;
         public EnergyBar EnergyBar;
         public RectTransform BattleAnimation;
+        public TurnOrderView TurnOrderView;
 
         #endregion
 
@@ -84,6 +85,9 @@ namespace Scripts.UI
                         break;
                     case "BattleAnimation":
                         BattleAnimation = bind.GetComponent<RectTransform>();
+                        break;
+                    case "TurnOrderView":
+                        TurnOrderView = bind.GetComponent<TurnOrderView>();
                         break;
                 }
             }

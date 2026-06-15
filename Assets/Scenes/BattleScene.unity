@@ -598,9 +598,57 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 4874984058266360017}
     m_Modifications:
+    - target: {fileID: 1931243314061656346, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1931243314061656346, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1931243314061656346, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1931243314061656346, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4624041714010690061, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4624041714010690061, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4624041714010690061, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4624041714010690061, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4882386424376360855, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
       propertyPath: m_Name
       value: "UI_\u610F\u56FE"
+      objectReference: {fileID: 0}
+    - target: {fileID: 5318308240542988051, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5318308240542988051, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5318308240542988051, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5318308240542988051, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5319481460156090497, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
       propertyPath: m_RootOrder
@@ -648,6 +696,22 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5983490880847161332, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8446804704343236569, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8446804704343236569, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8446804704343236569, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8446804704343236569, guid: dc9132f4df2e1e14bb85a78d61f85240, type: 3}
+      propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -970,6 +1034,71 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 494367169}
   m_CullTransparentMesh: 1
+--- !u!1 &669032331
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 669032332}
+  - component: {fileID: 669032334}
+  - component: {fileID: 669032333}
+  m_Layer: 0
+  m_Name: TurnOrderView
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &669032332
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 669032331}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 786, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4874984058266360017}
+  m_RootOrder: 10
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &669032333
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 669032331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d216cafba0b91d478ed3029a8792957, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  actionOrderPrefab: {fileID: 1816795889444805927, guid: a52156c2bfa84ce419683312338fcc5e, type: 3}
+  levelIndicatorPrefab: {fileID: 0}
+  cardsContainer: {fileID: 0}
+  cardSpacing: 8
+  atb: {fileID: 6409102427222875274}
+--- !u!114 &669032334
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 669032331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b22561507dbdbd645b8ef45735e8d72a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  BindName: TurnOrderView
+  ComponentType: TurnOrderView
+  IsContainer: 0
 --- !u!1 &692059498
 GameObject:
   m_ObjectHideFlags: 0
@@ -4579,6 +4708,7 @@ Transform:
   - {fileID: 1256928875}
   - {fileID: 808120789}
   - {fileID: 273728095}
+  - {fileID: 669032332}
   m_Father: {fileID: 1968662052}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -4896,6 +5026,7 @@ MonoBehaviour:
   Btn_PaikuBase: {fileID: 7781739798012796649}
   EnergyBar: {fileID: 1544199011}
   BattleAnimation: {fileID: 808120789}
+  TurnOrderView: {fileID: 669032333}
   cardViewControllerPrefab: {fileID: 6730834944265822965, guid: 7e6494885bdae024384ad6955e5388a5, type: 3}
   maxHandSize: 10
   cardSpacing: 10

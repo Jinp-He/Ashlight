@@ -18,7 +18,16 @@
       "Bash(grep:*)",
       "Bash(rg:*)",
       "Bash(find:*)",
-      "Bash(awk '/m_Sprite: \\\\{fileID: 21300000, guid: ffd2e6cf4b4e58f43bba6ee25d770af7/{found=NR} END{print \"found at \"found}' \"F:/Ashlight/Assets/Resources/Enemy/Prefab/EnemyPrefab.prefab\")"
+      "Bash(awk '/m_Sprite: \\\\{fileID: 21300000, guid: ffd2e6cf4b4e58f43bba6ee25d770af7/{found=NR} END{print \"found at \"found}' \"F:/Ashlight/Assets/Resources/Enemy/Prefab/EnemyPrefab.prefab\")",
+      "Bash(cd \"C:\\\\Users\\\\lofnh\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\ebc5d099-d1f1-4006-ad44-0ad9ec5cf077\\\\4510fa3d-3894-418a-ab4a-16ed57de6983\\\\skills\\\\xlsx\" && python scripts/run_python.py \" *)",
+      "PowerShell(python -c \"import pandas as pd; pd.set_option\\('display.max_rows', None\\); pd.set_option\\('display.max_columns', None\\); pd.set_option\\('display.width', None\\); pd.set_option\\('display.max_colwidth', None\\); sheets = pd.read_excel\\('F:/Ashlight/DataTables/Datas/#NounDictionary.xlsx', sheet_name=None, header=None\\); [print\\(f'=== Sheet: {n} ===\\\\n{df.to_string\\(\\)}\\\\n'\\) for n,df in sheets.items\\(\\)]\")",
+      "PowerShell($skillDir = \"C:\\\\Users\\\\lofnh\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\ebc5d099-d1f1-4006-ad44-0ad9ec5cf077\\\\4510fa3d-3894-418a-ab4a-16ed57de6983\\\\skills\\\\xlsx\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git push *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

@@ -221,8 +221,13 @@ namespace Scripts.UI
         {
             if (ATB != null)
             {
+                // 【回合制说明】规划轨和执行轨都改为离散 Slots 队列，由 TriggerNextUnit() 统一驱动。
+                // ATB 始终 IsPaused=true，因此此 Tick 实际是空操作（保留仅为兼容旧实时模式）。
                 ATB.Tick(Time.deltaTime);
             }
+
+            // 行动顺序视图每帧同步排序
+            TurnOrderView?.RefreshOrder();
 
             string currentTurnUnitId = _battleManager?.CurrentState?.CurrentTurnUnitId;
             if (!string.IsNullOrEmpty(currentTurnUnitId))
@@ -313,7 +318,18 @@ namespace Scripts.UI
             if (ATB != null && _battleManager != null && _battleManager.CurrentState != null)
             {
                 ATB.InitializeByUnits(_battleManager.CurrentState.PlayerUnits, _battleManager.CurrentState.EnemyUnits);
-                ATB.Resume();
+
+                // 初始化行动顺序视图（需在 TriggerNextUnit 之前，确保卡片已创建好）
+                if (TurnOrderView != null)
+                {
+                    TurnOrderView.Initialize(
+                        _battleManager.CurrentState.PlayerUnits,
+                        _battleManager.CurrentState.EnemyUnits);
+                }
+
+                // 【回合制】暂停 ATB 后立即触发第一个单位的回合，无需等待实时推进
+                ATB.Pause();
+                ATB.TriggerNextUnit();
             }
 
             // 创建时间轴UI
@@ -956,8 +972,9 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 玩家打出执行牌：挂起动作、压暗其余执行牌、并立即将 ATB 图标移入执行轨。
-        /// ATB 此时处于 Pause 状态，图标会冻在执行轨起点，等玩家结束回合 Resume 后才开始移动。
+        /// 玩家打出执行牌：挂起动作、压暗其余执行牌、并立即把 ATB 图标排入执行轨（Slots=执行费用）。
+        /// 【回合制】图标停在第 cost 格等待，等玩家结束回合后由 TriggerNextUnit 推进；
+        /// 轮到它时触发 OnExecutionComplete 结算（不再靠 Tick 实时推进）。
         /// </summary>
         public void OnPlayerPlayedExecutionCard(CardViewController playedCard, string ownerUnitId)
         {
@@ -973,6 +990,7 @@ namespace Scripts.UI
             {
                 int executingCost = _battleManager.GetPendingPlayerExecutionCost(ownerUnitId);
                 ATB.MoveToExecutingTrack(ownerUnitId, executingCost);
+                TurnOrderView?.SetExecuting(ownerUnitId, true);
             }
         }
 
@@ -1353,8 +1371,10 @@ namespace Scripts.UI
                                 int executingCost = _battleManager.GetPendingPlayerExecutionCost(currentTurnUnitId);
                                 ATB.MoveToExecutingTrack(currentTurnUnitId, executingCost);
                             }
-                            ATB.Resume();
-                            Debug.Log($"[UI_BattleScene] 玩家结束回合，执行轨开始推进: {currentTurnUnitId}");
+                            // 【回合制】玩家执行牌已排到第 cost 格等待，推进到下一单位。
+                            // 轮到该执行牌时 TriggerNextUnit 会触发 OnExecutionComplete 结算（不再靠 Tick）。
+                            ATB.TriggerNextUnit();
+                            Debug.Log($"[UI_BattleScene] 玩家结束回合，执行牌进入执行轨队列: {currentTurnUnitId}");
                             yield break;
                         }
 
@@ -1362,8 +1382,12 @@ namespace Scripts.UI
 
                         _playerPlayedExecutionCardThisAtbTurn = false;
                         _battleManager.EndCurrentTurn();
-                        ATB.Resume();
-                        Debug.Log($"[UI_BattleScene] 玩家回合结束并恢复ATB: {currentTurnUnitId}");
+
+                        // 【回合制】Swift 牌/跳过/啥都不干：从当前行动点（X=0）往后 3 格（绝对位置）。
+                        // 类似 ATB 时间轴：无论其他人在哪，本单位下次行动时间 = 现在 + 3 格。
+                        ATB.SetPositionBySlots(currentTurnUnitId, 3);
+                        ATB.TriggerNextUnit();
+                        Debug.Log($"[UI_BattleScene] 玩家回合结束（Swift/跳过），触发下一单位: {currentTurnUnitId}");
                         yield break;
                     }
                 }
@@ -1410,6 +1434,9 @@ namespace Scripts.UI
                 return;
             }
 
+            // 高亮当前行动单位
+            TurnOrderView?.SetActiveUnit(unitId);
+
             _isProcessingAtbTurn = true;
             try
             {
@@ -1436,7 +1463,10 @@ namespace Scripts.UI
                     {
                         if (ATB != null)
                         {
-                            ATB.Resume();
+                            // 【回合制】敌人无技能可用，跳过：排到 1 格后即可。
+                            // 不调用 TriggerNextUnit —— 当前正处在 TriggerNextUnit 的循环内，
+                            // 设回 Slots=1 后循环会自动继续到下一单位（避免重入）。
+                            ATB.SetPositionBySlots(unitId, 1);
                         }
                         return;
                     }
@@ -1470,8 +1500,11 @@ namespace Scripts.UI
 
                     if (ATB != null)
                     {
+                        // 【回合制】敌人宣告意图 → 排到第 executingCost 格等待（显示攻击图标）。
+                        // 不调用 Resume/TriggerNextUnit：当前在 TriggerNextUnit 循环内，
+                        // 单位已转入执行轨，循环会自动继续；轮到它时触发 OnExecutionComplete 结算。
                         ATB.MoveToExecutingTrack(unitId, executingCost);
-                        ATB.Resume();
+                        TurnOrderView?.SetExecuting(unitId, true);
                     }
                 }
             }
@@ -1515,6 +1548,10 @@ namespace Scripts.UI
         /// </summary>
         private void HandleAtbExecutionComplete(string unitId, bool isPlayerUnit)
         {
+            // 执行完成后清除高亮和攻击图标
+            TurnOrderView?.SetActiveUnit(null);
+            TurnOrderView?.SetExecuting(unitId, false);
+
             if (_battleManager == null || _battleManager.CurrentState == null)
             {
                 return;
@@ -1555,7 +1592,9 @@ namespace Scripts.UI
                     _isProcessingPlayerExecutionTurn = false;
                     _playerPlayedExecutionCardThisAtbTurn = false;
                     ClearHandExecutionSuppression();
-                    // 不调用 ATB.Resume()：新回合需要全场暂停等待玩家操作。
+                    // 【回合制】把该玩家从执行轨拉回规划轨、Slots=0（立刻开始新回合）。
+                    // TriggerNextUnit 循环检测到“执行轨单位是玩家”后会停下等玩家操作。
+                    if (ATB != null) ATB.SetPositionBySlots(unitId, 0);
                 }
 
                 return;
@@ -1584,7 +1623,9 @@ namespace Scripts.UI
                 _enemiesInExecutionTrack.Remove(unitId);
                 if (ATB != null)
                 {
-                    ATB.Resume();
+                    // 【回合制】敌人执行完成：拉回规划轨、排到 3 格后等待下次行动。
+                    // 不调用 TriggerNextUnit —— 当前在 TriggerNextUnit 循环内，循环会自动继续到下一单位。
+                    ATB.SetPositionBySlots(unitId, 3);
                 }
             }
         }
@@ -1865,6 +1906,9 @@ namespace Scripts.UI
             if (ATB != null)
             {
                 ATB.Pause();
+                // 【回合制】中止 TriggerNextUnit 的自动连续推进：
+                // 结算中途打死单位触发战斗结束时，循环不应再触发后续回合。
+                ATB.AutoAdvanceSuspended = true;
             }
 
             // 停止血量预测显示
