@@ -30,6 +30,9 @@ namespace Scripts.UI
         [Tooltip("悬停时的缩放比例")]
         private float hoverScale = 2f;
 
+        /// <summary>外部设置悬停放大比例（如三选一选卡面板用 1.1，避免大卡 hover 放得过大）。</summary>
+        public void SetHoverScale(float scale) => hoverScale = scale;
+
         [SerializeField]
         [Tooltip("缩放动画时长")]
         private float scaleDuration = 0.2f;
@@ -59,6 +62,10 @@ namespace Scripts.UI
         [SerializeField]
         [Tooltip("位置恢复动画时长")]
         private float positionRestoreDuration = 0.3f;
+
+        [SerializeField]
+        [Tooltip("使用（拖动/选择）卡牌时，其余手牌向下位移的距离（像素），用于让出空间不遮挡信息")]
+        private float otherCardsPushDownDistance = 100f;
 
         [Header("目标选择颜色设置")]
         [SerializeField]
@@ -117,6 +124,10 @@ namespace Scripts.UI
         private Tween _positionTween;
         private CanvasGroup _canvasGroup;
         private float _originalAlpha = 1f;
+
+        // 使用本牌时被下移让位的其他手牌（记录其原始 anchoredPosition.y 以便恢复）
+        private readonly System.Collections.Generic.List<RectTransform> _pushedSiblings = new System.Collections.Generic.List<RectTransform>();
+        private readonly System.Collections.Generic.List<float> _pushedSiblingOriginalY = new System.Collections.Generic.List<float>();
         
         // Card 拖拽状态
         private CardDragState _cardDragState = CardDragState.OnHand;
@@ -175,7 +186,10 @@ namespace Scripts.UI
         private GameObject _currentTargetObject;
         private GameObject _lastValidTargetObject;
         private bool _isTargeting = false;
-        
+
+        // 点击进入的目标选择模式（无需按住拖拽）：点击卡牌进入，移动鼠标选目标，再次左键确认，右键/Esc取消
+        private bool _isClickTargeting = false;
+
         // 目标颜色管理
         private Dictionary<Character, Color> _originalCharacterColors = new Dictionary<Character, Color>();
         private Dictionary<Enemy, Color> _originalEnemyColors = new Dictionary<Enemy, Color>();
@@ -274,6 +288,12 @@ namespace Scripts.UI
         /// </summary>
         private void Update()
         {
+            // 点击进入的目标选择模式：每帧更新箭头/高亮，并检测确认/取消输入
+            if (_isClickTargeting)
+            {
+                UpdateClickTargeting();
+            }
+
             // 检测鼠标是否悬停在link上
             if (Txt_Effect != null)
             {
@@ -372,6 +392,12 @@ namespace Scripts.UI
         /// </summary>
         public void ResetForReuse()
         {
+            // 若仍处于点击式目标选择中，先收尾清理（隐藏箭头/高亮、复位其余手牌、恢复射线）
+            if (_isClickTargeting)
+            {
+                ExitClickTargetingVisuals();
+            }
+
             // 重置拖拽状态为 OnHand
             SetCardDragState(CardDragState.OnHand);
             _lastValidTargetObject = null;
@@ -746,8 +772,8 @@ namespace Scripts.UI
         /// </summary>
         public void OnPointerEnter(PointerEventData eventData)
         {
-            // 如果正在拖拽，不处理悬停效果
-            if (_isDragging)
+            // 如果正在拖拽或处于点击目标选择中，不处理悬停效果
+            if (_isDragging || _isClickTargeting)
                 return;
 
             if (_executionSuppressed)
@@ -783,8 +809,8 @@ namespace Scripts.UI
         /// </summary>
         public void OnPointerExit(PointerEventData eventData)
         {
-            // 如果正在拖拽，不处理离开效果
-            if (_isDragging)
+            // 如果正在拖拽或处于点击目标选择中，不处理离开效果
+            if (_isDragging || _isClickTargeting)
                 return;
 
             _isHovering = false;
@@ -816,7 +842,7 @@ namespace Scripts.UI
         /// </summary>
         public void OnPointerClick(PointerEventData eventData)
         {
-            // 只在View模式下响应点击
+            // View模式：点击加入卡组
             if (_displayMode == DescriptionMode.View && _currentCard != null)
             {
                 // 发送选择卡牌到卡组的事件
@@ -826,7 +852,51 @@ namespace Scripts.UI
                 });
 
                 Debug.Log($"[CardViewController] 选择卡牌到卡组: {_currentCard.Name}");
+                return;
             }
+
+            // 战斗模式：点击卡牌进入目标选择模式（等同进入拖拽选目标），无需按住拖动
+            if (_displayMode == DescriptionMode.Battle)
+            {
+                HandleBattleClick(eventData);
+            }
+        }
+
+        /// <summary>
+        /// 战斗模式下点击手牌：进入点击式目标选择模式
+        /// </summary>
+        private void HandleBattleClick(PointerEventData eventData)
+        {
+            // 拖拽过程中不响应点击
+            if (_isDragging)
+                return;
+
+            // 已在点击选择中：再次点击卡牌视为取消
+            if (_isClickTargeting)
+            {
+                CancelClickTargeting();
+                return;
+            }
+
+            if (_isLocked || _executionSuppressed)
+                return;
+
+            // 仅手牌中的卡牌可点选
+            if (_cardDragState != CardDragState.OnHand)
+                return;
+
+            // 仅目标选择型卡牌支持点击选目标；TimeSlot型仍需拖拽到时间轴
+            if (!UsesTargetSelection())
+                return;
+
+            // 能量不足不允许使用
+            if (!HasEnoughEnergyForCard())
+            {
+                Debug.Log($"[CardViewController] 能量不足，无法选择目标: {_currentCard?.Name} (需求={_currentCard?.Energy})");
+                return;
+            }
+
+            BeginClickTargeting();
         }
 
         #endregion
@@ -886,6 +956,230 @@ namespace Scripts.UI
             _rectTransform.anchoredPosition = _hoverBaseAnchoredPosition;
         }
 
+        /// <summary>
+        /// 使用本牌时，将同一手牌容器下的其余卡牌向下位移让位（本牌保持原位/跟随鼠标），
+        /// 避免其他手牌遮挡目标箭头、敌人意图等信息。
+        /// </summary>
+        private void PushDownOtherHandCards()
+        {
+            // 先清理可能的残留，避免重复记录
+            RestoreOtherHandCards();
+
+            Transform parent = transform.parent;
+            if (parent == null || otherCardsPushDownDistance <= 0f)
+                return;
+
+            int childCount = parent.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child == transform)
+                    continue;
+                if (!child.gameObject.activeSelf)
+                    continue;
+                if (child.GetComponent<CardViewController>() == null)
+                    continue;
+
+                RectTransform rt = child as RectTransform;
+                if (rt == null)
+                    continue;
+
+                float originalY = rt.anchoredPosition.y;
+                _pushedSiblings.Add(rt);
+                _pushedSiblingOriginalY.Add(originalY);
+
+                // 仅动画 Y，X 交由手牌布局负责，避免与 UpdateHandLayout 冲突
+                rt.DOKill();
+                rt.DOAnchorPosY(originalY - otherCardsPushDownDistance, positionRestoreDuration)
+                    .SetEase(Ease.OutCubic);
+            }
+        }
+
+        /// <summary>
+        /// 恢复被 PushDownOtherHandCards 下移的其余手牌位置
+        /// </summary>
+        private void RestoreOtherHandCards()
+        {
+            for (int i = 0; i < _pushedSiblings.Count; i++)
+            {
+                RectTransform rt = _pushedSiblings[i];
+                if (rt == null)
+                    continue;
+
+                rt.DOKill();
+                rt.DOAnchorPosY(_pushedSiblingOriginalY[i], positionRestoreDuration)
+                    .SetEase(Ease.OutCubic);
+            }
+
+            _pushedSiblings.Clear();
+            _pushedSiblingOriginalY.Clear();
+        }
+
+        #endregion
+
+        #region 点击式目标选择（点击卡牌进入，等同拖拽选目标）
+
+        /// <summary>
+        /// 进入点击式目标选择：与拖拽进入目标选择的视觉/状态一致，但卡牌停在手牌中，
+        /// 由 Update 每帧根据鼠标更新箭头与高亮，左键确认、右键/Esc取消。
+        /// </summary>
+        private void BeginClickTargeting()
+        {
+            _isClickTargeting = true;
+            _isTargeting = true;
+            _currentTargetObject = null;
+            _lastValidTargetObject = null;
+
+            // 其余手牌让位
+            PushDownOtherHandCards();
+
+            // 设置所有目标的颜色（非法变黑，合法变暗）
+            SetAllTargetsColor();
+
+            // 提升层级
+            ElevateCard();
+
+            // 放大Card子对象
+            _scaleTween?.Kill();
+            if (Card != null && Card.transform != null)
+            {
+                _scaleTween = Card.transform.DOScale(_originalCardScale * dragScale, scaleDuration)
+                    .SetEase(Ease.OutBack);
+            }
+
+            // 半透明
+            SetCanvasGroupAlpha(dragAlpha);
+
+            // 关闭自身射线：选择期间确认/取消统一由 Update 的全局鼠标输入处理，
+            // 避免卡牌自身的 OnPointerClick 与之重复触发
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.blocksRaycasts = false;
+            }
+
+            // 隐藏描述面板，避免遮挡
+            HideDescription();
+
+            // 初始化并显示目标箭头
+            if (_targetArrow != null)
+            {
+                _targetArrow.UpdateLine(GetCardScreenCenter(), Input.mousePosition, false);
+                _targetArrow.Show();
+            }
+
+            Debug.Log($"[CardViewController] 点击进入目标选择模式: {_currentCard?.Name}");
+        }
+
+        /// <summary>
+        /// 点击式目标选择的每帧逻辑：更新箭头/高亮，处理确认与取消输入
+        /// </summary>
+        private void UpdateClickTargeting()
+        {
+            if (_currentCard == null)
+            {
+                CancelClickTargeting();
+                return;
+            }
+
+            // 取消：右键 或 Esc
+            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelClickTargeting();
+                return;
+            }
+
+            PointerEventData ped = new PointerEventData(EventSystem.current)
+            {
+                position = Input.mousePosition
+            };
+
+            // 检测目标
+            GameObject targetObj = _targetManager?.DetectTargetUnderMouse(ped);
+            CharacterEnum ownerCharacterId = GetOwnerCharacterId();
+            bool isValid = _targetManager?.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId) ?? false;
+
+            // 更新箭头颜色
+            if (_targetArrow != null)
+            {
+                _targetArrow.UpdateLine(GetCardScreenCenter(), Input.mousePosition, isValid);
+            }
+
+            // 更新高亮
+            UpdateTargetHighlighting(targetObj, isValid);
+
+            _currentTargetObject = targetObj;
+            if (isValid && targetObj != null)
+                _lastValidTargetObject = targetObj;
+
+            // 确认：左键命中合法目标才出牌；点空白/非法目标不退出，继续选择（退出只用右键）
+            if (Input.GetMouseButtonDown(0) && isValid)
+            {
+                ConfirmClickTargeting(targetObj, ownerCharacterId);
+            }
+        }
+
+        /// <summary>
+        /// 左键命中合法目标后出牌
+        /// </summary>
+        private void ConfirmClickTargeting(GameObject resolvedTarget, CharacterEnum ownerCharacterId)
+        {
+            // 先收尾视觉与高亮（与拖拽结束顺序一致）
+            ExitClickTargetingVisuals();
+
+            string ownerId = ownerCharacterId.ToString();
+            PlaceCardOnTargetTimeline(resolvedTarget, ownerId);
+
+            _currentTargetObject = null;
+            _lastValidTargetObject = null;
+        }
+
+        /// <summary>
+        /// 取消点击式目标选择，恢复手牌
+        /// </summary>
+        private void CancelClickTargeting()
+        {
+            ExitClickTargetingVisuals();
+            RestoreCardToHandState("点击选择：取消");
+            _currentTargetObject = null;
+            _lastValidTargetObject = null;
+        }
+
+        /// <summary>
+        /// 收尾点击式目标选择的视觉/高亮（不含卡牌自身缩放/透明度恢复，交由调用方决定）
+        /// </summary>
+        private void ExitClickTargetingVisuals()
+        {
+            _isClickTargeting = false;
+            _isTargeting = false;
+
+            // 恢复自身射线
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.blocksRaycasts = true;
+            }
+
+            RestoreOtherHandCards();
+
+            if (_targetArrow != null)
+            {
+                _targetArrow.Hide();
+            }
+
+            ClearAllTargetHighlighting();
+            RestoreAllTargetsColor();
+            _previousHoveredTarget = null;
+        }
+
+        /// <summary>
+        /// 获取卡牌中心的屏幕坐标（作为箭头起点）
+        /// </summary>
+        private Vector3 GetCardScreenCenter()
+        {
+            Canvas canvas = GetComponentInParent<Canvas>();
+            Camera cam = canvas?.renderMode == RenderMode.ScreenSpaceOverlay ? null : (canvas?.worldCamera ?? Camera.main);
+            return RectTransformUtility.WorldToScreenPoint(cam, transform.position);
+        }
+
         #endregion
 
         #region 拖拽处理（战斗模式）
@@ -940,6 +1234,9 @@ namespace Scripts.UI
         /// </summary>
         private void OnBeginDragOnHand(PointerEventData eventData)
         {
+            // 使用本牌时，把其余手牌向下让位，避免遮挡目标/箭头/信息
+            PushDownOtherHandCards();
+
             // 判断是否使用目标选择模式
             bool usesTargetSelection = UsesTargetSelection();
 
@@ -1327,6 +1624,9 @@ namespace Scripts.UI
         /// </summary>
         private void OnEndDragOnHand(PointerEventData eventData)
         {
+            // 拖拽结束（无论放置成功与否）先把让位的手牌复位
+            RestoreOtherHandCards();
+
             if (_isTargeting)
             {
                 // 目标选择模式
@@ -1364,14 +1664,14 @@ namespace Scripts.UI
                     }
                     else
                     {
-                        Debug.LogWarning("[CardViewController] 目标无效，已恢复到手牌");
-                        RestoreCardToHandState();
+                        Debug.LogWarning($"[CardViewController] 目标无效，已恢复到手牌 (target={resolvedTarget.name}, targetType={_currentCard?.TargetType})");
+                        RestoreCardToHandState($"目标非法 target={resolvedTarget.name} targetType={_currentCard?.TargetType}");
                     }
                 }
                 else
                 {
                     Debug.LogWarning("[CardViewController] 未选择目标，已恢复到手牌");
-                    RestoreCardToHandState();
+                    RestoreCardToHandState("拖拽结束时未检测到任何目标");
                 }
 
                 _currentTargetObject = null;
@@ -3019,7 +3319,7 @@ namespace Scripts.UI
             if (string.IsNullOrEmpty(targetId))
             {
                 Debug.LogWarning("[CardViewController] 无法确定目标ID");
-                RestoreCardToHandState();
+                RestoreCardToHandState("无法从目标对象解析出 UnitId");
                 return;
             }
 
@@ -3027,7 +3327,7 @@ namespace Scripts.UI
             if (string.IsNullOrEmpty(ownerUnitId))
             {
                 Debug.LogWarning($"[CardViewController] 无法解析施法者单位ID: ownerId={ownerId}");
-                RestoreCardToHandState();
+                RestoreCardToHandState($"无法解析施法者单位ID ownerId={ownerId}");
                 return;
             }
 
@@ -3035,7 +3335,7 @@ namespace Scripts.UI
             if (battleManager == null)
             {
                 Debug.LogWarning("[CardViewController] BattleManager 不存在，无法立即执行卡牌");
-                RestoreCardToHandState();
+                RestoreCardToHandState("BattleManager.Instance 为 null");
                 return;
             }
 
@@ -3052,8 +3352,8 @@ namespace Scripts.UI
 
             if (!success)
             {
-                Debug.LogWarning("[CardViewController] 打牌失败，恢复手牌状态");
-                RestoreCardToHandState();
+                Debug.LogWarning($"[CardViewController] 打牌失败，恢复手牌状态 (execution={isExecutionCard}, owner={ownerUnitId}, target={targetId}) —— 真正原因见上方 [BattleManager] 告警");
+                RestoreCardToHandState($"{(isExecutionCard ? "TryQueuePlayerExecutionCard" : "TryPlayCardImmediately")} 返回 false，详见上方 [BattleManager] 告警");
                 return;
             }
 
@@ -3190,7 +3490,7 @@ namespace Scripts.UI
         /// <summary>
         /// 恢复卡牌到手牌状态
         /// </summary>
-        private void RestoreCardToHandState()
+        private void RestoreCardToHandState(string reason = null)
         {
             // 恢复缩放
             _scaleTween?.Kill();
@@ -3209,7 +3509,7 @@ namespace Scripts.UI
             // 恢复透明度
             SetCanvasGroupAlpha(_originalAlpha);
 
-            Debug.Log("[CardViewController] 卡牌已恢复到手牌状态（非法目标）");
+            Debug.Log($"[CardViewController] 卡牌已恢复到手牌状态：{(string.IsNullOrEmpty(reason) ? "未知原因" : reason)} (card={_currentCard?.Name})");
         }
 
         #endregion

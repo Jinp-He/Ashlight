@@ -112,6 +112,20 @@ namespace Scripts.UI
         /// </summary>
         public bool AutoAdvanceSuspended { get; set; }
 
+        /// <summary>
+        /// 【回合制】死亡单位判定回调。由 UI_BattleScene 注入，使 ATB 能在推进队列时
+        /// 主动跳过/移除已死亡单位的图标——单位死亡时其图标不会自动从队列移除，
+        /// 若不跳过，TriggerNextUnit 会反复触发死亡单位的回合导致卡死。
+        /// 返回 true 表示该 unitId 已死亡（或已不存在）。
+        /// </summary>
+        public Func<string, bool> IsUnitDeadPredicate;
+
+        /// <summary>
+        /// 图标被移除时触发（含死亡清理、TriggerNextUnit 跳过死亡单位）。
+        /// 供 UI 同步移除行动顺序视图（TurnOrderView）中对应的卡片，保持两者一致。
+        /// </summary>
+        public event Action<string> OnIconRemoved;
+
         private class AtbIconRuntime
         {
             public string UnitId;
@@ -304,6 +318,32 @@ namespace Scripts.UI
             _activeIcons.Clear();
         }
 
+        /// <summary>
+        /// 【回合制】移除指定单位的 ATB 图标（单位死亡时调用）。
+        /// 同时从运行时队列 _activeIcons 与对应的实例列表移除，并销毁 GameObject。
+        /// 找不到对应图标时静默返回（可能已被移除）。
+        /// </summary>
+        public void RemoveUnitIcon(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+
+            var icon = FindIcon(unitId);
+            if (icon == null) return;
+
+            _activeIcons.Remove(icon);
+
+            var go = icon.Rect != null ? icon.Rect.gameObject : null;
+            if (go != null)
+            {
+                _playerIconInstances.Remove(go);
+                _enemyIconInstances.Remove(go);
+                Destroy(go);
+            }
+
+            Debug.Log($"[ATB] RemoveUnitIcon: 已移除单位图标 {unitId}，剩余 {_activeIcons.Count} 个");
+            OnIconRemoved?.Invoke(unitId);
+        }
+
         // ────────────────────────────────────────────────────────────────
         #region 公共查询 API
 
@@ -374,6 +414,15 @@ namespace Scripts.UI
                 {
                     Debug.LogWarning("[ATB] TriggerNextUnit: 无可触发单位");
                     return false;
+                }
+
+                // 【死亡保护】单位死亡时图标不会自动出队；若选中的是死亡单位，
+                // 直接移除其图标并继续循环，避免反复触发死亡单位回合导致卡死。
+                if (IsUnitDeadPredicate != null && IsUnitDeadPredicate(next.UnitId))
+                {
+                    Debug.Log($"[ATB] TriggerNextUnit: 跳过并移除死亡单位图标 {next.UnitId}");
+                    RemoveUnitIcon(next.UnitId);
+                    continue;
                 }
 
                 // 【时间推进】所有单位 Slots 一起减去 minSlots，当前回合归零

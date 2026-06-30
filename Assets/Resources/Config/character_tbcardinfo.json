@@ -7,7 +7,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 12,
         "is_aoe": false
       }
     ],
@@ -27,7 +27,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 9,
         "conditions": "Channeling|Recoil",
         "multiplier": 2
       }
@@ -48,7 +48,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 11,
+        "damage": 13,
         "is_aoe": true
       },
       {
@@ -74,7 +74,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 14,
+        "damage": 16,
         "is_aoe": false
       },
       {
@@ -100,7 +100,7 @@
       {
         "$type": "InterceptEffect",
         "EffectType": 1,
-        "shield_value": 14
+        "shield_value": 16
       }
     ],
     "CardType": 0,
@@ -148,7 +148,7 @@
       {
         "$type": "HealEffect",
         "EffectType": 3,
-        "value": 8
+        "value": 9
       }
     ],
     "CardType": 1,
@@ -191,13 +191,13 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 9,
         "is_aoe": false
       },
       {
         "$type": "AttackConditionalEffect",
         "EffectType": 0,
-        "bonus_damage": 8,
+        "bonus_damage": 9,
         "condition_type": "IsAttacking"
       }
     ],
@@ -217,7 +217,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 14,
+        "damage": 16,
         "is_aoe": false
       }
     ],
@@ -237,7 +237,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 11,
+        "damage": 13,
         "is_aoe": false
       },
       {
@@ -263,19 +263,19 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 4,
+        "damage": 5,
         "is_aoe": false
       },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 4,
+        "damage": 5,
         "is_aoe": false
       },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 4,
+        "damage": 5,
         "is_aoe": false
       }
     ],
@@ -321,7 +321,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 25,
+        "damage": 29,
         "conditions": "Burn",
         "multiplier": 2
       }
@@ -342,7 +342,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 18,
+        "damage": 21,
         "is_aoe": true
       },
       {
@@ -413,7 +413,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 16,
+        "damage": 18,
         "conditions": "Channeling|Recoil",
         "multiplier": 2
       }
@@ -465,13 +465,13 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 4,
+        "damage": 5,
         "is_aoe": false
       },
       {
         "$type": "AttackConditionalEffect",
         "EffectType": 0,
-        "bonus_damage": 6,
+        "bonus_damage": 7,
         "condition_type": "InExecution"
       }
     ],
@@ -491,7 +491,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 14,
+        "damage": 16,
         "conditions": "SkippedLastExecution",
         "multiplier": 2
       }
@@ -512,7 +512,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 14,
         "is_aoe": false
       }
     ],
@@ -532,7 +532,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 15,
+        "damage": 17,
         "is_aoe": false
       },
       {
@@ -558,13 +558,13 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 9,
         "is_aoe": false
       },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 9,
         "is_aoe": false
       }
     ],
@@ -584,7 +584,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 14,
+        "damage": 16,
         "is_aoe": true
       }
     ],
@@ -604,7 +604,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 25,
+        "damage": 29,
         "conditions": "FullHP",
         "multiplier": 2
       }
@@ -625,7 +625,7 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 8,
+        "damage": 9,
         "is_aoe": false
       },
       {
@@ -677,13 +677,13 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 14,
         "is_aoe": false
       },
       {
         "$type": "AttackConditionalEffect",
         "EffectType": 0,
-        "bonus_damage": 12,
+        "bonus_damage": 14,
         "condition_type": "IsAttacking"
       }
     ],
@@ -703,19 +703,19 @@
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 12,
         "is_aoe": true
       },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 12,
         "is_aoe": true
       },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 10,
+        "damage": 12,
         "is_aoe": true
       }
     ],
@@ -779,7 +779,7 @@
       {
         "$type": "AttackExtraEffect",
         "EffectType": 0,
-        "damage": 18,
+        "damage": 21,
         "conditions": "Pierce",
         "multiplier": 1
       }

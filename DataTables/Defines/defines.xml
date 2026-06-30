@@ -69,4 +69,40 @@
         <var name="value" type="float" comment="Buff参数/数值"/>
     </bean>
 
+
+    <!-- ============================================================== -->
+    <!-- 升级选项效果 (UpgradeOptions.Effects)                          -->
+    <!-- 多态基类，子类名作为判别符（与 Effect 体系一致）              -->
+    <!-- 编码示例: GrantBuff,Block,3,Self ; ModifyCardStat,Rocket001,Damage,5 -->
+    <!-- ============================================================== -->
+    <bean name="UpgradeEffect" sep=","/>
+
+    <!-- 战斗开始时给单位贴一个整场永久 buff（力量/敏捷/再生 等真 buff，走 UnitState.Buffs） -->
+    <bean name="GrantBuff" parent="UpgradeEffect">
+        <var name="buff_id" type="string" comment="引用 TbBuffInfo 的 Id，如 Strength/Dexterity/Regen"/>
+        <var name="stack" type="int" comment="层数/数值（落到 BuffState.Value）"/>
+        <var name="target" type="TargetTypeEnum" comment="贴给谁：Self=本角色 / AllAlly=全体我方"/>
+    </bean>
+
+    <!-- 修改单位的战斗属性字段（护甲/最大生命/能量 等，非 buff，整场生效） -->
+    <bean name="ModifyUnitStat" parent="UpgradeEffect">
+        <var name="stat" type="string" comment="要改的属性：MaxHp/Armor/Energy"/>
+        <var name="delta" type="int" comment="增减量(+/-)"/>
+        <var name="target" type="TargetTypeEnum" comment="作用对象：Self=本角色 / AllAlly=全体我方"/>
+    </bean>
+
+    <!-- 针对卡牌的数值修正（整局生效，按 selector 匹配卡牌） -->
+    <bean name="ModifyCardStat" parent="UpgradeEffect">
+        <var name="selector" type="string" comment="目标卡：卡Id / BelongTo:Rocket / CardType:Swift / All"/>
+        <var name="stat" type="string" comment="要改的属性：Damage/Defense/Energy/ExecutingCost ..."/>
+        <var name="delta" type="int" comment="增减量(+/-)"/>
+    </bean>
+
+    <!-- 针对卡牌的行为标记修正（如 单体→AOE） -->
+    <bean name="ModifyCardFlag" parent="UpgradeEffect">
+        <var name="selector" type="string" comment="目标卡：卡Id / BelongTo:Rocket / CardType:Swift / All"/>
+        <var name="flag" type="string" comment="要改的标记：如 IsAoe"/>
+        <var name="value" type="bool" comment="目标值"/>
+    </bean>
+
 </module>

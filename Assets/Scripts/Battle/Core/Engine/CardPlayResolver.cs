@@ -37,7 +37,8 @@ namespace Ashlight.Battle.Core.Engine
                 return false;
             }
 
-            var commands = ConvertEffectsToCommands(card.Effects);
+            var modifier = state.CardModifiers?.Get(card.Id);
+            var commands = ConvertEffectsToCommands(card.Effects, modifier);
             if (commands.Count == 0)
             {
                 Debug.LogWarning($"[CardPlayResolver] 卡牌 {card.Name} 没有可执行的命令");
@@ -67,19 +68,28 @@ namespace Ashlight.Battle.Core.Engine
         /// </summary>
         public List<ICommand> GenerateCommands(CardInfo card)
         {
+            return GenerateCommands(card, null);
+        }
+
+        /// <summary>
+        /// 仅生成命令列表但不执行（用于预测），并叠加卡牌修正
+        /// </summary>
+        public List<ICommand> GenerateCommands(CardInfo card, CardModifier modifier)
+        {
             if (card?.Effects == null)
             {
                 return new List<ICommand>();
             }
 
-            return ConvertEffectsToCommands(card.Effects);
+            return ConvertEffectsToCommands(card.Effects, modifier);
         }
 
         /// <summary>
         /// 将 Effect 列表转换为 Command 列表
         /// 复用原 CardToTimelineConverter 的映射逻辑
         /// </summary>
-        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects)
+        /// <param name="modifier">来自升级系统的卡牌修正（可空）</param>
+        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects, CardModifier modifier = null)
         {
             var commands = new List<ICommand>();
             if (effects == null || effects.Count == 0)
@@ -89,7 +99,7 @@ namespace Ashlight.Battle.Core.Engine
 
             foreach (var effect in effects)
             {
-                var command = ConvertEffectToCommand(effect);
+                var command = ConvertEffectToCommand(effect, modifier);
                 if (command != null)
                 {
                     commands.Add(command);
@@ -100,9 +110,9 @@ namespace Ashlight.Battle.Core.Engine
         }
 
         /// <summary>
-        /// 将单个 Effect 转换为 Command
+        /// 将单个 Effect 转换为 Command（叠加卡牌修正）
         /// </summary>
-        private ICommand ConvertEffectToCommand(Effect effect)
+        private ICommand ConvertEffectToCommand(Effect effect, CardModifier modifier = null)
         {
             if (effect == null)
             {
@@ -111,12 +121,17 @@ namespace Ashlight.Battle.Core.Engine
 
             if (effect is AttackEffect attackEffect)
             {
-                return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe);
+                int damage = attackEffect.Damage + (modifier?.DamageDelta ?? 0);
+                if (damage < 0) damage = 0;
+                bool isAoe = modifier?.ForceAoe ?? attackEffect.IsAoe;
+                return new DamageCommand(damage, isAoe);
             }
 
             if (effect is DefenseEffect defenseEffect)
             {
-                return new DefenseCommand(defenseEffect.Value, defenseEffect.PerHit);
+                int value = defenseEffect.Value + (modifier?.DefenseDelta ?? 0);
+                if (value < 0) value = 0;
+                return new DefenseCommand(value, defenseEffect.PerHit);
             }
 
             if (effect is HealEffect healEffect)

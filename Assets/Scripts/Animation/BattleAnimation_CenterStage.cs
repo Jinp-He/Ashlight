@@ -1,37 +1,29 @@
 using UnityEngine;
 using Spine.Unity;
-using UnityEngine.UI;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using DG.Tweening;
 using Ashlight.Battle.Core.Data;
-using Ashlight.Config;
-using Ashlight.Common.Utils;
 using Scripts.UI;
-using cfg.Enemy;
 
 /// <summary>
-/// 【备份版本】中央舞台式战斗演出动画组件
-/// 四步动画序列：准备 -> 入场 -> 战斗 -> 退场
-/// 会将攻击者与目标抽离到屏幕中央播放，原版本备份，未挂载到任何 GameObject。
-/// 当前主用版本是 BattleAnimation（原地播放）。如需切回此方案，把组件换成本类即可。
+/// 中央舞台式战斗演出动画组件。
+/// 不生成副本、不隐藏原单位，而是把"施法者"和"目标"两个真实单位 Tween 到屏幕中央对峙，
+/// 播放 attack/shouji 后再 Tween 回各自原位。其它单位不受影响。
+/// 普通（迅捷）打牌仍走原地播放版 <see cref="BattleAnimation"/>。
 /// </summary>
-public class BattleAnimation_CenterStage : MonoBehaviour
+public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
 {
     #region 序列化字段
 
-    [Header("位置设置")]
-    [Tooltip("角色（玩家）生成位置")]
+    // 以下三个字段为旧"抽离副本"方案遗留，现方案（移动真实单位）已不再使用，
+    // 保留以避免破坏场景里已有的序列化引用。
+    [Header("旧方案遗留字段（现已不使用）")]
     public RectTransform CharacterPosition;
-
-    [Tooltip("敌人生成位置")]
     public RectTransform EnemyPosition;
-
-    [Header("预制体")]
-    [Tooltip("SkeletonGraphic预制体")]
     public SkeletonGraphic skeletonGraphicPrefab;
 
+    [Header("预制体")]
     [Tooltip("伤害数字预制体（包含TextMeshProUGUI组件，如果为空则使用动态创建）")]
     public GameObject damageTextPrefab;
 
@@ -39,22 +31,21 @@ public class BattleAnimation_CenterStage : MonoBehaviour
 
     #region 私有字段
 
-    private RectTransform _rectTransform;
     private Canvas _canvas;
-    private List<SkeletonGraphic> _spawnedSkeletons = new List<SkeletonGraphic>();
 
-    // 动画参数
-    private const float MOVE_DURATION = .3f;       // 移动时间
-    private const float BATTLE_DURATION = 1.2f;    // 战斗动画时间
-    private const float FADEOUT_DURATION = .3f;   // 淡出时间
-    private const float INTERMITTENT_DURATION = 2f;   // 中间时间
+    private const float MOVE_DURATION = 0.3f;     // 入场（移动到中央）时间
+    private const float BATTLE_DURATION = 0.9f;   // 中央对峙演出时间
+    private const float RETURN_DURATION = 0.3f;   // 退场（移回原位）时间
+    private const float CENTER_GAP = 420f;        // 中央对峙时两个单位的间距（Canvas 本地单位）
+    private const float INERTIA_DISTANCE = 18f;   // 攻击瞬间施法者朝目标的冲刺距离
+    private const float DAMAGE_FLOAT_DURATION = 0.6f;
+
     #endregion
 
     #region Unity生命周期
 
     private void Awake()
     {
-        _rectTransform = GetComponent<RectTransform>();
         _canvas = GetComponentInParent<Canvas>();
     }
 
@@ -63,16 +54,15 @@ public class BattleAnimation_CenterStage : MonoBehaviour
     #region 公共方法
 
     /// <summary>
-    /// 获取动画总演出时间（用于解算时等待）
-    /// 包含：移动时间 + 战斗时间 + 淡出时间
+    /// 获取动画总演出时间（用于解算时等待）。
     /// </summary>
     public static float GetTotalAnimationDuration()
     {
-        return MOVE_DURATION + BATTLE_DURATION + FADEOUT_DURATION;
+        return MOVE_DURATION + BATTLE_DURATION + RETURN_DURATION;
     }
 
     /// <summary>
-    /// 播放战斗演出动画
+    /// 播放中央舞台战斗演出。
     /// </summary>
     public IEnumerator PlayBattleAnimation(
         UnitState casterState,
@@ -83,152 +73,173 @@ public class BattleAnimation_CenterStage : MonoBehaviour
         int damage = 0,
         Action onHit = null)
     {
-        if (casterState == null || targetState == null)
+        if (casterState == null || targetState == null || casterUI == null || targetUI == null)
         {
+            onHit?.Invoke();
             yield break;
         }
 
-        bool isEnemyAttack = !casterState.IsPlayerUnit;
+        RectTransform casterRect = casterUI.transform as RectTransform;
+        RectTransform targetRect = targetUI.transform as RectTransform;
+        if (casterRect == null || targetRect == null)
+        {
+            onHit?.Invoke();
+            yield break;
+        }
 
-        yield return StepA_Prepare(casterState, targetState, casterUI, targetUI);
-        yield return StepB_Enter(isEnemyAttack);
-        yield return StepC_Battle(isAttackCard, isEnemyAttack, targetUI, damage, onHit);
-        yield return StepD_Exit(casterUI, targetUI);
+        // 0. 记录原始世界坐标与同级渲染顺序，结束后还原
+        Vector3 casterHome = casterRect.position;
+        Vector3 targetHome = targetRect.position;
+        int casterSibling = casterRect.GetSiblingIndex();
+        int targetSibling = targetRect.GetSiblingIndex();
+
+        // 把两个单位提到各自父级最前，避免被同侧其它单位遮挡
+        casterRect.SetAsLastSibling();
+        targetRect.SetAsLastSibling();
+
+        // 计算中央对峙目标点：玩家恒在左、敌人恒在右，保持朝向一致；Y 保持各自原值
+        Vector3 casterStage = ComputeStagePosition(casterState.IsPlayerUnit, casterHome);
+        Vector3 targetStage = ComputeStagePosition(targetState.IsPlayerUnit, targetHome);
+
+        // 1. 入场：双方滑到中央
+        Tween enterCaster = casterRect.DOMove(casterStage, MOVE_DURATION).SetEase(Ease.OutQuad);
+        targetRect.DOMove(targetStage, MOVE_DURATION).SetEase(Ease.OutQuad);
+        yield return enterCaster.WaitForCompletion();
+
+        // 2. 攻击者播 attack，目标播 shouji
+        PlayCasterAttack(casterUI);
+        PlayTargetHurt(targetUI);
+
+        // 3. 伤害数字
+        if (damage > 0)
+        {
+            Vector3 damagePos = GetUnitTopWorldPosition(targetUI);
+            if (damagePos != Vector3.zero)
+            {
+                ShowDamageNumber(damagePos, damage);
+            }
+        }
+
+        // 4. 受击回调（更新血量等 UI）
+        onHit?.Invoke();
+
+        // 5. 攻击惯性：施法者朝目标方向小幅冲刺
+        float dir = casterState.IsPlayerUnit ? 1f : -1f; // 玩家在左、朝右冲
+        Vector3 lunge = casterStage + new Vector3(INERTIA_DISTANCE * dir, 0f, 0f);
+        casterRect.DOMove(lunge, BATTLE_DURATION).SetEase(Ease.OutQuad);
+
+        yield return new WaitForSeconds(BATTLE_DURATION);
+
+        // 6. 退场：双方滑回原位
+        Tween backCaster = casterRect.DOMove(casterHome, RETURN_DURATION).SetEase(Ease.InOutQuad);
+        targetRect.DOMove(targetHome, RETURN_DURATION).SetEase(Ease.InOutQuad);
+        yield return backCaster.WaitForCompletion();
+
+        // 7. 还原渲染顺序
+        casterRect.SetSiblingIndex(casterSibling);
+        targetRect.SetSiblingIndex(targetSibling);
     }
 
     #endregion
 
-    #region 私有方法 - 动画步骤
+    #region 私有方法 - 位置计算
 
-    private IEnumerator StepA_Prepare(
-        UnitState casterState,
-        UnitState targetState,
-        MonoBehaviour casterUI,
-        MonoBehaviour targetUI)
+    /// <summary>
+    /// 计算单位在中央舞台的世界坐标：X 落在屏幕中央左右（玩家左、敌人右），Y 保持原值。
+    /// </summary>
+    private Vector3 ComputeStagePosition(bool isPlayerUnit, Vector3 home)
     {
-        ClearSpawnedSkeletons();
-
-        SetUnitAlpha(casterUI, 0f);
-        SetUnitAlpha(targetUI, 0f);
-
-        RectTransform casterSpawnPos = casterState.IsPlayerUnit ? CharacterPosition : EnemyPosition;
-        RectTransform targetSpawnPos = targetState.IsPlayerUnit ? CharacterPosition : EnemyPosition;
-
-        SpawnSkeleton(casterState, casterSpawnPos, "Caster_Skeleton");
-        SpawnSkeleton(targetState, targetSpawnPos, "Target_Skeleton");
-
-        yield return null;
-    }
-
-    private IEnumerator StepB_Enter(bool isEnemyAttack)
-    {
-        if (_canvas == null || _rectTransform == null)
+        if (_canvas == null)
         {
-            yield break;
+            return home;
         }
 
-        RectTransform canvasRect = _canvas.GetComponent<RectTransform>();
-        float screenWidth = canvasRect.rect.width;
-
-        float characterX = CharacterPosition.localPosition.x;
-        float enemyX = EnemyPosition.localPosition.x;
-        float centerOffset = (characterX + enemyX) / 2f;
-
-        float startX, targetX;
-
-        if (isEnemyAttack)
+        RectTransform canvasRect = _canvas.transform as RectTransform;
+        if (canvasRect == null)
         {
-            startX = screenWidth / 2f + Mathf.Abs(centerOffset) + GetAnimationWidth() / 2f;
-            targetX = -centerOffset;
+            return home;
+        }
+
+        Vector3 centerWorld = canvasRect.TransformPoint(canvasRect.rect.center);
+        float scale = canvasRect.lossyScale.x;
+        float halfGap = CENTER_GAP * 0.5f * scale;
+
+        float targetX = isPlayerUnit ? centerWorld.x - halfGap : centerWorld.x + halfGap;
+        return new Vector3(targetX, home.y, home.z);
+    }
+
+    #endregion
+
+    #region 私有方法 - 动画驱动
+
+    private void PlayCasterAttack(MonoBehaviour casterUI)
+    {
+        if (casterUI == null) return;
+
+        var character = casterUI as Character;
+        if (character != null)
+        {
+            character.PlayAttackAnimation();
+            return;
+        }
+
+        var enemy = casterUI as Enemy;
+        if (enemy != null)
+        {
+            enemy.PlayAttackAnimation();
+        }
+    }
+
+    private void PlayTargetHurt(MonoBehaviour targetUI)
+    {
+        if (targetUI == null) return;
+
+        var character = targetUI as Character;
+        if (character != null)
+        {
+            character.PlayShoujiAnimation();
+            return;
+        }
+
+        var enemy = targetUI as Enemy;
+        if (enemy != null)
+        {
+            enemy.PlayShoujiAnimation();
+        }
+    }
+
+    /// <summary>
+    /// 取目标 Skeleton 的头顶世界坐标，用于伤害数字定位。
+    /// </summary>
+    private Vector3 GetUnitTopWorldPosition(MonoBehaviour unitUI)
+    {
+        if (unitUI == null) return Vector3.zero;
+
+        SkeletonGraphic skeleton = null;
+        var character = unitUI as Character;
+        if (character != null)
+        {
+            skeleton = character.Skeleton_Unit;
         }
         else
         {
-            startX = -screenWidth / 2f - Mathf.Abs(centerOffset) - GetAnimationWidth() / 2f;
-            targetX = -centerOffset;
-        }
-
-        _rectTransform.anchoredPosition = new Vector2(startX, _rectTransform.anchoredPosition.y);
-
-        yield return _rectTransform
-            .DOAnchorPosX(targetX, MOVE_DURATION)
-            .SetEase(Ease.OutQuad)
-            .WaitForCompletion();
-    }
-
-    private const float INERTIA_DISTANCE = 12f;
-
-    private IEnumerator StepC_Battle(bool isAttackCard, bool isEnemyAttack, MonoBehaviour targetUI, int damage, Action onHit)
-    {
-        SkeletonGraphic casterSkeleton = FindSkeletonByName("Caster_Skeleton");
-        SkeletonGraphic targetSkeleton = FindSkeletonByName("Target_Skeleton");
-
-        if (casterSkeleton != null && casterSkeleton.AnimationState != null)
-        {
-            PlayAnimation(casterSkeleton, "attack1", "施法者");
-        }
-
-        if (targetSkeleton != null && targetSkeleton.AnimationState != null)
-        {
-            PlayAnimation(targetSkeleton, "shouji", "目标");
-        }
-
-        if (damage > 0 && targetSkeleton != null)
-        {
-            Vector3 damagePos = GetSkeletonTopPosition(targetSkeleton);
-            ShowDamageNumber(damagePos, damage);
-        }
-
-        onHit?.Invoke();
-
-        float inertiaDirection = isEnemyAttack ? -1f : 1f;
-        float targetX = _rectTransform.anchoredPosition.x + (INERTIA_DISTANCE * inertiaDirection);
-
-        _rectTransform.DOAnchorPosX(targetX, BATTLE_DURATION).SetEase(Ease.OutQuad);
-
-        yield return new WaitForSeconds(BATTLE_DURATION);
-    }
-
-    private void PlayAnimation(SkeletonGraphic skeleton, string animName, string unitName)
-    {
-        if (skeleton == null || skeleton.AnimationState == null)
-        {
-            return;
-        }
-
-        var skeletonData = skeleton.AnimationState.Data?.SkeletonData;
-        if (skeletonData == null)
-        {
-            return;
-        }
-
-        var targetAnim = skeletonData.FindAnimation(animName);
-        if (targetAnim != null)
-        {
-            bool isZeroFrameAnim = targetAnim.Duration <= 0.001f;
-
-            if (isZeroFrameAnim)
+            var enemy = unitUI as Enemy;
+            if (enemy != null)
             {
-                skeleton.AnimationState.SetAnimation(0, animName, true);
-            }
-            else
-            {
-                skeleton.AnimationState.SetAnimation(0, animName, false);
-                skeleton.AnimationState.AddAnimation(0, "idle", true, 0f);
+                skeleton = enemy.Skeleton_Unit;
             }
         }
-    }
 
-    private Vector3 GetSkeletonTopPosition(SkeletonGraphic skeleton)
-    {
-        if (skeleton == null) return Vector3.zero;
+        if (skeleton == null)
+        {
+            return unitUI.transform.position + new Vector3(0, 200f, 0);
+        }
 
         Vector3 worldPos = skeleton.transform.position;
-
         if (skeleton.Skeleton != null)
         {
             float[] vertexBuffer = null;
             skeleton.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vertexBuffer);
-
             float height = maxY - minY;
             worldPos.y += height * skeleton.transform.lossyScale.y;
         }
@@ -236,157 +247,19 @@ public class BattleAnimation_CenterStage : MonoBehaviour
         {
             worldPos.y += 200f;
         }
-
         return worldPos;
-    }
-
-    private IEnumerator StepD_Exit(MonoBehaviour casterUI, MonoBehaviour targetUI)
-    {
-        foreach (var skeleton in _spawnedSkeletons)
-        {
-            if (skeleton == null) continue;
-
-            Color targetColor = new Color(0, 0, 0, 0);
-
-            DOTween.To(
-                () => skeleton.color,
-                c =>
-                {
-                    skeleton.color = c;
-                    if (skeleton.Skeleton != null)
-                    {
-                        skeleton.Skeleton.R = c.r;
-                        skeleton.Skeleton.G = c.g;
-                        skeleton.Skeleton.B = c.b;
-                        skeleton.Skeleton.A = c.a;
-                    }
-                },
-                targetColor,
-                FADEOUT_DURATION
-            );
-        }
-
-        yield return new WaitForSeconds(FADEOUT_DURATION);
-
-        ClearSpawnedSkeletons();
-
-        SetUnitAlpha(casterUI, 1f);
-        SetUnitAlpha(targetUI, 1f);
-    }
-
-    #endregion
-
-    #region 私有方法 - 辅助
-
-    private SkeletonGraphic SpawnSkeleton(UnitState unitState, RectTransform parentPosition, string skeletonName)
-    {
-        if (skeletonGraphicPrefab == null)
-        {
-            return null;
-        }
-
-        if (parentPosition == null)
-        {
-            return null;
-        }
-
-        SkeletonGraphic skeleton = Instantiate(skeletonGraphicPrefab, parentPosition);
-        skeleton.transform.localPosition = Vector3.zero;
-        skeleton.transform.localScale = Vector3.one;
-        skeleton.gameObject.name = skeletonName;
-
-        string skeletonPath;
-        if (unitState.IsPlayerUnit)
-        {
-            skeletonPath = AssetPath.GetSkeletonAssetPath(unitState.ConfigId);
-        }
-        else
-        {
-            EnemyInfo enemyInfo = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(unitState.ConfigId);
-            string enemyId = enemyInfo?.AlternativePath;
-            skeletonPath = AssetPath.GetEnemySkeletonAssetPath(enemyId);
-        }
-
-        var skeletonData = Resources.Load<SkeletonDataAsset>(skeletonPath);
-        if (skeletonData != null)
-        {
-            skeleton.skeletonDataAsset = skeletonData;
-            skeleton.Initialize(true);
-
-            if (skeleton.AnimationState != null)
-            {
-                skeleton.AnimationState.SetAnimation(0, "idle", true);
-            }
-        }
-
-        _spawnedSkeletons.Add(skeleton);
-        return skeleton;
-    }
-
-    private SkeletonGraphic FindSkeletonByName(string name)
-    {
-        foreach (var skeleton in _spawnedSkeletons)
-        {
-            if (skeleton != null && skeleton.gameObject.name == name)
-            {
-                return skeleton;
-            }
-        }
-        return null;
-    }
-
-    private void ClearSpawnedSkeletons()
-    {
-        foreach (var skeleton in _spawnedSkeletons)
-        {
-            if (skeleton != null)
-            {
-                Destroy(skeleton.gameObject);
-            }
-        }
-        _spawnedSkeletons.Clear();
-    }
-
-    private void SetUnitAlpha(MonoBehaviour unitUI, float alpha)
-    {
-        if (unitUI == null) return;
-
-        Color color = Color.white;
-        color.a = alpha;
-
-        var character = unitUI as Character;
-        if (character != null)
-        {
-            character.SetColor(color);
-            return;
-        }
-
-        var enemy = unitUI as Enemy;
-        if (enemy != null)
-        {
-            enemy.SetColor(color);
-            return;
-        }
-    }
-
-    private float GetAnimationWidth()
-    {
-        if (CharacterPosition == null || EnemyPosition == null)
-            return 0f;
-
-        return Mathf.Abs(EnemyPosition.localPosition.x - CharacterPosition.localPosition.x);
     }
 
     private void ShowDamageNumber(Vector3 targetPosition, int damage)
     {
-        if (damage <= 0)
+        if (damage <= 0 || _canvas == null)
         {
             return;
         }
 
-        GameObject damageTextObj = null;
-        TMPro.TextMeshProUGUI textMesh = null;
-        RectTransform rectTransform = null;
+        GameObject damageTextObj;
+        TMPro.TextMeshProUGUI textMesh;
+        RectTransform rectTransform;
 
         if (damageTextPrefab != null)
         {
@@ -428,13 +301,13 @@ public class BattleAnimation_CenterStage : MonoBehaviour
 
         Sequence damageSequence = DOTween.Sequence();
         damageSequence.Append(
-            rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, 1.0f)
+            rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, DAMAGE_FLOAT_DURATION)
                 .SetEase(Ease.OutQuad)
         );
         if (textMesh != null)
         {
             damageSequence.Join(
-                textMesh.DOFade(0f, 1.0f).SetEase(Ease.InQuad)
+                textMesh.DOFade(0f, DAMAGE_FLOAT_DURATION).SetEase(Ease.InQuad)
             );
         }
         damageSequence.OnComplete(() => Destroy(damageTextObj));

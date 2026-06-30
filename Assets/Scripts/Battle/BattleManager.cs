@@ -84,9 +84,11 @@ namespace Ashlight.Battle
         /// </summary>
         private readonly Dictionary<string, (EnemySkillInfo Skill, string TargetUnitId)> _pendingEnemyIntents
             = new Dictionary<string, (EnemySkillInfo, string)>();
-        private cfg.Character.CardInfo _pendingPlayerExecutionCard;
-        private string _pendingPlayerExecutionTargetUnitId;
-        private string _pendingPlayerExecutionCasterUnitId;
+        /// <summary>
+        /// 玩家挂起的执行牌（按 casterUnitId 分槽，每个角色各自可挂一张执行牌）
+        /// </summary>
+        private readonly Dictionary<string, (cfg.Character.CardInfo Card, string TargetUnitId)> _pendingPlayerExecutions
+            = new Dictionary<string, (cfg.Character.CardInfo, string)>();
 
         // ========== ATB 引擎组件 ==========
 
@@ -135,6 +137,14 @@ namespace Ashlight.Battle
 
         private void Update()
         {
+            // 任何时候、任意伤害来源（直伤/反伤/持续伤害/连锁/Buff 结算等）导致单位死亡，
+            // 都能被检测到：每帧重新评估战斗结束条件，不依赖散落在各 Command 里的 CheckBattleEnd。
+            // 战斗尚未结束时才需要评估；已结束并发过事件后停止，避免无谓开销。
+            if (CurrentState != null && !_battleEndEventRaised)
+            {
+                CurrentState.CheckBattleEnd();
+            }
+
             RaiseBattleEndedIfNeeded();
         }
 
@@ -185,6 +195,9 @@ namespace Ashlight.Battle
 
             // 3. 初始化卡组系统
             InitializeDeckSystem(battleInfo.PlayerCharacters, battleInfo.InitialDrawCount);
+
+            // 3.5 应用已获得的升级效果（贴永久buff / 改单位属性 / 写卡牌修正表）
+            UpgradeEffectApplier.Apply(CurrentState, battleInfo.PlayerCharacters);
 
             // 4. 保存初始快照
             SaveInitialSnapshot();
@@ -518,7 +531,7 @@ namespace Ashlight.Battle
             }
 
             // 发布卡牌执行事件（用于 UI 动画触发）
-            var commands = CardPlayResolver.GenerateCommands(cardInfo);
+            var commands = CardPlayResolver.GenerateCommands(cardInfo, CurrentState?.CardModifiers?.Get(cardInfo.Id));
             bool isAttackCard = commands.Any(c => c is DamageCommand);
             // 执行牌：仅打出时尚未进入“执行动作”阶段，不播放战斗演出（与 Timeline 解算时的演出区分）
             bool skipBattleAnimation = cardInfo.CardType == CardTypeEnum.Execution;
@@ -600,9 +613,9 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            if (HasPendingPlayerExecutionCard())
+            if (HasPendingPlayerExecutionCard(ownerId))
             {
-                Debug.LogWarning($"[BattleManager] 当前已有玩家挂起的执行牌，无法再次挂起: owner={ownerId}");
+                Debug.LogWarning($"[BattleManager] 该角色本回合已挂起一张执行牌，无法再次挂起: owner={ownerId}");
                 return false;
             }
 
@@ -654,9 +667,7 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            _pendingPlayerExecutionCard = cardInfo;
-            _pendingPlayerExecutionTargetUnitId = targetId;
-            _pendingPlayerExecutionCasterUnitId = ownerId;
+            _pendingPlayerExecutions[ownerId] = (cardInfo, targetId);
 
             if (PredictionManager != null)
             {
@@ -668,22 +679,24 @@ namespace Ashlight.Battle
 
         public bool HasPendingPlayerExecutionCard(string unitId = null)
         {
-            if (_pendingPlayerExecutionCard == null || string.IsNullOrEmpty(_pendingPlayerExecutionCasterUnitId))
+            if (string.IsNullOrEmpty(unitId))
             {
-                return false;
+                return _pendingPlayerExecutions.Count > 0;
             }
 
-            return string.IsNullOrEmpty(unitId) || _pendingPlayerExecutionCasterUnitId == unitId;
+            return _pendingPlayerExecutions.ContainsKey(unitId);
         }
 
         public int GetPendingPlayerExecutionCost(string unitId)
         {
-            if (!HasPendingPlayerExecutionCard(unitId))
+            if (!string.IsNullOrEmpty(unitId)
+                && _pendingPlayerExecutions.TryGetValue(unitId, out var pending)
+                && pending.Card != null)
             {
-                return 1;
+                return Mathf.Max(1, pending.Card.ExecutingCost);
             }
 
-            return Mathf.Max(1, _pendingPlayerExecutionCard.ExecutingCost);
+            return 1;
         }
 
         /// <summary>
@@ -1024,31 +1037,36 @@ namespace Ashlight.Battle
         /// </summary>
         public bool ExecutePendingPlayerCardAfterExecutionTrack(string unitId)
         {
-            if (CurrentState == null || string.IsNullOrEmpty(unitId))
+            if (string.IsNullOrEmpty(unitId))
             {
-                ClearPendingPlayerExecution();
                 return false;
             }
 
-            if (_pendingPlayerExecutionCasterUnitId != unitId || _pendingPlayerExecutionCard == null)
+            if (CurrentState == null)
             {
-                ClearPendingPlayerExecution();
+                ClearPendingPlayerExecution(unitId);
+                return false;
+            }
+
+            if (!_pendingPlayerExecutions.TryGetValue(unitId, out var pending) || pending.Card == null)
+            {
+                ClearPendingPlayerExecution(unitId);
                 return false;
             }
 
             var owner = CurrentState.GetUnitById(unitId);
-            var target = CurrentState.GetUnitById(_pendingPlayerExecutionTargetUnitId);
+            var target = CurrentState.GetUnitById(pending.TargetUnitId);
             if (owner == null || owner.IsDead || target == null || target.IsDead)
             {
-                ClearPendingPlayerExecution();
+                ClearPendingPlayerExecution(unitId);
                 return false;
             }
 
-            var card = _pendingPlayerExecutionCard;
-            string targetId = _pendingPlayerExecutionTargetUnitId;
-            ClearPendingPlayerExecution();
+            var card = pending.Card;
+            string targetId = pending.TargetUnitId;
+            ClearPendingPlayerExecution(unitId);
 
-            var commands = CardPlayResolver.GenerateCommands(card);
+            var commands = CardPlayResolver.GenerateCommands(card, CurrentState?.CardModifiers?.Get(card.Id));
             bool isAttackCard = commands.Any(c => c is DamageCommand);
             GameEvent.Publish(new CardExecutedEvent
             {
@@ -1057,7 +1075,8 @@ namespace Ashlight.Battle
                 CardId = card.Id,
                 IsAttackCard = isAttackCard,
                 IsPrediction = false,
-                SkipBattleAnimation = false
+                SkipBattleAnimation = false,
+                UseCenterStage = true // 玩家执行牌结算：中央舞台演出
             });
 
             bool success = CardPlayResolver.PlayCard(CurrentState, card, owner.UnitId, targetId);
@@ -1095,14 +1114,13 @@ namespace Ashlight.Battle
 
         private void ClearPendingPlayerExecution(string unitId = null)
         {
-            if (!string.IsNullOrEmpty(unitId) && _pendingPlayerExecutionCasterUnitId != unitId)
+            if (string.IsNullOrEmpty(unitId))
             {
+                _pendingPlayerExecutions.Clear();
                 return;
             }
 
-            _pendingPlayerExecutionCard = null;
-            _pendingPlayerExecutionTargetUnitId = null;
-            _pendingPlayerExecutionCasterUnitId = null;
+            _pendingPlayerExecutions.Remove(unitId);
         }
 
         private bool TryPickEnemySkillAndTarget(UnitState enemyUnit, out EnemySkillInfo selectedSkill, out UnitState target)
@@ -1206,7 +1224,8 @@ namespace Ashlight.Battle
                 TargetId = target.UnitId,
                 CardId = selectedSkill.Id,
                 IsAttackCard = isAttackSkill,
-                IsPrediction = false
+                IsPrediction = false,
+                UseCenterStage = true // 敌人技能执行：中央舞台演出
             });
 
             enemyUnit.CurrentEnergy -= skillEnergyCost;

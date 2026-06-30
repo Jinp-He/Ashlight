@@ -1,0 +1,63 @@
+[
+  {
+    "Id": "UP_Rocket_001",
+    "Name": "强化爆破",
+    "BelongTo": 1,
+    "Description": "「爆破」造成的伤害 +5",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket001",
+        "stat": "Damage",
+        "delta": 5
+      }
+    ]
+  },
+  {
+    "Id": "UP_Rocket_002",
+    "Name": "连锁爆破",
+    "BelongTo": 1,
+    "Description": "「爆破」改为对全体敌人造成伤害",
+    "Rarity": 1,
+    "Prerequisite": "UP_Rocket_001",
+    "Effects": [
+      {
+        "$type": "ModifyCardFlag",
+        "selector": "Rocket001",
+        "flag": "IsAoe",
+        "value": true
+      }
+    ]
+  },
+  {
+    "Id": "UP_Irene_001",
+    "Name": "凝神",
+    "BelongTo": 0,
+    "Description": "战斗开始时获得 2 点力量",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "GrantBuff",
+        "buff_id": "Strength",
+        "stack": 2,
+        "target": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Zhouzhou_001",
+    "Name": "坚守",
+    "BelongTo": 2,
+    "Description": "最大生命 +8",
+    "Rarity": 2,
+    "Effects": [
+      {
+        "$type": "ModifyUnitStat",
+        "stat": "MaxHp",
+        "delta": 8,
+        "target": 2
+      }
+    ]
+  }
+]

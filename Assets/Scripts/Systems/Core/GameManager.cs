@@ -33,6 +33,20 @@ namespace Ashlight.Systems.Core
         }
 
         /// <summary>
+        /// 确保存在 GameManager 实例（用于直接启动 BattleScene 等无引导场景的开发测试）。
+        /// 已存在则直接返回；否则即时创建并完成初始化（加载配置/存档、初始化角色状态）。
+        /// </summary>
+        public static GameManager EnsureInstance()
+        {
+            if (Instance == null)
+            {
+                var go = new GameObject("GameManager (Auto)");
+                go.AddComponent<GameManager>(); // Awake -> Initialize
+            }
+            return Instance;
+        }
+
+        /// <summary>
         /// 初始化游戏
         /// </summary>
         private void Initialize()
@@ -44,11 +58,16 @@ namespace Ashlight.Systems.Core
             bool isNewSave = !SaveManager.HasSave();
             CurrentSave = SaveManager.LoadOrCreateNew();
 
-            // 3. 如果是新存档，初始化角色数据
+            // 3. 如果是新存档，初始化角色数据；否则对账补齐角色表里新增的角色
             if (isNewSave || CurrentSave.Characters == null || CurrentSave.Characters.Count == 0)
             {
                 CharacterSystem.InitializeCharacters(unlockFirst: true);
                 Debug.Log("[GameManager] 新存档：已初始化角色数据");
+            }
+            else
+            {
+                int added = CharacterSystem.ReconcileCharacters();
+                if (added > 0) Debug.Log($"[GameManager] 旧存档对账：补齐 {added} 个新角色");
             }
 
             // 4. 初始化各系统

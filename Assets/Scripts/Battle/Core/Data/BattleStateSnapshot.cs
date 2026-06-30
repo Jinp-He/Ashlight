@@ -68,6 +68,11 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public bool IsGlobalPaused { get; set; }
 
+        /// <summary>
+        /// 卡牌修正表（升级系统在战斗开始时填充，按 CardId 叠加伤害/护甲/AOE 等）
+        /// </summary>
+        public CardModifierRegistry CardModifiers { get; set; }
+
         public BattleStateSnapshot()
         {
             PlayerUnits = new List<UnitState>();
@@ -81,6 +86,7 @@ namespace Ashlight.Battle.Core.Data
             CurrentTurnUnitId = null;
             TurnCount = 0;
             IsGlobalPaused = false;
+            CardModifiers = new CardModifierRegistry();
         }
 
         /// <summary>
@@ -131,13 +137,24 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public void CheckBattleEnd()
         {
-            bool allPlayersDead = PlayerUnits.All(u => u.IsDead);
-            bool allEnemiesDead = EnemyUnits.All(u => u.IsDead);
+            // 注意：List.All() 对空列表返回 true。若某一方单位列表为空（异常初始化），
+            // 不能据此判定团灭，否则会在战斗一开始就误判结束。
+            bool allPlayersDead = PlayerUnits.Count > 0 && PlayerUnits.All(u => u.IsDead);
+            bool allEnemiesDead = EnemyUnits.Count > 0 && EnemyUnits.All(u => u.IsDead);
 
             if (allPlayersDead || allEnemiesDead)
             {
+                bool wasEnded = IsBattleEnded;
                 IsBattleEnded = true;
                 IsPlayerVictory = allEnemiesDead && !allPlayersDead;
+
+                if (!wasEnded)
+                {
+                    UnityEngine.Debug.Log(
+                        $"[BattleEnd] 检测到战斗结束：allPlayersDead={allPlayersDead}, allEnemiesDead={allEnemiesDead}, " +
+                        $"玩家胜利={IsPlayerVictory} | 玩家存活 {PlayerUnits.Count(u => !u.IsDead)}/{PlayerUnits.Count}, " +
+                        $"敌人存活 {EnemyUnits.Count(u => !u.IsDead)}/{EnemyUnits.Count}");
+                }
             }
         }
 
@@ -188,6 +205,12 @@ namespace Ashlight.Battle.Core.Data
             if (this.DeckSystem != null)
             {
                 clone.DeckSystem = this.DeckSystem.Clone();
+            }
+
+            // 深拷贝卡牌修正表
+            if (this.CardModifiers != null)
+            {
+                clone.CardModifiers = this.CardModifiers.Clone();
             }
 
             return clone;

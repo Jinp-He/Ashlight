@@ -27,7 +27,30 @@
       "Bash(git checkout *)",
       "Bash(git merge *)",
       "Bash(git push *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git rm *)",
+      "Bash(cmd.exe /c gen.bat)",
+      "Bash(echo \"EXIT=$?\")",
+      "PowerShell(Set-Location F:\\\\Ashlight\\\\DataTables; & dotnet \"F:\\\\Ashlight\\\\Tools\\\\Luban\\\\Luban.dll\" -t all -d json -c cs-simple-json --conf \"F:\\\\Ashlight\\\\DataTables\\\\luban.conf\" -x outputCodeDir=F:/Ashlight/Assets/Gen -x outputDataDir=F:/Ashlight/Assets/Resources/Config; \"EXIT=$LASTEXITCODE\")",
+      "Bash(cd /f/Ashlight && grep -oE \"Tb[A-Za-z]+\" Assets/Gen/Tables.cs | sort -u; echo \"--- enemy folder ---\"; ls DataTables/Datas/Enemy)",
+      "Bash(cd /f/Ashlight && echo \"=== how Effects string is parsed ===\" && grep -rln \"Effects\" Assets/Scripts --include=*.cs | head; echo; echo \"=== Effect bean / EffectType usage ===\" && grep -rln \"EffectEnum\\\\|AttackEffect\\\\|EffectType\\\\|ParseEffect\\\\|EffectParser\\\\|EffectExecutor\\\\|IEffect\\\\b\" Assets/Scripts --include=*.cs | head -30)",
+      "Bash(echo \"regen done EXIT=$?\")",
+      "Bash(cd /F/Ashlight && find . -type f -name \"*.cs\" | head -20)",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight' -Recurse -Filter 'DataTables' -Directory\")",
+      "Bash(python3)",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight' -Recurse -Filter '*.bat' | Select-Object -First 20\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\DataTables' -Recurse | Sort-Object FullName\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\Assets\\\\Gen' -ErrorAction SilentlyContinue | Select-Object -First 20\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\Assets\\\\Gen\\\\Character' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-Content -Path 'F:\\\\Ashlight\\\\DataTables\\\\Defines\\\\defines.xml' | Measure-Object -Line\")",
+      "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe' --headless --convert-to csv --outdir 'F:\\\\Ashlight\\\\DataTables' 'F:\\\\Ashlight\\\\DataTables\\\\Datas\\\\__tables__.xlsx' 2>&1 | head -20\")",
+      "Bash(powershell -Command \"Get-Content 'F:\\\\Ashlight\\\\DataTables\\\\Defines\\\\defines.xml'\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\Assets' -Recurse -Filter 'Tables.cs' | Select-Object -First 3\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\Assets\\\\Gen\\\\Enemy' | Select-Object Name\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\DataTables\\\\output' -Filter '*buff*' -o Name\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\DataTables' -Recurse -Filter '*.md' -o Name 2>/dev/null\")",
+      "Bash(powershell -Command \"ls 'F:\\\\Ashlight\\\\DataTables\\\\output' | Where-Object Name -like '*buff*'\")",
+      "Bash(powershell -Command \"ls 'F:\\\\Ashlight\\\\DataTables\\\\output' | grep -i buff\")"
     ]
   }
 }

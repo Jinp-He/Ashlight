@@ -95,6 +95,10 @@ namespace Scripts.UI
         [Tooltip("战斗胜利弹窗（由用户在场景内手搭，挂 VictoryPanel 脚本后拖进来）")]
         private VictoryPanel victoryPanel;
 
+        [SerializeField]
+        [Tooltip("胜利面板 WinPanel（场景内 WinPanel 实例拖进来）。若已绑定则优先于 victoryPanel")]
+        private WinPanel winPanel;
+
         #endregion
 
         #region 私有字段
@@ -261,6 +265,7 @@ namespace Scripts.UI
             {
                 ATB.OnPlanningComplete -= HandleAtbPlanningComplete;
                 ATB.OnExecutionComplete -= HandleAtbExecutionComplete;
+                ATB.OnIconRemoved -= OnAtbIconRemoved;
             }
 
             // 移除按钮监听
@@ -314,10 +319,26 @@ namespace Scripts.UI
             // 创建玩家和敌人的UI
             CreateBattleUnits();
 
+            // 新战斗开始：复位升级流程相关 UI（隐藏经验条、恢复手牌区、收起升级面板）
+            ResetUpgradeUIForNewBattle();
+
             // 初始化ATB图标（按单位速度决定初始位置）
             if (ATB != null && _battleManager != null && _battleManager.CurrentState != null)
             {
                 ATB.InitializeByUnits(_battleManager.CurrentState.PlayerUnits, _battleManager.CurrentState.EnemyUnits);
+
+                // 【死亡保护】注入死亡判定，使 ATB 推进队列时能跳过/移除死亡单位的图标，
+                // 避免单位死亡后图标残留导致 TriggerNextUnit 反复触发死亡单位回合卡死。
+                ATB.IsUnitDeadPredicate = id =>
+                {
+                    var u = _battleManager?.CurrentState?.GetUnitById(id);
+                    return u == null || u.IsDead;
+                };
+
+                // ATB 图标被移除时，同步移除行动顺序视图（卡牌区域）中对应的卡片，
+                // 保证死亡单位的卡片不会残留在卡牌区域。
+                ATB.OnIconRemoved -= OnAtbIconRemoved;
+                ATB.OnIconRemoved += OnAtbIconRemoved;
 
                 // 初始化行动顺序视图（需在 TriggerNextUnit 之前，确保卡片已创建好）
                 if (TurnOrderView != null)
@@ -389,6 +410,14 @@ namespace Scripts.UI
         private void InitializeBattleWithTestData()
         {
             Debug.Log("[UI_BattleScene] 使用测试数据初始化战斗");
+
+            // 测试期：仅在「本次 PlayMode 首次进入战斗」时把角色重建为 Lv1 + BaseDeck，
+            // 同一次运行内的后续战斗沿用（经验/卡组累积），下次 PlayMode 再重置。
+            // 判定：GameManager 是 DontDestroyOnLoad，跨场景重载存活，本次为空=本次运行首次。
+            bool firstBattleThisSession = GameManager.Instance == null;
+            GameManager.EnsureInstance();
+            if (firstBattleThisSession)
+                Ashlight.Systems.Character.CharacterSystem.InitializeCharacters(unlockFirst: true);
 
             // 创建测试用的角色列表（包含Rocket、Irene、Zhouzhou）
             var testCharacters = new List<CharacterEnum>
@@ -627,6 +656,49 @@ namespace Scripts.UI
                     enemy.UpdateFromUnitState();
                 }
             }
+
+            // 单位死亡后，立即把它从卡牌区域（行动顺序视图）与 ATB 队列移除，避免残留。
+            RemoveDeadUnitsFromTurnViews();
+        }
+
+        /// <summary>
+        /// 扫描当前战场，移除所有死亡单位在 ATB 队列与行动顺序视图（卡牌区域）中的残留。
+        /// 由 UpdateAllUnitsDisplay 在每次状态变化后调用，保证死亡单位的卡片即时消失。
+        /// </summary>
+        private void RemoveDeadUnitsFromTurnViews()
+        {
+            var state = _battleManager?.CurrentState;
+            if (state == null) return;
+
+            RemoveDeadUnitsFrom(state.PlayerUnits);
+            RemoveDeadUnitsFrom(state.EnemyUnits);
+        }
+
+        private void RemoveDeadUnitsFrom(IReadOnlyList<UnitState> units)
+        {
+            if (units == null) return;
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                var u = units[i];
+                if (u == null || !u.IsDead) continue;
+
+                // RemoveUnitIcon 会触发 OnIconRemoved → OnAtbIconRemoved，同步移除卡片；
+                // 两个方法都对不存在的 unitId 静默无操作，可安全重复调用。
+                ATB?.RemoveUnitIcon(u.UnitId);
+                TurnOrderView?.RemoveUnit(u.UnitId);
+
+                // 移除该单位残留在敌人共享时间轴上的时间槽卡牌（仅敌人会有）。
+                _enemyTimeline?.RemoveEnemyTimeSlotsByOwner(u.UnitId);
+            }
+        }
+
+        /// <summary>
+        /// ATB 图标被移除时的回调：同步移除行动顺序视图中的对应卡片。
+        /// </summary>
+        private void OnAtbIconRemoved(string unitId)
+        {
+            TurnOrderView?.RemoveUnit(unitId);
         }
 
         /// <summary>
@@ -1434,6 +1506,21 @@ namespace Scripts.UI
                 return;
             }
 
+            // 【死亡/结束保护】战斗已结束，或该单位已死亡：不再开启回合，移除其残留图标。
+            if (_battleManager.CurrentState.IsBattleEnded)
+            {
+                Debug.Log($"[UI_BattleScene] 规划完成时战斗已结束，跳过单位回合: {unitId}");
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+                return;
+            }
+            var planningUnit = _battleManager.CurrentState.GetUnitById(unitId);
+            if (planningUnit == null || planningUnit.IsDead)
+            {
+                Debug.Log($"[UI_BattleScene] 规划完成时单位已死亡，移除其ATB图标: {unitId}");
+                ATB?.RemoveUnitIcon(unitId);
+                return;
+            }
+
             // 高亮当前行动单位
             TurnOrderView?.SetActiveUnit(unitId);
 
@@ -1554,6 +1641,25 @@ namespace Scripts.UI
 
             if (_battleManager == null || _battleManager.CurrentState == null)
             {
+                return;
+            }
+
+            // 【死亡/结束保护】战斗已结束：停止自动推进，等待结算弹窗。
+            if (_battleManager.CurrentState.IsBattleEnded)
+            {
+                Debug.Log($"[UI_BattleScene] 执行结算时战斗已结束，停止推进: {unitId}");
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+                _enemiesInExecutionTrack.Remove(unitId);
+                return;
+            }
+
+            // 【死亡保护】执行单位已死亡（如其意图结算前被反伤/连锁打死）：移除其图标，不结算。
+            var execUnit = _battleManager.CurrentState.GetUnitById(unitId);
+            if (execUnit == null || execUnit.IsDead)
+            {
+                Debug.Log($"[UI_BattleScene] 执行结算时单位已死亡，移除其ATB图标: {unitId}");
+                _enemiesInExecutionTrack.Remove(unitId);
+                ATB?.RemoveUnitIcon(unitId);
                 return;
             }
 
@@ -1902,53 +2008,184 @@ namespace Scripts.UI
         {
             Debug.Log($"[UI_BattleScene] 收到战斗结束事件，玩家胜利: {evt.IsPlayerVictory}");
 
-            // 暂停 ATB（冻结规划轨/执行轨），避免关闭弹窗前继续推进
-            if (ATB != null)
+            // 【关键】先弹结算面板，且每个步骤独立 try/catch：
+            // 之前任一前置步骤（暂停 ATB / 停止预测）抛异常都会挡住 WinPanel，导致只看到“收到战斗结束事件”。
+            // 把面板放最前面并隔离异常，确保面板一定会尝试弹出；异常也会被完整打印出来定位。
+            try
             {
-                ATB.Pause();
-                // 【回合制】中止 TriggerNextUnit 的自动连续推进：
-                // 结算中途打死单位触发战斗结束时，循环不应再触发后续回合。
-                ATB.AutoAdvanceSuspended = true;
+                if (evt.IsPlayerVictory)
+                {
+                    HandleVictory();
+                }
+                else
+                {
+                    HandleDefeat();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 处理胜负面板时异常（这就是没弹 WinPanel 的原因）: {e}");
+            }
+
+            // 暂停 ATB（冻结规划轨/执行轨），避免关闭弹窗前继续推进
+            try
+            {
+                if (ATB != null)
+                {
+                    ATB.Pause();
+                    // 【回合制】中止 TriggerNextUnit 的自动连续推进：
+                    // 结算中途打死单位触发战斗结束时，循环不应再触发后续回合。
+                    ATB.AutoAdvanceSuspended = true;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 暂停 ATB 时异常: {e}");
             }
 
             // 停止血量预测显示
-            if (_battleManager?.PredictionManager != null)
+            try
             {
-                _battleManager.PredictionManager.StopPrediction();
+                if (_battleManager?.PredictionManager != null)
+                {
+                    _battleManager.PredictionManager.StopPrediction();
+                }
             }
-
-            if (evt.IsPlayerVictory)
+            catch (System.Exception e)
             {
-                HandleVictory();
-            }
-            else
-            {
-                HandleDefeat();
+                Debug.LogError($"[UI_BattleScene] 停止血量预测时异常: {e}");
             }
         }
 
         /// <summary>
-        /// 胜利分支：测试模式按序列自动跳下一关；非测试模式或序列耗尽则走 VictoryPanel
+        /// 胜利分支：【WinPanel 优先】胜利一律尝试弹出结算面板，由玩家点击「继续」进下一关；
+        /// 仅当场景内/Resources 都找不到任何结算面板时，才退回测试自动跳关逻辑。
         /// </summary>
         private void HandleVictory()
         {
-            string nextEncounterId = GetNextEncounterId(_currentEncounterId);
+            // 新流程：先移除所有敌人 -> 玩家点选一名角色（indicator 指示）-> 弹 ChoosePanel 三选一升级 -> 再走原结算面板。
+            // 具体实现见 UI_BattleScene.UpgradeFlow.cs。
+            StartVictoryUpgradeFlow();
+        }
 
-            if (testAutoAdvance && !string.IsNullOrEmpty(nextEncounterId))
+        /// <summary>
+        /// 显示胜利结算面板（原 HandleVictory 逻辑）：WinPanel 优先，其次 VictoryPanel，最后退回测试自动跳关。
+        /// 由升级三选一流程结束（或无可选升级/无法点选）后调用。
+        /// </summary>
+        private void ShowVictorySettlementPanel()
+        {
+            // WinPanel 优先：自动解析引用（Inspector 未绑定也能复用场景实例或从 Resources 实例化）
+            var panel = ResolveWinPanel();
+            if (panel != null)
             {
-                Debug.Log($"[UI_BattleScene] 胜利，自动跳关：{_currentEncounterId} -> {nextEncounterId}（延迟 {testAutoAdvanceDelay}s）");
-                ScheduleSceneReload(nextEncounterId, testAutoAdvanceDelay);
+                Debug.Log("[UI_BattleScene] 胜利，弹出 WinPanel");
+                panel.Show();
                 return;
             }
 
             if (victoryPanel != null)
             {
+                Debug.Log("[UI_BattleScene] 胜利，弹出 VictoryPanel（无 WinPanel）");
                 victoryPanel.Show(true);
+                return;
+            }
+
+            // 没有任何结算面板可用：退回测试自动跳关
+            string nextEncounterId = GetNextEncounterId(_currentEncounterId);
+            if (testAutoAdvance && !string.IsNullOrEmpty(nextEncounterId))
+            {
+                Debug.Log($"[UI_BattleScene] 无结算面板，自动跳关：{_currentEncounterId} -> {nextEncounterId}（延迟 {testAutoAdvanceDelay}s）");
+                ScheduleSceneReload(nextEncounterId, testAutoAdvanceDelay);
+                return;
+            }
+
+            Debug.LogWarning("[UI_BattleScene] WinPanel/VictoryPanel 均不可用，且未启用自动跳关；战斗已结束停在原场景");
+        }
+
+        /// <summary>
+        /// 解析胜利面板引用，保证 HandleVictory 一定能拿到可用面板：
+        ///   1. Inspector 已绑定 → 直接用；
+        ///   2. 场景内查找（含未激活实例）→ 复用并缓存；
+        ///   3. 从 Resources 实例化 WinPanel 预制体作为兜底。
+        /// </summary>
+        private WinPanel ResolveWinPanel()
+        {
+            if (winPanel != null)
+                return EnsurePanelUnderCanvas(winPanel);
+
+            // 场景里通常已有一个未激活的 WinPanel 实例（prefab 实例），直接复用
+            winPanel = FindObjectOfType<WinPanel>(true);
+            if (winPanel != null)
+            {
+                Debug.Log("[UI_BattleScene] winPanel 未在 Inspector 绑定，已自动复用场景内 WinPanel 实例");
+                return EnsurePanelUnderCanvas(winPanel);
+            }
+
+            // 兜底：从 Resources 实例化（路径对应 Assets/Resources/UI/BattleScene/WinPanel.prefab）
+            var prefab = Resources.Load<GameObject>("UI/BattleScene/WinPanel");
+            if (prefab != null)
+            {
+                Transform parent = FindBattleCanvas()?.transform;
+                GameObject go = parent != null ? Instantiate(prefab, parent, false) : Instantiate(prefab);
+                go.SetActive(false); // 由 WinPanel.Show() 负责激活并播放演出
+                winPanel = go.GetComponent<WinPanel>();
+                Debug.Log($"[UI_BattleScene] 场景内无 WinPanel，已从 Resources 实例化 WinPanel 预制体 (parent={(parent != null ? parent.name : "无Canvas")})");
+                return EnsurePanelUnderCanvas(winPanel);
+            }
+
+            Debug.LogError("[UI_BattleScene] 无法解析 WinPanel：Inspector 未绑定、场景内无实例、且 Resources(UI/BattleScene/WinPanel) 加载失败");
+            return null;
+        }
+
+        /// <summary>
+        /// 确保 WinPanel 挂在某个 Canvas 下，否则它不会被渲染（UI 元素必须在 Canvas 子树里）。
+        /// 若当前没有 Canvas 祖先，则重挂到战斗场景的 Canvas，并置于最上层。
+        /// </summary>
+        private WinPanel EnsurePanelUnderCanvas(WinPanel panel)
+        {
+            if (panel == null) return null;
+
+            if (panel.GetComponentInParent<Canvas>() != null)
+            {
+                panel.transform.SetAsLastSibling(); // 已在 Canvas 下，仅确保渲染在最上层
+                return panel;
+            }
+
+            var canvas = FindBattleCanvas();
+            if (canvas != null)
+            {
+                panel.transform.SetParent(canvas.transform, false);
+                panel.transform.SetAsLastSibling();
+                // 锚定铺满父级，避免预制体自带的局部坐标把它推到屏幕外
+                var rt = panel.transform as RectTransform;
+                if (rt != null)
+                {
+                    rt.anchorMin = Vector2.zero;
+                    rt.anchorMax = Vector2.one;
+                    rt.offsetMin = Vector2.zero;
+                    rt.offsetMax = Vector2.zero;
+                }
+                Debug.Log($"[UI_BattleScene] WinPanel 原本不在 Canvas 下，已重挂到 Canvas: {canvas.name}");
             }
             else
             {
-                Debug.LogWarning("[UI_BattleScene] VictoryPanel 未绑定，且未启用自动跳关；战斗已结束停在原场景");
+                Debug.LogError("[UI_BattleScene] 找不到任何 Canvas，WinPanel 无法显示！请确认战斗场景里有 Canvas。");
             }
+            return panel;
+        }
+
+        /// <summary>
+        /// 查找战斗场景的 Canvas：UI_BattleScene 本体可能不在 Canvas 下，
+        /// 因此优先借用已知 UI 元素（CardContainer / PlayerPosition）的 Canvas，兜底取场景内任意 Canvas。
+        /// </summary>
+        private Canvas FindBattleCanvas()
+        {
+            Canvas c = null;
+            if (CardContainer != null) c = CardContainer.GetComponentInParent<Canvas>();
+            if (c == null && PlayerPosition != null) c = PlayerPosition.GetComponentInParent<Canvas>();
+            if (c == null) c = GetComponentInParent<Canvas>();
+            if (c == null) c = FindObjectOfType<Canvas>();
+            return c;
         }
 
         /// <summary>

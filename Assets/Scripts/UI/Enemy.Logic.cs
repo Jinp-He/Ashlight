@@ -105,6 +105,7 @@ namespace Scripts.UI
             LoadSkeletonAnimation();
             UpdateDisplay();
             SetIntentionThinking();
+            RebuildHitArea();
 
             Debug.Log($"[Enemy] 初始化完成: {enemyInfo.Name}");
         }
@@ -770,6 +771,149 @@ namespace Scripts.UI
                 rt.anchoredPosition.x - centerX * scaleX,
                 rt.anchoredPosition.y);
         }
+
+        #region 点击命中区 (HitArea)
+
+        [Header("点击命中区")]
+        [Tooltip("命中区最大尺寸(像素)。防止超大图的透明边缘遮挡相邻敌人——宽度务必小于敌人间距(默认 200)")]
+        [SerializeField] private Vector2 _hitAreaMaxSize = new Vector2(180f, 320f);
+        [Tooltip("命中区最小尺寸，保证小体型敌人也点得到")]
+        [SerializeField] private Vector2 _hitAreaMinSize = new Vector2(110f, 160f);
+        [Tooltip("命中区底部相对视觉脚底的竖直偏移(正数上移)")]
+        [SerializeField] private float _hitAreaBottomOffsetY = 0f;
+        [Tooltip("调试：把命中区染成半透明红色以便观察")]
+        [SerializeField] private bool _hitAreaDebugVisible = false;
+
+        private RectTransform _hitArea;
+        private Image _hitAreaImage;
+        private const string HitAreaNodeName = "HitArea";
+
+        /// <summary>
+        /// 关掉大图视觉(Image/Skeleton/Indicator)的射线命中，改用一个尺寸受控的透明 HitArea
+        /// 作为本敌人的唯一可点击区域。解决"占比过大的图，其透明矩形包围盒遮挡相邻敌人导致点不中"。
+        /// HitArea 是 Enemy 子节点，TargetSelectionManager 的 GetComponentInParent&lt;Enemy&gt;() 会自动归属到本敌人。
+        /// </summary>
+        private void RebuildHitArea()
+        {
+            // 1) 关闭视觉自身的射线命中，避免大包围盒(含透明边缘)挡住别人
+            if (EnemyImage != null) EnemyImage.raycastTarget = false;
+            if (Skeleton_Unit != null) Skeleton_Unit.raycastTarget = false;
+            if (Indicator != null)
+            {
+                var indImg = Indicator.GetComponent<Image>();
+                if (indImg != null) indImg.raycastTarget = false;
+            }
+
+            // 2) 计算当前视觉的可见包围盒(已换算到根节点本地坐标)
+            Rect visual = CalcVisualBounds();
+
+            // 3) clamp 到受控尺寸，宽度不超过敌人间距，避免命中区互相重叠
+            float w = Mathf.Clamp(visual.width, _hitAreaMinSize.x, _hitAreaMaxSize.x);
+            float h = Mathf.Clamp(visual.height, _hitAreaMinSize.y, _hitAreaMaxSize.y);
+
+            float centerX = visual.center.x;
+            float bottomY = visual.yMin + _hitAreaBottomOffsetY; // 贴脚底
+            float centerY = bottomY + h * 0.5f;
+
+            EnsureHitAreaNode();
+            _hitArea.sizeDelta = new Vector2(w, h);
+            _hitArea.localPosition = new Vector3(centerX, centerY, 0f);
+
+            if (_hitAreaImage != null)
+            {
+                _hitAreaImage.color = _hitAreaDebugVisible
+                    ? new Color(1f, 0f, 0f, 0.25f)
+                    : new Color(0f, 0f, 0f, 0f);
+            }
+        }
+
+        /// <summary>
+        /// 复用或创建 HitArea 子节点(透明、可命中射线)。运行时创建，匹配敌人动态生成。
+        /// </summary>
+        private void EnsureHitAreaNode()
+        {
+            if (_hitArea == null)
+            {
+                var existing = transform.Find(HitAreaNodeName) as RectTransform;
+                if (existing != null)
+                {
+                    _hitArea = existing;
+                    _hitAreaImage = existing.GetComponent<Image>();
+                }
+                else
+                {
+                    var go = new GameObject(HitAreaNodeName, typeof(RectTransform), typeof(Image));
+                    _hitArea = go.GetComponent<RectTransform>();
+                    _hitArea.SetParent(transform, false);
+                    _hitAreaImage = go.GetComponent<Image>();
+                }
+            }
+
+            // anchorMin==anchorMax 时 sizeDelta 即真实尺寸；位置统一用 localPosition 设定
+            _hitArea.anchorMin = _hitArea.anchorMax = _hitArea.pivot = new Vector2(0.5f, 0.5f);
+
+            if (_hitAreaImage != null)
+            {
+                _hitAreaImage.sprite = null;
+                _hitAreaImage.raycastTarget = true; // 透明 Image 依然命中射线(UGUI 默认不按 alpha 剔除)
+                _hitAreaImage.color = new Color(0f, 0f, 0f, 0f);
+            }
+
+            // 置于最上层，保证在本敌人内部优先命中
+            _hitArea.SetAsLastSibling();
+        }
+
+        /// <summary>
+        /// 计算当前视觉(静态图或骨骼)的可见包围盒，换算到根节点本地坐标系。
+        /// 用世界角点 + InverseTransformPoint，规避各视觉 pivot/scale 差异。
+        /// </summary>
+        private Rect CalcVisualBounds()
+        {
+            var root = transform as RectTransform;
+
+            if (_isStaticSprite && EnemyImage != null && EnemyImage.gameObject.activeInHierarchy)
+            {
+                var corners = new Vector3[4];
+                EnemyImage.rectTransform.GetWorldCorners(corners);
+                return WorldCornersToLocalRect(root, corners);
+            }
+
+            if (Skeleton_Unit != null && Skeleton_Unit.gameObject.activeInHierarchy && Skeleton_Unit.Skeleton != null)
+            {
+                Skeleton_Unit.Skeleton.UpdateWorldTransform();
+                float[] vb = null;
+                Skeleton_Unit.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vb);
+                if (maxX > minX)
+                {
+                    var srt = Skeleton_Unit.rectTransform;
+                    var corners = new Vector3[4];
+                    corners[0] = srt.TransformPoint(new Vector3(minX, minY, 0f));
+                    corners[1] = srt.TransformPoint(new Vector3(minX, maxY, 0f));
+                    corners[2] = srt.TransformPoint(new Vector3(maxX, maxY, 0f));
+                    corners[3] = srt.TransformPoint(new Vector3(maxX, minY, 0f));
+                    return WorldCornersToLocalRect(root, corners);
+                }
+            }
+
+            // 兜底：无视觉时给个最小框，脚底起算
+            return Rect.MinMaxRect(-_hitAreaMinSize.x * 0.5f, 0f, _hitAreaMinSize.x * 0.5f, _hitAreaMinSize.y);
+        }
+
+        private static Rect WorldCornersToLocalRect(RectTransform root, Vector3[] worldCorners)
+        {
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            foreach (var wc in worldCorners)
+            {
+                Vector3 l = root.InverseTransformPoint(wc);
+                if (l.x < minX) minX = l.x;
+                if (l.x > maxX) maxX = l.x;
+                if (l.y < minY) minY = l.y;
+                if (l.y > maxY) maxY = l.y;
+            }
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+
+        #endregion
 
         /// <summary>
         /// 更新显示

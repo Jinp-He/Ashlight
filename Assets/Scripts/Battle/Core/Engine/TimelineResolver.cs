@@ -358,7 +358,8 @@ namespace Ashlight.Battle.Core.Engine
                         TargetId = block.TargetId,
                         CardId = block.SourceCardId,
                         IsAttackCard = isAttackCard,
-                        IsPrediction = state.IsPrediction
+                        IsPrediction = state.IsPrediction,
+                        UseCenterStage = true // 时间轴解算（执行牌/敌人技能）：中央舞台演出
                     });
 
                     // 标记等待动画（放到执行指令之后等待）

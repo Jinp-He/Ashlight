@@ -11,7 +11,7 @@ using Scripts.UI;
 /// 不再把双方抽离到屏幕中央，直接在各自当前位置播放 attack/shouji 动画。
 /// 旧版"中央舞台"流程参见 BattleAnimation_CenterStage。
 /// </summary>
-public class BattleAnimation : MonoBehaviour
+public class BattleAnimation : MonoBehaviour, IBattleAnimationPlayer
 {
     #region 序列化字段
 

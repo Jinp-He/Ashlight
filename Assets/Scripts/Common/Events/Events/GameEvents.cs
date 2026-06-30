@@ -165,6 +165,12 @@ namespace Ashlight.Common.Events
         /// 为 true 时不播放战斗演出（例如 ATB 下打出执行牌仅宣告出牌，效果在执行轨再结算）
         /// </summary>
         public bool SkipBattleAnimation;
+
+        /// <summary>
+        /// 为 true 时使用"中央舞台"演出（双方抽离到屏幕中央播放），否则使用原地播放。
+        /// 玩家执行牌结算、敌人技能执行时为 true；迅捷牌等普通打牌保持原地。
+        /// </summary>
+        public bool UseCenterStage;
     }
 
     /// <summary>

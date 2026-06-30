@@ -170,10 +170,27 @@ namespace Scripts.UI
                 yield break;
             }
 
-            var battleAnimComponent = _battleAnimationRect.GetComponent<BattleAnimation>();
+            // 根据事件标志选择演出方式：
+            //   UseCenterStage=true  -> 中央舞台版（玩家执行牌、敌人技能）
+            //   UseCenterStage=false -> 原地播放版（迅捷牌等普通打牌）
+            IBattleAnimationPlayer battleAnimComponent = null;
+            if (evt.UseCenterStage)
+            {
+                battleAnimComponent = _battleAnimationRect.GetComponent<BattleAnimation_CenterStage>();
+                if (battleAnimComponent == null)
+                {
+                    Debug.LogWarning("[BattleAnimationHandler] 未挂载 BattleAnimation_CenterStage，回退到原地播放版");
+                }
+            }
+
             if (battleAnimComponent == null)
             {
-                Debug.LogError("[BattleAnimationHandler] BattleAnimation组件未找到");
+                battleAnimComponent = _battleAnimationRect.GetComponent<BattleAnimation>();
+            }
+
+            if (battleAnimComponent == null)
+            {
+                Debug.LogError("[BattleAnimationHandler] 未找到任何 BattleAnimation 组件");
                 SignalAnimationComplete();
                 yield break;
             }
