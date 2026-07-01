@@ -3,7 +3,7 @@
     "Id": "Enemy001",
     "Name": "小兵",
     "AlternativePath": "DogKnight",
-    "Hp": 100,
+    "Hp": 10,
     "Speed": 5,
     "IntentionSet": [
       {
@@ -21,7 +21,7 @@
     "Id": "Enemy002",
     "Name": "小兵2",
     "AlternativePath": "Mafe",
-    "Hp": 70,
+    "Hp": 10,
     "Speed": 5,
     "IntentionSet": [
       {
@@ -39,7 +39,7 @@
     "Id": "Enemy003",
     "Name": "重装步兵",
     "AlternativePath": "DogKnight",
-    "Hp": 140,
+    "Hp": 10,
     "Speed": 4,
     "IntentionSet": [
       {
@@ -75,7 +75,7 @@
     "Id": "Enemy004",
     "Name": "冰焰法师",
     "AlternativePath": "Wangg",
-    "Hp": 65,
+    "Hp": 10,
     "Speed": 5,
     "IntentionSet": [
       {
@@ -111,7 +111,7 @@
     "Id": "Enemy005",
     "Name": "急袭兵",
     "AlternativePath": "Remy",
-    "Hp": 55,
+    "Hp": 10,
     "Speed": 7,
     "IntentionSet": [
       {

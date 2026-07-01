@@ -23,8 +23,8 @@ public partial class Tables
     public Character.TbUpgradeOptions TbUpgradeOptions {get; }
     public Character.TbCharacterExp TbCharacterExp {get; }
     public Enemy.TbEncounter TbEncounter {get; }
-    public Enemy.TbEnemyInfo TbEnemyInfo {get; }
     public Enemy.TbEnemySkillInfo TbEnemySkillInfo {get; }
+    public Enemy.TbEnemyInfo TbEnemyInfo {get; }
 
     public Tables(System.Func<string, JSONNode> loader)
     {
@@ -37,8 +37,8 @@ public partial class Tables
         TbUpgradeOptions = new Character.TbUpgradeOptions(loader("character_tbupgradeoptions"));
         TbCharacterExp = new Character.TbCharacterExp(loader("character_tbcharacterexp"));
         TbEncounter = new Enemy.TbEncounter(loader("enemy_tbencounter"));
-        TbEnemyInfo = new Enemy.TbEnemyInfo(loader("enemy_tbenemyinfo"));
         TbEnemySkillInfo = new Enemy.TbEnemySkillInfo(loader("enemy_tbenemyskillinfo"));
+        TbEnemyInfo = new Enemy.TbEnemyInfo(loader("enemy_tbenemyinfo"));
         ResolveRef();
     }
     
@@ -53,8 +53,8 @@ public partial class Tables
         TbUpgradeOptions.ResolveRef(this);
         TbCharacterExp.ResolveRef(this);
         TbEncounter.ResolveRef(this);
-        TbEnemyInfo.ResolveRef(this);
         TbEnemySkillInfo.ResolveRef(this);
+        TbEnemyInfo.ResolveRef(this);
     }
 }
 
