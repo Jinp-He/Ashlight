@@ -29,6 +29,8 @@ public sealed partial class CardInfo : Luban.BeanBase
         { if(!_buf["IsLocked"].IsBoolean) { throw new SerializationException(); }  IsLocked = _buf["IsLocked"]; }
         { if(!_buf["Energy"].IsNumber) { throw new SerializationException(); }  Energy = _buf["Energy"]; }
         { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
+        { if(!_buf["IsEthereal"].IsBoolean) { throw new SerializationException(); }  IsEthereal = _buf["IsEthereal"]; }
+        { if(!_buf["IsExhaust"].IsBoolean) { throw new SerializationException(); }  IsExhaust = _buf["IsExhaust"]; }
     }
 
     public static CardInfo DeserializeCardInfo(JSONNode _buf)
@@ -48,6 +50,8 @@ public sealed partial class CardInfo : Luban.BeanBase
     public readonly bool IsLocked;
     public readonly int Energy;
     public readonly int ExecutingCost;
+    public readonly bool IsEthereal;
+    public readonly bool IsExhaust;
    
     public const int __ID__ = 804331843;
     public override int GetTypeId() => __ID__;
@@ -72,6 +76,8 @@ public sealed partial class CardInfo : Luban.BeanBase
         + "IsLocked:" + IsLocked + ","
         + "Energy:" + Energy + ","
         + "ExecutingCost:" + ExecutingCost + ","
+        + "IsEthereal:" + IsEthereal + ","
+        + "IsExhaust:" + IsExhaust + ","
         + "}";
     }
 }

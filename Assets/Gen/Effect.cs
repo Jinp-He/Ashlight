@@ -27,6 +27,7 @@ public abstract partial class Effect : Luban.BeanBase
             case "AttackEffect": return new AttackEffect(_buf);
             case "AttackExtraEffect": return new AttackExtraEffect(_buf);
             case "AttackConditionalEffect": return new AttackConditionalEffect(_buf);
+            case "DefenseConditionalEffect": return new DefenseConditionalEffect(_buf);
             case "DefenseEffect": return new DefenseEffect(_buf);
             case "InterceptEffect": return new InterceptEffect(_buf);
             case "HealEffect": return new HealEffect(_buf);
@@ -35,6 +36,8 @@ public abstract partial class Effect : Luban.BeanBase
             case "TimeShiftAllEffect": return new TimeShiftAllEffect(_buf);
             case "CollisionEffect": return new CollisionEffect(_buf);
             case "SwiftEffect": return new SwiftEffect(_buf);
+            case "MovePositionEffect": return new MovePositionEffect(_buf);
+            case "AddToHandEffect": return new AddToHandEffect(_buf);
             case "ChannelEffect": return new ChannelEffect(_buf);
             case "TauntEffect": return new TauntEffect(_buf);
             case "BuffEffect": return new BuffEffect(_buf);

@@ -12,7 +12,8 @@
       }
     ],
     "ExecutingCost": 2,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 0
   },
   {
     "Id": "ES002",
@@ -27,7 +28,8 @@
       }
     ],
     "ExecutingCost": 3,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 1
   },
   {
     "Id": "ES003",
@@ -42,7 +44,8 @@
       }
     ],
     "ExecutingCost": 8,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 0
   },
   {
     "Id": "ES004",
@@ -57,7 +60,8 @@
       }
     ],
     "ExecutingCost": 5,
-    "TargetType": 4
+    "TargetType": 4,
+    "TargetZone": 2
   },
   {
     "Id": "ES005",
@@ -78,7 +82,8 @@
       }
     ],
     "ExecutingCost": 2,
-    "TargetType": 2
+    "TargetType": 2,
+    "TargetZone": 2
   },
   {
     "Id": "ES006",
@@ -93,7 +98,8 @@
       }
     ],
     "ExecutingCost": 1,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 0
   },
   {
     "Id": "ES007",
@@ -114,7 +120,8 @@
       }
     ],
     "ExecutingCost": 3,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 1
   },
   {
     "Id": "ES008",
@@ -135,7 +142,8 @@
       }
     ],
     "ExecutingCost": 10,
-    "TargetType": 4
+    "TargetType": 4,
+    "TargetZone": 2
   },
   {
     "Id": "ES009",
@@ -150,7 +158,8 @@
       }
     ],
     "ExecutingCost": 3,
-    "TargetType": 2
+    "TargetType": 2,
+    "TargetZone": 2
   },
   {
     "Id": "ES010",
@@ -165,6 +174,83 @@
       }
     ],
     "ExecutingCost": 3,
-    "TargetType": 3
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES011",
+    "Name": "重拳",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES012",
+    "Name": "横扫",
+    "Description": "对所有目标造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": true
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 4,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES013",
+    "Name": "战争咆哮",
+    "Description": "获得{V}层力量与{D}点护甲",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Strength",
+        "value": 3
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 15,
+        "per_hit": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 2,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ES014",
+    "Name": "湮灭一击",
+    "Description": "蓄力轰击，造成{A}点毁灭伤害；引导期间受到{V}点伤害即被打断",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 80,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 40
+      }
+    ],
+    "ExecutingCost": 8,
+    "TargetType": 3,
+    "TargetZone": 1
   }
 ]

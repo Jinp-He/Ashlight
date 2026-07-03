@@ -202,6 +202,9 @@ namespace Scripts.UI
             // 订阅战斗结束事件
             GameEvent.Subscribe<BattleEndedEvent>(OnBattleEnded);
 
+            // 订阅换位事件（MovePosition 效果驱动角色交换 sibling 顺序）
+            GameEvent.Subscribe<PositionSwappedEvent>(OnPositionSwapped);
+
             if (ATB != null)
             {
                 ATB.OnPlanningComplete += HandleAtbPlanningComplete;
@@ -260,6 +263,7 @@ namespace Scripts.UI
             GameEvent.Unsubscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Unsubscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
             GameEvent.Unsubscribe<BattleEndedEvent>(OnBattleEnded);
+            GameEvent.Unsubscribe<PositionSwappedEvent>(OnPositionSwapped);
 
             if (ATB != null)
             {
@@ -480,14 +484,15 @@ namespace Scripts.UI
                     continue;
                 }
 
-                var cardView = _cardPoolManager.GetCard(cardState.InstanceId);
+                // 运行时产出的卡（如 AddToHand 生成的飞刀）不在初始池中，GetOrCreateCard 会按需补建 UI
+                var cardView = _cardPoolManager.GetOrCreateCard(cardState);
                 if (cardView != null)
                 {
                     _cardPoolManager.MoveToHand(cardView);
                 }
                 else
                 {
-                    Debug.LogWarning($"[UI_BattleScene] 池中未找到卡牌: {cardState.InstanceId} (CardId: {cardState.CardId})");
+                    Debug.LogWarning($"[UI_BattleScene] 无法获取/创建卡牌 UI: {cardState.InstanceId} (CardId: {cardState.CardId})");
                 }
             }
 
@@ -570,6 +575,37 @@ namespace Scripts.UI
                 _unitUIManager.RegisterCharacter(character);
                 Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId})");
             }
+        }
+
+        /// <summary>
+        /// 换位事件处理：交换两名角色在 HorizontalLayoutGroup 里的 sibling 顺序，由 layout 完成实际重排。
+        /// 逻辑层已交换好二者的 RowPosition（唯一真相源），这里只做视觉呈现。
+        /// 注意：HorizontalLayoutGroup 默认瞬间重排；如需缓动要另做（临时脱离 layout 再 tween）。
+        /// </summary>
+        private void OnPositionSwapped(PositionSwappedEvent e)
+        {
+            if (e.IsPrediction) return; // 预解算不移动
+
+            var a = _unitUIManager?.FindCharacter(e.UnitIdA);
+            var b = _unitUIManager?.FindCharacter(e.UnitIdB);
+            if (a == null || b == null) return;
+
+            var ta = a.transform;
+            var tb = b.transform;
+            int siA = ta.GetSiblingIndex();
+            int siB = tb.GetSiblingIndex();
+            if (siA == siB) return;
+
+            // 交换两个 sibling 槽位：先把靠后的挪到靠前的位置，再把原靠前的挪到靠后位置，
+            // 避免连续 SetSiblingIndex 时索引偏移导致错位。
+            int lower = Mathf.Min(siA, siB);
+            int higher = Mathf.Max(siA, siB);
+            Transform tLower = siA < siB ? ta : tb;
+            Transform tHigher = siA < siB ? tb : ta;
+            tHigher.SetSiblingIndex(lower);
+            tLower.SetSiblingIndex(higher);
+
+            Debug.Log($"[UI_BattleScene] 换位 {e.UnitIdA}(#{siA}) <-> {e.UnitIdB}(#{siB})");
         }
 
         /// <summary>
@@ -1041,6 +1077,56 @@ namespace Scripts.UI
             // 出牌后能量减少，剩余手牌可能转为能量不足 —— 立即刷新变色
             RefreshHandEnergyAffordability();
             Debug.Log($"[UI_BattleScene] 立即出牌后移入弃牌堆: {card.GetCurrentCard()?.Name}");
+        }
+
+        /// <summary>
+        /// 从数据层补齐手牌 UI：为 DeckSystem.Hand 中尚未显示的卡牌（如打牌时 AddToHand 产出的 token）创建/取出 UI 并移入手牌。
+        /// 增量式，不销毁现有手牌 view；出牌后产出卡牌时调用。
+        /// </summary>
+        public void RefreshHandFromData()
+        {
+            if (_battleManager?.CurrentState?.DeckSystem == null)
+            {
+                return;
+            }
+
+            var handData = _battleManager.CurrentState.DeckSystem.Hand;
+            if (handData == null)
+            {
+                return;
+            }
+
+            var shownInstanceIds = new HashSet<string>();
+            foreach (var view in _cardPoolManager.HandCards)
+            {
+                if (view != null)
+                {
+                    shownInstanceIds.Add(view.InstanceId);
+                }
+            }
+
+            bool added = false;
+            foreach (var cardState in handData)
+            {
+                if (cardState == null || shownInstanceIds.Contains(cardState.InstanceId))
+                {
+                    continue;
+                }
+
+                var cardView = _cardPoolManager.GetOrCreateCard(cardState);
+                if (cardView != null)
+                {
+                    _cardPoolManager.MoveToHand(cardView);
+                    added = true;
+                    Debug.Log($"[UI_BattleScene] 补齐产出卡牌到手牌: {cardState.CardId} ({cardState.InstanceId})");
+                }
+            }
+
+            if (added)
+            {
+                UpdateHandLayout();
+                RefreshHandEnergyAffordability();
+            }
         }
 
         /// <summary>
@@ -1591,7 +1677,7 @@ namespace Scripts.UI
                         // 不调用 Resume/TriggerNextUnit：当前在 TriggerNextUnit 循环内，
                         // 单位已转入执行轨，循环会自动继续；轮到它时触发 OnExecutionComplete 结算。
                         ATB.MoveToExecutingTrack(unitId, executingCost);
-                        TurnOrderView?.SetExecuting(unitId, true);
+                        TurnOrderView?.SetExecuting(unitId, true, preparedSkill);
                     }
                 }
             }
@@ -2008,6 +2094,17 @@ namespace Scripts.UI
         {
             Debug.Log($"[UI_BattleScene] 收到战斗结束事件，玩家胜利: {evt.IsPlayerVictory}");
 
+            // 战斗结束：清除所有单位残留的 buff/debuff（数据层清空 + 刷新图标），
+            // 否则战斗中的增益/减益会残留在胜利结算/升级界面的角色身上（以及同场景复用未重载时的下一场）。
+            try
+            {
+                ClearAllUnitBuffs();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 清除战斗结束 buff/debuff 时异常: {e}");
+            }
+
             // 【关键】先弹结算面板，且每个步骤独立 try/catch：
             // 之前任一前置步骤（暂停 ATB / 停止预测）抛异常都会挡住 WinPanel，导致只看到“收到战斗结束事件”。
             // 把面板放最前面并隔离异常，确保面板一定会尝试弹出；异常也会被完整打印出来定位。
@@ -2055,6 +2152,28 @@ namespace Scripts.UI
             {
                 Debug.LogError($"[UI_BattleScene] 停止血量预测时异常: {e}");
             }
+        }
+
+        /// <summary>
+        /// 战斗结束时清空所有单位（玩家 + 敌人）的 buff/debuff 数据，并刷新显示让图标立即消失。
+        /// 单一入口在 OnBattleEnded 调用，胜负两条分支都会经过，保证结算/升级界面上不再残留战斗中的增益减益。
+        /// </summary>
+        private void ClearAllUnitBuffs()
+        {
+            var state = _battleManager?.CurrentState;
+            if (state == null) return;
+
+            if (state.PlayerUnits != null)
+            {
+                foreach (var u in state.PlayerUnits) u?.Buffs?.Clear();
+            }
+            if (state.EnemyUnits != null)
+            {
+                foreach (var u in state.EnemyUnits) u?.Buffs?.Clear();
+            }
+
+            // 刷新 UI，被清空的 buff 图标随之移除
+            UpdateAllUnitsDisplay();
         }
 
         /// <summary>

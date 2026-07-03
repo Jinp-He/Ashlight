@@ -214,4 +214,24 @@ namespace Ashlight.Common.Events
         /// </summary>
         public bool IsPlayerVictory;
     }
+
+    /// <summary>
+    /// 换位事件
+    /// 当 MovePositionCommand 让施法者和一名友方交换前/后排时发布，用于驱动 UI 交换二者的
+    /// sibling 顺序（由 HorizontalLayoutGroup 完成实际重排）。
+    /// 逻辑层（阵营列表顺序，索引 0 = 前排）是唯一真相源，UI 收到事件后只做视觉交换。
+    /// </summary>
+    public struct PositionSwappedEvent
+    {
+        /// <summary>
+        /// 交换双方的单位ID（A 通常是施法者）
+        /// </summary>
+        public string UnitIdA;
+        public string UnitIdB;
+
+        /// <summary>
+        /// 是否为预解算模式（预解算时不实际移动角色）
+        /// </summary>
+        public bool IsPrediction;
+    }
 }

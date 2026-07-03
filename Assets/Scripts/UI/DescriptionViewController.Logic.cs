@@ -21,7 +21,15 @@ namespace Scripts.UI
         {
             // 调用自动生成的UI绑定初始化方法
             InitUIBindings();
-            
+
+            // tooltip 是纯展示面板，绝不能拦截指针射线：它显示在鼠标附近时若拦射线，会盖住触发它的
+            // 元素（敌人意图 / 行动顺序卡 / 手牌），导致对方 PointerExit→隐藏→鼠标回到元素→PointerEnter→
+            // 再显示的反复闪烁。用显式判空而非 ?? （Unity 的 GetComponent 不存在时返回“伪 null”，?? 不认）。
+            var cg = GetComponent<CanvasGroup>();
+            if (cg == null) cg = gameObject.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+
             // 默认隐藏
             gameObject.SetActive(false);
         }

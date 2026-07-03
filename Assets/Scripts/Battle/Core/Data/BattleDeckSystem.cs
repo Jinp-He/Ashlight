@@ -402,6 +402,26 @@ namespace Ashlight.Battle.Core.Data
             return true;
         }
 
+        /// <summary>
+        /// [一次性]：卡牌配置带 IsExhaust 时，使用后自毁（进入 RemovedPile，不入弃牌堆）。
+        /// </summary>
+        private bool IsExhaustCard(CardRuntimeState card)
+        {
+            if (card == null) return false;
+            var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(card.CardId);
+            return info != null && info.IsExhaust;
+        }
+
+        /// <summary>
+        /// [虚无]：卡牌配置带 IsEthereal 时，回合结束弃手牌时自毁（进入 RemovedPile，不入弃牌堆）。
+        /// </summary>
+        private bool IsEtherealCard(CardRuntimeState card)
+        {
+            if (card == null) return false;
+            var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(card.CardId);
+            return info != null && info.IsEthereal;
+        }
+
         public bool UseCard(CardRuntimeState card, bool isExhaust = false)
         {
             if (card == null)
@@ -418,7 +438,7 @@ namespace Ashlight.Battle.Core.Data
 
             Hand.Remove(card);
 
-            if (isExhaust)
+            if (isExhaust || IsExhaustCard(card))
             {
                 RemovedPile.Add(card);
             }
@@ -460,6 +480,28 @@ namespace Ashlight.Battle.Core.Data
             }
 
             return UseCard(card, isExhaust);
+        }
+
+        public int AddCardToHand(string cardId, int count)
+        {
+            if (string.IsNullOrEmpty(cardId) || count <= 0)
+            {
+                return 0;
+            }
+
+            if (ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(cardId) == null)
+            {
+                Debug.LogWarning($"[BattleDeckSystem] AddCardToHand failed, unknown CardId={cardId}");
+                return 0;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                Hand.Add(CardRuntimeState.CreateDefault(cardId));
+            }
+
+            Debug.Log($"[BattleDeckSystem] AddCardToHand: {cardId} x{count}, hand={Hand.Count}");
+            return count;
         }
 
         public bool PlayCardToTimeline(CardRuntimeState card)
@@ -517,7 +559,7 @@ namespace Ashlight.Battle.Core.Data
 
             InPlayPile.Remove(card);
 
-            if (isExhaust)
+            if (isExhaust || IsExhaustCard(card))
             {
                 RemovedPile.Add(card);
             }
@@ -548,7 +590,7 @@ namespace Ashlight.Battle.Core.Data
 
             InPlayPile.Remove(card);
 
-            if (isExhaust)
+            if (isExhaust || IsExhaustCard(card))
             {
                 RemovedPile.Add(card);
             }
@@ -586,8 +628,17 @@ namespace Ashlight.Battle.Core.Data
         public void DiscardAllHand()
         {
             int count = Hand.Count;
+            int etherealCount = 0;
             foreach (var card in Hand.ToList())
             {
+                // [虚无]：回合结束自毁，进入 RemovedPile，不入弃牌堆
+                if (IsEtherealCard(card))
+                {
+                    RemovedPile.Add(card);
+                    etherealCount++;
+                    continue;
+                }
+
                 var split = GetSplitForDiscard(card);
                 if (split != null)
                 {
@@ -600,7 +651,7 @@ namespace Ashlight.Battle.Core.Data
             }
 
             Hand.Clear();
-            Debug.Log($"[BattleDeckSystem] 弃掉所有手牌: {count} 张");
+            Debug.Log($"[BattleDeckSystem] 弃掉所有手牌: {count} 张（其中 [虚无] 自毁 {etherealCount} 张）");
         }
 
         /// <summary>

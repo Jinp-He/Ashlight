@@ -15,6 +15,10 @@ namespace Scripts.UI
         private List<Character> _allPlayerCharacters = new List<Character>();
         private List<Enemy> _allEnemies = new List<Enemy>();
 
+        // 战斗场景引用：名单的权威来源。缓存的名单可能在初始化过早时为空/过期，
+        // 因此改为按需从场景重新拉取（见 RefreshRosterFromScene）。
+        private UI_BattleScene _battleScene;
+
         /// <summary>
         /// 初始化管理器
         /// </summary>
@@ -25,7 +29,25 @@ namespace Scripts.UI
             _allPlayerCharacters = playerCharacters ?? new List<Character>();
             _allEnemies = enemies ?? new List<Enemy>();
 
+            if (_battleScene == null) _battleScene = FindObjectOfType<UI_BattleScene>();
+
             Debug.Log($"[TargetSelectionManager] 初始化完成: {_allPlayerCharacters.Count}个玩家角色, {_allEnemies.Count}个敌人");
+        }
+
+        /// <summary>
+        /// 从战斗场景重新拉取当前角色/敌人名单。
+        /// 解决 InitializeTargetSelection 由第一张卡懒创建、可能早于战斗单位生成而抓到空名单、
+        /// 之后又永不刷新的问题——凡是用到全体名单的地方先刷一次即可。
+        /// </summary>
+        private void RefreshRosterFromScene()
+        {
+            if (_battleScene == null) _battleScene = FindObjectOfType<UI_BattleScene>();
+            if (_battleScene == null) return;
+
+            var players = _battleScene.GetAllPlayerCharacters();
+            var enemies = _battleScene.GetAllEnemies();
+            if (players != null) _allPlayerCharacters = players;
+            if (enemies != null) _allEnemies = enemies;
         }
 
         /// <summary>
@@ -124,6 +146,8 @@ namespace Scripts.UI
         /// <returns>合法的队友列表</returns>
         public List<Character> GetAllValidAllies(CharacterEnum ownerCharacterId)
         {
+            RefreshRosterFromScene(); // 名单按需刷新，避免用到初始化过早留下的空名单
+
             List<Character> validAllies = new List<Character>();
 
             foreach (var character in _allPlayerCharacters)
@@ -149,6 +173,8 @@ namespace Scripts.UI
         /// <returns>合法的敌人列表</returns>
         public List<Enemy> GetAllValidEnemies()
         {
+            RefreshRosterFromScene(); // 名单按需刷新，避免用到初始化过早留下的空名单
+
             List<Enemy> validEnemies = new List<Enemy>();
 
             foreach (var enemy in _allEnemies)

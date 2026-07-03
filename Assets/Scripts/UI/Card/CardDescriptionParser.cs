@@ -58,21 +58,49 @@ namespace Scripts.UI
                 return string.Empty;
             }
 
-            if (string.IsNullOrEmpty(cardInfo.Description))
+            // 获取原始描述
+            string description = cardInfo.Description ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(description))
             {
-                return string.Empty;
+                // 替换 {} 标签（效果数值）
+                description = ReplaceEffectTags(description, cardInfo.Effects, mode);
+
+                // 替换 [] 标签（其他属性）
+                description = ReplaceBracketTags(description, cardInfo);
             }
 
-            // 获取原始描述
-            string description = cardInfo.Description;
-
-            // 替换 {} 标签（效果数值）
-            description = ReplaceEffectTags(description, cardInfo.Effects, mode);
-
-            // 替换 [] 标签（其他属性）
-            description = ReplaceBracketTags(description, cardInfo);
+            // 追加关键词标签（[一次性]/[虚无]），复用绿色 + 悬停词条渲染
+            description = AppendKeywordTags(description, cardInfo);
 
             return description;
+        }
+
+        /// <summary>
+        /// 根据卡牌标记追加关键词标签（[一次性]/[虚无]）。
+        /// 若描述里已手写该关键词则不重复追加。
+        /// </summary>
+        private static string AppendKeywordTags(string text, CardInfo cardInfo)
+        {
+            var tags = new List<string>();
+
+            if (cardInfo.IsExhaust && (string.IsNullOrEmpty(text) || !text.Contains("一次性")))
+            {
+                tags.Add(WrapWithColorAndLink("一次性", "一次性", TagColor));
+            }
+
+            if (cardInfo.IsEthereal && (string.IsNullOrEmpty(text) || !text.Contains("虚无")))
+            {
+                tags.Add(WrapWithColorAndLink("虚无", "虚无", TagColor));
+            }
+
+            if (tags.Count == 0)
+            {
+                return text ?? string.Empty;
+            }
+
+            string keywordLine = string.Join(" ", tags);
+            return string.IsNullOrEmpty(text) ? keywordLine : text + "\n" + keywordLine;
         }
 
         #endregion

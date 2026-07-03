@@ -123,10 +123,20 @@ namespace Ashlight.Battle.Core.Engine
                 return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe);
             }
 
+            if (effect is AttackConditionalEffect attackConditionalEffect)
+            {
+                return new AttackConditionalCommand(attackConditionalEffect.BonusDamage, attackConditionalEffect.ConditionType);
+            }
+
             // DefenseEffect -> DefenseCommand
             if (effect is DefenseEffect defenseEffect)
             {
                 return new DefenseCommand(defenseEffect.Value, defenseEffect.PerHit);
+            }
+
+            if (effect is DefenseConditionalEffect defenseConditionalEffect)
+            {
+                return new DefenseConditionalCommand(defenseConditionalEffect.Value, defenseConditionalEffect.ConditionType);
             }
 
             // HealEffect -> HealCommand
@@ -151,6 +161,16 @@ namespace Ashlight.Battle.Core.Engine
             if (effect is BuffEffect buffEffect)
             {
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
+            }
+
+            if (effect is MovePositionEffect movePositionEffect)
+            {
+                return new MovePositionCommand(movePositionEffect.Mode);
+            }
+
+            if (effect is AddToHandEffect addToHandEffect)
+            {
+                return new AddToHandCommand(addToHandEffect.CardId, addToHandEffect.Count);
             }
 
             // 其他Effect暂不处理

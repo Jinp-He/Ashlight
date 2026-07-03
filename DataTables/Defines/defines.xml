@@ -21,6 +21,11 @@
         <var name="condition_type" type="string" comment="触发条件，如 'IsAttacking'"/>
     </bean>
 
+    <bean name="DefenseConditionalEffect" parent="Effect">
+        <var name="value" type="int" comment="条件护甲数值 {D}"/>
+        <var name="condition_type" type="string" comment="触发条件，如 'SelfInFrontRow'"/>
+    </bean>
+
 
     <bean name="DefenseEffect" parent="Effect">
         <var name="value" type="int" comment="护甲数值 {D}"/>
@@ -55,6 +60,15 @@
 
     <bean name="SwiftEffect" parent="Effect">
         </bean>
+
+    <bean name="MovePositionEffect" parent="Effect">
+        <var name="mode" type="string" comment="位置变化模式，如 Toggle/FrontRow/BackRow"/>
+    </bean>
+
+    <bean name="AddToHandEffect" parent="Effect">
+        <var name="card_id" type="string" comment="加入手牌的卡牌Id"/>
+        <var name="count" type="int" comment="加入张数"/>
+    </bean>
 
     <bean name="ChannelEffect" parent="Effect">
         <var name="duration" type="int" comment="引导持续时间"/>

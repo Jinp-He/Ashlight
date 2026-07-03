@@ -50,7 +50,7 @@ namespace Ashlight.Battle.Core.Commands
             }
 
             // 检查是否满足条件
-            bool conditionMet = CheckCondition(state, target);
+            bool conditionMet = CheckCondition(state, owner, target);
             
             if (!conditionMet)
             {
@@ -79,7 +79,7 @@ namespace Ashlight.Battle.Core.Commands
         /// <summary>
         /// 检查是否满足触发条件
         /// </summary>
-        private bool CheckCondition(BattleStateSnapshot state, UnitState target)
+        private bool CheckCondition(BattleStateSnapshot state, UnitState owner, UnitState target)
         {
             if (string.IsNullOrEmpty(ConditionType))
             {
@@ -120,6 +120,15 @@ namespace Ashlight.Battle.Core.Commands
                     // 目标处于意图轴或执行轴
                     return target.CurrentPhase == EnemyPhase.IntentAxis
                         || target.CurrentPhase == EnemyPhase.ExecuteAxis;
+
+                case "InExecution":
+                    return target.CurrentPhase == EnemyPhase.ExecuteAxis;
+
+                case "SelfInFrontRow":
+                    return owner != null && state.IsFrontRow(owner);
+
+                case "SelfInBackRow":
+                    return owner != null && !state.IsFrontRow(owner);
 
                 case "IsStunned":
                     // 目标处于硬直状态

@@ -226,5 +226,15 @@
     "DefaultDuration": -1,
     "MaxStack": 99,
     "RefreshOnReapply": false
+  },
+  {
+    "Id": "Dodge",
+    "Name": "闪避",
+    "Description": "闪避下一次受到的攻击，剩余 {V} 次",
+    "IconPath": "UI/Buff/Icon_Dodge",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
   }
 ]

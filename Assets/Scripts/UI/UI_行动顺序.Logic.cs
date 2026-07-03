@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using cfg.Enemy;
 
 namespace Scripts.UI
 {
@@ -11,9 +13,15 @@ namespace Scripts.UI
     ///   UnitsPiece      — 角色图片容器
     ///     Img_DogKnight / Img_Irene / Img_Rocket / Img_Zhouzhou / ...
     ///   Img_Attack      — 攻击图标
+    ///
+    /// 敌人进入执行轨后，hover 本卡会弹出「即将执行技能」的说明（复用 DescriptionViewController，与 IntentionView 同款）。
     /// </summary>
-    public partial class UI_行动顺序 : MonoBehaviour
+    public partial class UI_行动顺序 : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
+        // 当前执行技能（仅敌人进入执行轨时有值）；共享 tooltip 由 TurnOrderView 注入
+        private EnemySkillInfo _executingSkill;
+        private DescriptionViewController _tooltip;
+
         #region Unity 生命周期
 
         private void Awake()
@@ -23,6 +31,8 @@ namespace Scripts.UI
             // 初始状态：关闭高亮和攻击图标
             SetHighlight(false);
             SetAttacking(false);
+
+            EnsureRaycastTarget();
         }
 
         #endregion
@@ -77,6 +87,63 @@ namespace Scripts.UI
         {
             if (Img_Attack != null)
                 Img_Attack.gameObject.SetActive(attacking);
+        }
+
+        /// <summary>
+        /// 设置"即将执行技能"与共享 tooltip。skill 为 null 表示清除（退出执行轨），并收起 tooltip。
+        /// </summary>
+        public void SetExecutingSkill(EnemySkillInfo skill, DescriptionViewController tooltip)
+        {
+            _executingSkill = skill;
+            _tooltip = tooltip;
+            if (skill == null && _tooltip != null)
+                _tooltip.Hide();
+        }
+
+        #endregion
+
+        #region Tooltip（悬停显示执行技能说明）
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (_executingSkill == null || _tooltip == null) return;
+            _tooltip.Show(_executingSkill);
+            PositionTooltip(eventData);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (_tooltip != null) _tooltip.Hide();
+        }
+
+        /// <summary>把 tooltip 放到鼠标右侧（复刻 IntentionView 的定位逻辑，兼容 Overlay / Camera 画布）。</summary>
+        private void PositionTooltip(PointerEventData eventData)
+        {
+            if (_tooltip == null) return;
+
+            var canvas = _tooltip.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            var canvasRect = canvas.transform as RectTransform;
+            if (canvasRect == null) return;
+
+            Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null
+                : (eventData != null ? (eventData.pressEventCamera ?? eventData.enterEventCamera) : canvas.worldCamera);
+
+            Vector2 screenPoint = (eventData != null ? eventData.position : (Vector2)Input.mousePosition)
+                                  + new Vector2(120f, 0f);
+
+            if (RectTransformUtility.ScreenPointToWorldPointInRectangle(canvasRect, screenPoint, cam, out var world))
+                _tooltip.SetPosition(world);
+        }
+
+        /// <summary>确保卡根有可接收射线的 Graphic，否则收不到 hover 事件。</summary>
+        private void EnsureRaycastTarget()
+        {
+            if (GetComponent<UnityEngine.UI.Graphic>() != null) return;
+            var img = gameObject.AddComponent<UnityEngine.UI.Image>();
+            img.color = new Color(0, 0, 0, 0); // 透明，仅用于接收 hover
+            img.raycastTarget = true;
         }
 
         #endregion

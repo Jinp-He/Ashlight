@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Ashlight.Battle.Core.Data;
+using cfg.Enemy;
 
 namespace Scripts.UI
 {
@@ -31,8 +32,17 @@ namespace Scripts.UI
         [Header("布局")]
         [SerializeField] private float cardSpacing = 6f;
 
+        [Header("第二次回合幽灵卡")]
+        [Tooltip("预测的第二次回合用半透明幽灵卡标识；此值为其透明度")]
+        [SerializeField] private float ghostAlpha = 0.5f;
+
         [Header("ATB 引用")]
         [SerializeField] private ATB atb;
+
+        [Header("技能 Tooltip")]
+        [SerializeField]
+        [Tooltip("DescriptionViewController 预制体（与 IntentionView 同款）。敌人进执行轨后 hover 卡片显示技能说明；留空则从 Resources 加载")]
+        private GameObject descriptionViewControllerPrefab;
 
         #endregion
 
@@ -42,11 +52,16 @@ namespace Scripts.UI
         {
             public string        UnitId;
             public UI_行动顺序   Card;
+            public UI_行动顺序   Ghost;       // 第二次回合幽灵卡（alpha=ghostAlpha，默认隐藏）
             public bool          IsExecuting; // 是否处于执行轨
+            public bool          GhostUsedThisFrame; // RefreshOrder 内部：本帧幽灵卡是否被用到
         }
 
         private readonly List<CardEntry> _cards = new List<CardEntry>();
         private string _activeUnitId;
+
+        /// <summary>共享的技能说明 tooltip（所有卡片共用一个，hover 时显示）</summary>
+        private DescriptionViewController _skillTooltip;
 
         /// <summary>回合分隔条对象池（穿插在卡片之间，按需创建、复用、隐藏）</summary>
         private readonly List<LevelIndicator> _separators = new List<LevelIndicator>();
@@ -63,6 +78,25 @@ namespace Scripts.UI
 
             // 在 Awake 就设好 HLG，防止 Initialize() 早于 Start() 被调用时布局缺失
             ApplyLayoutGroup();
+
+            EnsureSkillTooltip();
+        }
+
+        /// <summary>创建共享技能 tooltip（挂在所在 Canvas 下，初始隐藏）。预制体留空时从 Resources 加载。</summary>
+        private void EnsureSkillTooltip()
+        {
+            if (_skillTooltip != null) return;
+
+            if (descriptionViewControllerPrefab == null)
+                descriptionViewControllerPrefab = Resources.Load<GameObject>("UI/常用UI/PageViewer/DescriptionViewController");
+            if (descriptionViewControllerPrefab == null) return;
+
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+
+            var obj = Instantiate(descriptionViewControllerPrefab, canvas.transform);
+            _skillTooltip = obj.GetComponent<DescriptionViewController>();
+            _skillTooltip?.Hide();
         }
 
         #endregion
@@ -103,14 +137,16 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 标记单位进入/退出执行轨（显示攻击图标）
+        /// 标记单位进入/退出执行轨（显示攻击图标）。
+        /// executing=true 且传入敌人技能时，hover 该卡会弹出技能说明；退出时清除。
         /// </summary>
-        public void SetExecuting(string unitId, bool executing)
+        public void SetExecuting(string unitId, bool executing, EnemySkillInfo skill = null)
         {
             var entry = FindEntry(unitId);
             if (entry == null) return;
             entry.IsExecuting = executing;
             entry.Card.SetAttacking(executing);
+            entry.Card.SetExecutingSkill(executing ? skill : null, _skillTooltip);
         }
 
         /// <summary>
@@ -123,12 +159,18 @@ namespace Scripts.UI
         {
             if (atb == null || cardsContainer == null) return;
 
-            var order = atb.GetSortedTurnOrder();
+            // 含未来的顺序：Cycle 0 = 当前真实回合，Cycle 1 = 预测的第二次回合（幽灵卡）
+            var order = atb.GetTurnOrderWithFuture();
+
             if (order == null || order.Count == 0)
             {
+                foreach (var e in _cards) SetGhostActive(e, false);
                 HideSeparatorsFrom(0);
                 return;
             }
+
+            // 本帧用到哪些幽灵卡，先记下，最后把没用到的关掉
+            for (int i = 0; i < _cards.Count; i++) _cards[i].GhostUsedThisFrame = false;
 
             int  sibling = 0;     // 当前要分配的 sibling index
             int  sepUsed = 0;     // 本次已使用的分隔条数量
@@ -138,15 +180,27 @@ namespace Scripts.UI
             for (int i = 0; i < order.Count; i++)
             {
                 var entry = FindEntry(order[i].UnitId);
-                if (entry?.Card == null) continue;
+                if (entry == null) continue;
 
-                var t = entry.Card.transform;
+                bool isFuture = order[i].Cycle == 1;
+                var card = isFuture ? entry.Ghost : entry.Card;
+                if (card == null) continue;
+
+                // 幽灵卡按需显示（用到才开），并标记本帧已用
+                if (isFuture)
+                {
+                    SetGhostActive(entry, true);
+                    entry.GhostUsedThisFrame = true;
+                }
+
+                var t = card.transform;
                 if (t.parent != cardsContainer) continue;
 
                 int key = order[i].GroupKey;
 
                 // 跨组：进入新的一组前插入一条分隔条，并标注新组的格数
                 // （执行轨整组 GroupKey=-1，彼此不分隔，共享同一条执行轨）
+                // Cycle 0 → Cycle 1 边界处 GroupKey 必然跳变，会自动插入一条分隔条区隔"第二轮"。
                 if (hasPrev && key != prevKey)
                 {
                     var sep = GetSeparator(sepUsed++);
@@ -162,8 +216,20 @@ namespace Scripts.UI
                 hasPrev = true;
             }
 
+            // 关掉本帧没用到的幽灵卡
+            for (int i = 0; i < _cards.Count; i++)
+                if (!_cards[i].GhostUsedThisFrame) SetGhostActive(_cards[i], false);
+
             // 隐藏本次未用到的多余分隔条
             HideSeparatorsFrom(sepUsed);
+        }
+
+        /// <summary>切换幽灵卡显隐（仅在状态变化时调用 SetActive，避免每帧触发 layout 重建）。</summary>
+        private static void SetGhostActive(CardEntry entry, bool active)
+        {
+            if (entry?.Ghost == null) return;
+            var go = entry.Ghost.gameObject;
+            if (go.activeSelf != active) go.SetActive(active);
         }
 
         /// <summary>
@@ -174,7 +240,8 @@ namespace Scripts.UI
             for (int i = _cards.Count - 1; i >= 0; i--)
             {
                 if (_cards[i].UnitId != unitId) continue;
-                if (_cards[i].Card != null) Destroy(_cards[i].Card.gameObject);
+                if (_cards[i].Card  != null) Destroy(_cards[i].Card.gameObject);
+                if (_cards[i].Ghost != null) Destroy(_cards[i].Ghost.gameObject);
                 _cards.RemoveAt(i);
                 break;
             }
@@ -206,8 +273,36 @@ namespace Scripts.UI
             {
                 UnitId      = unitId,
                 Card        = card,
+                Ghost       = CreateGhostCard(configId),
                 IsExecuting = false
             });
+        }
+
+        /// <summary>
+        /// 创建一张第二次回合幽灵卡：与真实卡同款，但整体半透明、不接收 hover、默认隐藏，
+        /// 由 RefreshOrder 在预测到的位置上按需显示。
+        /// </summary>
+        private UI_行动顺序 CreateGhostCard(string configId)
+        {
+            if (actionOrderPrefab == null) return null;
+
+            var go   = Instantiate(actionOrderPrefab, cardsContainer);
+            go.name  = $"Ghost_{configId}";
+            // 注意：Unity 的 GetComponent 不存在时返回“伪 null”，不能用 ?? （?? 只认真 null），
+            // 必须用重载了 == 的显式判空，否则会拿到伪 null 组件、访问时抛 MissingComponentException。
+            var card = go.GetComponent<UI_行动顺序>();
+            if (card == null) card = go.AddComponent<UI_行动顺序>();
+            card.Setup(configId);
+
+            // 半透明标识为“预测的未来回合”；不拦射线，避免抢真实卡的 hover
+            var cg = go.GetComponent<CanvasGroup>();
+            if (cg == null) cg = go.AddComponent<CanvasGroup>();
+            cg.alpha          = ghostAlpha;
+            cg.blocksRaycasts = false;
+            cg.interactable   = false;
+
+            go.SetActive(false); // 默认隐藏，用到才开
+            return card;
         }
 
         #endregion
@@ -238,7 +333,10 @@ namespace Scripts.UI
         private void ClearCards()
         {
             foreach (var e in _cards)
-                if (e.Card != null) Destroy(e.Card.gameObject);
+            {
+                if (e.Card  != null) Destroy(e.Card.gameObject);
+                if (e.Ghost != null) Destroy(e.Ghost.gameObject);
+            }
             _cards.Clear();
             _activeUnitId = null;
 

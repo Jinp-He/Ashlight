@@ -14,6 +14,13 @@ namespace Ashlight.Battle.Core.Engine
     public class EnemySkillToTimelineConverter
     {
         /// <summary>
+        /// 施法者自施型 Buff（不随技能命中目标，而是在进入意图轴时挂给施法者本身）。
+        /// 例如 Stagger（破韧）：大招引导期间给自己挂上，玩家打够伤害即可打断该次施法。
+        /// </summary>
+        public static readonly System.Collections.Generic.HashSet<string> SelfCastBuffIds =
+            new System.Collections.Generic.HashSet<string> { "Stagger", "Block", "Channeling" };
+
+        /// <summary>
         /// 将敌人技能转换为TimelineBlock列表
         /// </summary>
         /// <param name="skillInfo">敌人技能配置</param>
@@ -30,7 +37,7 @@ namespace Ashlight.Battle.Core.Engine
 
             var blocks = new List<TimelineBlock>();
 
-            var commands = ConvertEffectsToCommands(skillInfo.Effects);
+            var commands = ConvertEffectsToCommands(skillInfo.Effects, skillInfo.TargetZone);
             blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, skillInfo.Id, commands));
             blocks[0].IsLastBlock = true;
 
@@ -86,7 +93,7 @@ namespace Ashlight.Battle.Core.Engine
         /// <summary>
         /// 将Effect列表转换为Command列表
         /// </summary>
-        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects)
+        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects, TargetZoneEnum targetZone)
         {
             var commands = new List<ICommand>();
 
@@ -97,7 +104,7 @@ namespace Ashlight.Battle.Core.Engine
 
             foreach (var effect in effects)
             {
-                var command = ConvertEffectToCommand(effect);
+                var command = ConvertEffectToCommand(effect, targetZone);
                 if (command != null)
                 {
                     commands.Add(command);
@@ -111,17 +118,17 @@ namespace Ashlight.Battle.Core.Engine
         /// 将单个Effect转换为Command
         /// 复用CardToTimelineConverter的逻辑
         /// </summary>
-        private ICommand ConvertEffectToCommand(Effect effect)
+        private ICommand ConvertEffectToCommand(Effect effect, TargetZoneEnum targetZone)
         {
             if (effect == null)
             {
                 return null;
             }
 
-            // AttackEffect -> DamageCommand
+            // AttackEffect -> DamageCommand（把技能的目标分区带给 AOE 扩散）
             if (effect is AttackEffect attackEffect)
             {
-                return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe);
+                return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe) { TargetZone = targetZone };
             }
 
             // DefenseEffect -> DefenseCommand
@@ -151,6 +158,11 @@ namespace Ashlight.Battle.Core.Engine
             // BuffEffect -> BuffCommand
             if (effect is BuffEffect buffEffect)
             {
+                // 自施型 Buff（如 Stagger）不落在技能目标身上：改由 BattleManager 在进入意图轴时挂给施法者
+                if (SelfCastBuffIds.Contains(buffEffect.BuffId))
+                {
+                    return null;
+                }
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
             }
 

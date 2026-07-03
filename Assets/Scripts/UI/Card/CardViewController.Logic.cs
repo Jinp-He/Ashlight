@@ -780,7 +780,10 @@ namespace Scripts.UI
                 return;
 
             _isHovering = true;
-            if (_rectTransform != null)
+            // 仅在没有正在进行的悬停位移动画时才重新记录基准位置。
+            // 否则快速切换/反复进出时，会把"上浮/回落中"的中间位置误当作基准，
+            // 导致每次进入都在上一次的偏移基础上再抬升，卡牌不断往上走。
+            if (_rectTransform != null && (_hoverMoveTween == null || !_hoverMoveTween.IsActive()))
             {
                 _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
             }
@@ -2953,7 +2956,18 @@ namespace Scripts.UI
             }
             else
             {
-                Debug.LogWarning($"[CardViewController] 无法加载卡牌图片: {spritePath}");
+                // 找不到对应卡图时，回退到默认卡图 Resources/Cards/Sprites/Default
+                string defaultPath = AssetPath.GetCardSpriteAssetPath("Default");
+                Sprite defaultSprite = Resources.Load<Sprite>(defaultPath);
+                if (defaultSprite != null)
+                {
+                    Img_CardPicture.sprite = defaultSprite;
+                    Debug.LogWarning($"[CardViewController] 无法加载卡牌图片: {spritePath}，已回退到默认卡图: {defaultPath}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[CardViewController] 无法加载卡牌图片: {spritePath}，且默认卡图也缺失: {defaultPath}");
+                }
             }
         }
 
@@ -3364,6 +3378,12 @@ namespace Scripts.UI
             }
 
             battleScene?.ConsumeHandCard(this);
+
+            // 秒放牌可能产出新卡（如刀扇产出飞刀）：从数据层补齐这些卡的手牌 UI
+            if (!isExecutionCard)
+            {
+                battleScene?.RefreshHandFromData();
+            }
 
             Debug.Log($"[CardViewController] 出牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}, execution={isExecutionCard}");
         }

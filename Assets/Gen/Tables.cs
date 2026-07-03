@@ -17,11 +17,11 @@ public partial class Tables
     public TbCustomColor TbCustomColor {get; }
     public TbBuffInfo TbBuffInfo {get; }
     public TbNounDictionary TbNounDictionary {get; }
-    public Character.TbCardInfo_backup TbCardInfoBackup {get; }
     public Character.TbCharaterInfo TbCharaterInfo {get; }
-    public Character.TbCardInfo TbCardInfo {get; }
     public Character.TbUpgradeOptions TbUpgradeOptions {get; }
     public Character.TbCharacterExp TbCharacterExp {get; }
+    public Character.TbCardInfo_backup TbCardInfoBackup {get; }
+    public Character.TbCardInfo TbCardInfo {get; }
     public Enemy.TbEncounter TbEncounter {get; }
     public Enemy.TbEnemySkillInfo TbEnemySkillInfo {get; }
     public Enemy.TbEnemyInfo TbEnemyInfo {get; }
@@ -31,11 +31,11 @@ public partial class Tables
         TbCustomColor = new TbCustomColor(loader("tbcustomcolor"));
         TbBuffInfo = new TbBuffInfo(loader("tbbuffinfo"));
         TbNounDictionary = new TbNounDictionary(loader("tbnoundictionary"));
-        TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
         TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
-        TbCardInfo = new Character.TbCardInfo(loader("character_tbcardinfo"));
         TbUpgradeOptions = new Character.TbUpgradeOptions(loader("character_tbupgradeoptions"));
         TbCharacterExp = new Character.TbCharacterExp(loader("character_tbcharacterexp"));
+        TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
+        TbCardInfo = new Character.TbCardInfo(loader("character_tbcardinfo"));
         TbEncounter = new Enemy.TbEncounter(loader("enemy_tbencounter"));
         TbEnemySkillInfo = new Enemy.TbEnemySkillInfo(loader("enemy_tbenemyskillinfo"));
         TbEnemyInfo = new Enemy.TbEnemyInfo(loader("enemy_tbenemyinfo"));
@@ -47,11 +47,11 @@ public partial class Tables
         TbCustomColor.ResolveRef(this);
         TbBuffInfo.ResolveRef(this);
         TbNounDictionary.ResolveRef(this);
-        TbCardInfoBackup.ResolveRef(this);
         TbCharaterInfo.ResolveRef(this);
-        TbCardInfo.ResolveRef(this);
         TbUpgradeOptions.ResolveRef(this);
         TbCharacterExp.ResolveRef(this);
+        TbCardInfoBackup.ResolveRef(this);
+        TbCardInfo.ResolveRef(this);
         TbEncounter.ResolveRef(this);
         TbEnemySkillInfo.ResolveRef(this);
         TbEnemyInfo.ResolveRef(this);

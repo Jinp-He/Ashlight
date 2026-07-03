@@ -363,6 +363,10 @@ namespace Scripts.UI
             /// 规划轨单位 = Slots（同格同组）。
             /// </summary>
             public int    GroupKey;
+            /// <summary>
+            /// 第几次回合：0 = 当前真实回合；1 = 预测的第二次回合（TurnOrderView 用半透明幽灵卡显示）。
+            /// </summary>
+            public int    Cycle;
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -570,6 +574,97 @@ namespace Scripts.UI
             }
 
             // 稳定排序：主键相等时按原始注册顺序（i）兜底，避免每帧顺序乱跳导致卡片闪烁
+            var indexed = new List<(TurnOrderEntry e, int idx)>(result.Count);
+            for (int i = 0; i < result.Count; i++) indexed.Add((result[i], i));
+            indexed.Sort((a, b) =>
+            {
+                int c = a.e.DistanceTo0.CompareTo(b.e.DistanceTo0);
+                return c != 0 ? c : a.idx.CompareTo(b.idx);
+            });
+            for (int i = 0; i < result.Count; i++) result[i] = indexed[i].e;
+            return result;
+        }
+
+        /// <summary>模拟第二次回合时用的临时条目</summary>
+        private struct SimEntry
+        {
+            public string   UnitId;
+            public bool     IsPlayer;
+            public int      Speed;
+            public int      Slots;
+            public AtbTrack Track;
+            public int      Idx;       // 注册序，稳定排序兜底
+            public int      Appeared;  // 已在模拟中行动过几次
+        }
+
+        /// <summary>
+        /// 返回"含未来"的行动顺序：Cycle 0 = 当前真实顺序，Cycle 1 = 每个单位第二次回合的预测位置。
+        ///
+        /// 预测按"速度基础节奏"向前模拟：反复取 Slots 最小者行动，行动后把它重排到所有人之后再加
+        /// CalculateInitialSlots(speed)（模拟 SetPositionBehindAll 的标准回合结束），直到每个单位都
+        /// 拿到第二次回合。由于真实重入距离取决于该回合的卡牌/技能消耗（预测时未知），Cycle 1 仅为
+        /// 近似，用于 UI 幽灵卡预览。所有 Cycle 1 的 Slots 必大于任意 Cycle 0，故排序后未来卡在最后。
+        /// </summary>
+        public List<TurnOrderEntry> GetTurnOrderWithFuture()
+        {
+            var result = new List<TurnOrderEntry>();
+            var work   = new List<SimEntry>(_activeIcons.Count);
+
+            for (int i = 0; i < _activeIcons.Count; i++)
+            {
+                var ic = _activeIcons[i];
+                if (ic?.Rect == null) continue;
+                work.Add(new SimEntry
+                {
+                    UnitId = ic.UnitId, IsPlayer = ic.IsPlayer, Speed = ic.Speed,
+                    Slots = ic.Slots, Track = ic.CurrentTrack, Idx = i, Appeared = 0
+                });
+                // Cycle 0：当前真实位置
+                result.Add(new TurnOrderEntry
+                {
+                    UnitId = ic.UnitId, IsPlayer = ic.IsPlayer,
+                    DistanceTo0 = ic.Slots, Track = ic.CurrentTrack, GroupKey = ic.Slots, Cycle = 0
+                });
+            }
+
+            int need = work.Count;             // 还有多少单位没拿到第二次回合
+            int cap  = work.Count * 4 + 8;      // 安全上限，防止异常时死循环
+            for (int guard = 0; guard < cap && need > 0; guard++)
+            {
+                // 选 Slots 最小者（并列按注册序）
+                int mi = -1;
+                for (int i = 0; i < work.Count; i++)
+                {
+                    if (mi < 0 || work[i].Slots < work[mi].Slots ||
+                        (work[i].Slots == work[mi].Slots && work[i].Idx < work[mi].Idx))
+                        mi = i;
+                }
+                if (mi < 0) break;
+
+                var e = work[mi];
+                e.Appeared++;
+                if (e.Appeared == 2)
+                {
+                    result.Add(new TurnOrderEntry
+                    {
+                        UnitId = e.UnitId, IsPlayer = e.IsPlayer,
+                        DistanceTo0 = e.Slots, Track = AtbTrack.Planning, GroupKey = e.Slots, Cycle = 1
+                    });
+                    need--;
+                }
+
+                // 重排到所有人之后 + 速度基础节奏（模拟 SetPositionBehindAll）
+                int maxOther = 0; bool has = false;
+                for (int i = 0; i < work.Count; i++)
+                {
+                    if (i == mi) continue;
+                    if (!has || work[i].Slots > maxOther) { maxOther = work[i].Slots; has = true; }
+                }
+                e.Slots = maxOther + CalculateInitialSlots(e.Speed);
+                work[mi] = e;
+            }
+
+            // 稳定排序（同 GetSortedTurnOrder）：主键 Slots，相等按插入序
             var indexed = new List<(TurnOrderEntry e, int idx)>(result.Count);
             for (int i = 0; i < result.Count; i++) indexed.Add((result[i], i));
             indexed.Sort((a, b) =>

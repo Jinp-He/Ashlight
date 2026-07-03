@@ -127,11 +127,25 @@ namespace Ashlight.Battle.Core.Engine
                 return new DamageCommand(damage, isAoe);
             }
 
+            if (effect is AttackConditionalEffect attackConditionalEffect)
+            {
+                int bonusDamage = attackConditionalEffect.BonusDamage + (modifier?.DamageDelta ?? 0);
+                if (bonusDamage < 0) bonusDamage = 0;
+                return new AttackConditionalCommand(bonusDamage, attackConditionalEffect.ConditionType);
+            }
+
             if (effect is DefenseEffect defenseEffect)
             {
                 int value = defenseEffect.Value + (modifier?.DefenseDelta ?? 0);
                 if (value < 0) value = 0;
                 return new DefenseCommand(value, defenseEffect.PerHit);
+            }
+
+            if (effect is DefenseConditionalEffect defenseConditionalEffect)
+            {
+                int value = defenseConditionalEffect.Value + (modifier?.DefenseDelta ?? 0);
+                if (value < 0) value = 0;
+                return new DefenseConditionalCommand(value, defenseConditionalEffect.ConditionType);
             }
 
             if (effect is HealEffect healEffect)
@@ -154,6 +168,16 @@ namespace Ashlight.Battle.Core.Engine
             if (effect is TimeShiftAllEffect timeShiftAllEffect)
             {
                 return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true);
+            }
+
+            if (effect is MovePositionEffect movePositionEffect)
+            {
+                return new MovePositionCommand(movePositionEffect.Mode);
+            }
+
+            if (effect is AddToHandEffect addToHandEffect)
+            {
+                return new AddToHandCommand(addToHandEffect.CardId, addToHandEffect.Count);
             }
 
             // TODO: 待 Luban schema 新增 StunEffect 后启用

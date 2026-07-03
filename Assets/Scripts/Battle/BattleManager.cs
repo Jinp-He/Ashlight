@@ -871,6 +871,10 @@ namespace Ashlight.Battle
                 intentAxisLength, executeAxisLength
             );
 
+            // 自施型 Buff（如 Stagger 破韧）在进入意图轴时立刻挂给施法者本身，
+            // 使整段引导期内玩家都能通过造成伤害打断该次施法。
+            ApplySelfCastBuffsOnIntentStart(enemyUnit, selectedSkill);
+
             // 同时存入旧字典以保持向后兼容（UI层可能仍在读取）
             _pendingEnemyIntents[unitId] = (selectedSkill, target.UnitId);
 
@@ -934,17 +938,55 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var target = CurrentState.GetUnitById(enemy.PendingTargetId);
-            if (target == null || target.IsDead)
+            var skill = intent.Skill;
+
+            // 动态索敌：目标在「执行这一刻」按 技能分区 + 当前站位 重新解算。
+            // 原先 telegraph 的目标若仍在有效区内则继续打它；否则（被移出该区/死亡）改选该区当前的其他人。
+            var target = ResolveExecutionTarget(enemy, skill);
+            if (target == null)
             {
+                // 目标区当前无可选单位——本次施法落空。TODO(索敌): 补 miss 表现（当前 FilterByZone 会回退全体，通常不至于到这里）。
+                Debug.Log($"[BattleManager] 敌人 {enemy.UnitId} 技能 {skill?.Id} 执行时目标区无人，落空");
                 ClearPendingEnemyIntent(enemy.UnitId);
                 return false;
             }
 
-            var skill = intent.Skill;
             ClearPendingEnemyIntent(enemy.UnitId);
             ExecuteEnemySkillInternal(enemy, skill, target);
+
+            // 施法完成（未被打断）：清除本次引导挂上的自施型 Buff，避免残留影响后续行动
+            foreach (var buffId in EnemySkillToTimelineConverter.SelfCastBuffIds)
+            {
+                enemy.RemoveBuff(buffId);
+            }
             return true;
+        }
+
+        /// <summary>
+        /// 进入意图轴时，将技能中的自施型 Buff（如 Stagger）挂到施法者本身。
+        /// 这些 Buff 不会随技能命中目标（已在 EnemySkillToTimelineConverter 中跳过）。
+        /// </summary>
+        private void ApplySelfCastBuffsOnIntentStart(UnitState enemyUnit, EnemySkillInfo skill)
+        {
+            if (enemyUnit == null || skill?.Effects == null)
+            {
+                return;
+            }
+
+            foreach (var effect in skill.Effects)
+            {
+                if (effect is BuffEffect buffEffect &&
+                    EnemySkillToTimelineConverter.SelfCastBuffIds.Contains(buffEffect.BuffId))
+                {
+                    enemyUnit.AddBuff(new BuffState
+                    {
+                        BuffId = buffEffect.BuffId,
+                        Value = buffEffect.Value,
+                        RemainingDuration = -1 // 持续到被消耗（打断）或施法完成时清除
+                    });
+                    Debug.Log($"[BattleManager] {enemyUnit.UnitId} 进入意图轴自施 Buff: {buffEffect.BuffId}={buffEffect.Value}");
+                }
+            }
         }
 
         /// <summary>
@@ -1170,10 +1212,10 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            // 目标选择：根据技能的 TargetType 决定
-            //   AllEnemy（全体）→ 仅用任一活着的玩家做"承载 UnitId"，AOE 真正铺开在 DamageCommand 里
-            //   SingleEnemy（单体）→ 在活着的玩家中随机选
-            //   其他 → 默认随机选活着的玩家
+            // 目标选择：先按 TargetZone 过滤到目标分区，再随机选一个「承载 UnitId」。
+            //   SingleEnemy（单体）→ 该载体就是真实受害者
+            //   AllEnemy（全体）  → 载体仅用于意图显示/演出，AOE 真正铺开（同样按分区）在 DamageCommand 里
+            //   TargetZone: Front/Back 过滤到对应区；Any/Conditional(未实装) 不过滤；空区回退全体
             var alivePlayers = CurrentState.PlayerUnits
                 .Where(u => u != null && !u.IsDead)
                 .ToList();
@@ -1183,9 +1225,52 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            int targetIdx = Random.Range(0, alivePlayers.Count);
-            target = alivePlayers[targetIdx];
+            var zonePool = ZoneTargeting.FilterByZone(alivePlayers, selectedSkill.TargetZone);
+            target = zonePool[Random.Range(0, zonePool.Count)];
+            Debug.Log($"[BattleManager] 敌人技能 {selectedSkill.Id} 选定目标 {target.UnitId} " +
+                      $"(TargetType={selectedSkill.TargetType}, TargetZone={selectedSkill.TargetZone})");
             return true;
+        }
+
+        /// <summary>
+        /// 【动态索敌】执行时刻按「技能分区 + 当前站位」重新解算单体载体目标。
+        /// · 原 telegraph 目标（PendingTargetId）若仍存活且仍在该技能的目标区内 → 继续打它（尊重预告）。
+        /// · 否则（被玩家移出该区 / 已死亡）→ 从该区当前存活单位里改选。
+        /// · 该区当前无人 → 返回 null（落空）。
+        /// AOE 的真正扩散由 DamageCommand 在执行时按同一分区口径现算，此处返回的载体仅用于演出/事件。
+        /// </summary>
+        private UnitState ResolveExecutionTarget(UnitState enemy, EnemySkillInfo skill)
+        {
+            if (CurrentState == null || skill == null)
+            {
+                return null;
+            }
+
+            var alivePlayers = CurrentState.PlayerUnits
+                .Where(u => u != null && !u.IsDead)
+                .ToList();
+            if (alivePlayers.Count == 0)
+            {
+                return null;
+            }
+
+            var zonePool = ZoneTargeting.FilterByZone(alivePlayers, skill.TargetZone);
+            if (zonePool.Count == 0)
+            {
+                return null;
+            }
+
+            // 原 telegraph 目标仍在有效区内 → 继续打它
+            var pending = CurrentState.GetUnitById(enemy.PendingTargetId);
+            if (pending != null && !pending.IsDead && zonePool.Contains(pending))
+            {
+                return pending;
+            }
+
+            // 目标已移出该区 / 死亡 → 按当前站位改选
+            var reselected = zonePool[Random.Range(0, zonePool.Count)];
+            Debug.Log($"[BattleManager] 动态索敌重选：{enemy.UnitId} 的技能 {skill.Id} 原目标 {enemy.PendingTargetId} 已离开 {skill.TargetZone} 区，改打 {reselected.UnitId}");
+            return reselected;
         }
 
         private void ExecuteEnemySkillInternal(UnitState enemyUnit, EnemySkillInfo selectedSkill, UnitState target)

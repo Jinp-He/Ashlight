@@ -1,5 +1,6 @@
 using Ashlight.Battle.Core.Data;
 using Ashlight.Common.Events;
+using cfg;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -19,6 +20,12 @@ namespace Ashlight.Battle.Core.Commands
         /// 是否为群体伤害（AOE）
         /// </summary>
         public bool IsAoe { get; set; }
+
+        /// <summary>
+        /// AOE 的目标分区限制（仅在 <see cref="IsAoe"/> 时生效）。
+        /// 默认 Any = 打目标阵营全体（玩家卡牌沿用旧行为）；敌人技能会按 skill 的 TargetZone 传入 Front/Back 以只扫某区。
+        /// </summary>
+        public TargetZoneEnum TargetZone { get; set; } = TargetZoneEnum.Any;
 
         public DamageCommand(int damage, bool isAoe = false)
         {
@@ -88,6 +95,9 @@ namespace Ashlight.Battle.Core.Commands
                 ? state.GetAliveEnemyUnits()
                 : state.GetAlivePlayerUnits();
 
+            // 分区过滤：AllEnemy+Front 只扫前区，+Back 只扫后区；Any 不过滤。
+            targets = ZoneTargeting.FilterByZone(targets, TargetZone);
+
             int adjustedDamage = ApplyAttackerModifiers(owner, Damage);
 
             foreach (var target in targets)
@@ -143,7 +153,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new DamageCommand(Damage, IsAoe);
+            return new DamageCommand(Damage, IsAoe) { TargetZone = TargetZone };
         }
     }
 }

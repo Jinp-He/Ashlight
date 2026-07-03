@@ -23,6 +23,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
         { var __json0 = _buf["Effects"]; if(!__json0.IsArray) { throw new SerializationException(); } Effects = new System.Collections.Generic.List<Effect>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { Effect __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.Effect.DeserializeEffect(__e0);  }  Effects.Add(__v0); }   }
         { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
         { if(!_buf["TargetType"].IsNumber) { throw new SerializationException(); }  TargetType = (TargetTypeEnum)_buf["TargetType"].AsInt; }
+        { if(!_buf["TargetZone"].IsNumber) { throw new SerializationException(); }  TargetZone = (TargetZoneEnum)_buf["TargetZone"].AsInt; }
     }
 
     public static EnemySkillInfo DeserializeEnemySkillInfo(JSONNode _buf)
@@ -36,6 +37,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
     public readonly System.Collections.Generic.List<Effect> Effects;
     public readonly int ExecutingCost;
     public readonly TargetTypeEnum TargetType;
+    public readonly TargetZoneEnum TargetZone;
    
     public const int __ID__ = -1485659299;
     public override int GetTypeId() => __ID__;
@@ -54,6 +56,7 @@ public sealed partial class EnemySkillInfo : Luban.BeanBase
         + "Effects:" + Luban.StringUtil.CollectionToString(Effects) + ","
         + "ExecutingCost:" + ExecutingCost + ","
         + "TargetType:" + TargetType + ","
+        + "TargetZone:" + TargetZone + ","
         + "}";
     }
 }

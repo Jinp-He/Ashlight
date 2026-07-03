@@ -3,7 +3,7 @@
     "Id": "Enemy001",
     "Name": "小兵",
     "AlternativePath": "DogKnight",
-    "Hp": 10,
+    "Hp": 30,
     "Speed": 5,
     "IntentionSet": [
       {
@@ -21,7 +21,7 @@
     "Id": "Enemy002",
     "Name": "小兵2",
     "AlternativePath": "Mafe",
-    "Hp": 10,
+    "Hp": 40,
     "Speed": 5,
     "IntentionSet": [
       {
@@ -39,7 +39,7 @@
     "Id": "Enemy003",
     "Name": "重装步兵",
     "AlternativePath": "DogKnight",
-    "Hp": 10,
+    "Hp": 100,
     "Speed": 4,
     "IntentionSet": [
       {
@@ -138,6 +138,51 @@
             "EnemyIntentionType": 4,
             "EnemySkillIndex": "ES010",
             "TimeSlot": 3
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Id": "Enemy006",
+    "Name": "Boss1号",
+    "AlternativePath": "Boss1",
+    "Hp": 300,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES011",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 3,
+            "EnemySkillIndex": "ES013",
+            "TimeSlot": 5
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES012",
+            "TimeSlot": 7
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 4,
+            "EnemySkillIndex": "ES014",
+            "TimeSlot": 14
           }
         ]
       }

@@ -268,7 +268,18 @@ namespace Scripts.UI
             }
             else
             {
-                Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}");
+                // 找不到对应卡图时，回退到默认卡图 Resources/Cards/Sprites/Default
+                string defaultPath = AssetPath.GetCardSpriteAssetPath("Default");
+                Sprite defaultSprite = Resources.Load<Sprite>(defaultPath);
+                if (defaultSprite != null)
+                {
+                    MiniSprite.sprite = defaultSprite;
+                    Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}，已回退到默认卡图: {defaultPath}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}，且默认卡图也缺失: {defaultPath}");
+                }
             }
         }
 

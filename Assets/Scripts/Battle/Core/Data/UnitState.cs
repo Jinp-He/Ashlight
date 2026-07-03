@@ -5,6 +5,12 @@ using Ashlight.Config;
 using UnityEngine;
 namespace Ashlight.Battle.Core.Data
 {
+    public enum BattleRowPosition
+    {
+        FrontRow = 0,
+        BackRow = 1
+    }
+
     /// <summary>
     /// 单个战斗单位的状态（NvN架构）
     /// POCO类，不继承MonoBehaviour
@@ -87,6 +93,9 @@ namespace Ashlight.Battle.Core.Data
         /// 过载状态
         /// </summary>
         public OverloadState Overload { get; set; }
+
+        // 前后排不再单独存字段：由单位在阵营列表中的位置推导（索引 0 = 前排），
+        // 见 BattleStateSnapshot.GetRowPosition / IsFrontRow。
 
         // ========== 敌人意图轴/执行轴字段 ==========
 

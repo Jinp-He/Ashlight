@@ -105,6 +105,10 @@ namespace cfg
         /// 圣物
         /// </summary>
         Artifact = 22,
+        /// <summary>
+        /// 闪避
+        /// </summary>
+        Dodge = 23,
     }
 
 } 
