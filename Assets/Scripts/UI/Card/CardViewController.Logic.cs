@@ -671,10 +671,10 @@ namespace Scripts.UI
                 Txt_CardTag.text = GetTargetTypeText(_currentCard.TargetType);
             }
 
-            // 设置左侧消耗（能量）
+            // 设置左侧消耗（能量）——用有效费用，游侠首张移动等免费效果直接体现在卡面
             if (Txt_LeftCost != null)
             {
-                Txt_LeftCost.text = _currentCard.Energy.ToString();
+                Txt_LeftCost.text = GetEffectiveEnergyCost().ToString();
             }
 
             // 根据玩家当前能量刷新左上角颜色
@@ -1982,7 +1982,44 @@ namespace Scripts.UI
         /// </summary>
         private CharacterEnum GetOwnerCharacterId()
         {
+            // 优先用运行时实例上的动态 owner（如飞刀在生成时按生成者写入）；无则回退卡牌静态 BelongTo
+            var rt = FindRuntimeState();
+            if (rt != null && rt.OwnerCharacterId.HasValue)
+            {
+                return rt.OwnerCharacterId.Value;
+            }
             return _currentCard.BelongTo;
+        }
+
+        /// <summary>按 InstanceId 在手牌里找到本卡的运行时状态（找不到返回 null）。</summary>
+        private CardRuntimeState FindRuntimeState()
+        {
+            if (string.IsNullOrEmpty(_instanceId))
+            {
+                return null;
+            }
+            var hand = Ashlight.Battle.BattleManager.Instance?.CurrentState?.DeckSystem?.Hand;
+            return hand?.Find(c => c != null && c.InstanceId == _instanceId);
+        }
+
+        /// <summary>本卡对其施法者的有效能量费用（含游侠首张移动免费）；数据不可用时回退卡牌静态 Energy。</summary>
+        private int GetEffectiveEnergyCost()
+        {
+            if (_currentCard == null)
+            {
+                return 0;
+            }
+            var bm = Ashlight.Battle.BattleManager.Instance;
+            if (bm == null || bm.CurrentState == null)
+            {
+                return _currentCard.Energy;
+            }
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (string.IsNullOrEmpty(ownerUnitId))
+            {
+                return _currentCard.Energy;
+            }
+            return bm.GetEffectiveEnergyCost(_currentCard, ownerUnitId);
         }
 
         /// <summary>
@@ -2014,7 +2051,7 @@ namespace Scripts.UI
                 return true;
             }
 
-            return unit.CurrentEnergy >= _currentCard.Energy;
+            return unit.CurrentEnergy >= battleManager.GetEffectiveEnergyCost(_currentCard, ownerUnitId);
         }
 
         /// <summary>

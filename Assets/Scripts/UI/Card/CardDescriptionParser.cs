@@ -228,6 +228,9 @@ namespace Scripts.UI
                     float bv = buffEffect.Value;
                     return (bv == Mathf.Floor(bv)) ? ((int)bv).ToString() : bv.ToString("0.#");
 
+                case DrawEffect drawEffect:
+                    return drawEffect.Count.ToString();
+
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");
                     return "?";

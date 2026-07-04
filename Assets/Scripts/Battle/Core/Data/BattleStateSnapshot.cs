@@ -101,27 +101,16 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
-        /// 前后排由“列表位置”推导（唯一真相源）：所在阵营列表的第一个单位（索引 0）为前排，
-        /// 其余皆为后排。换位 = 交换单位在列表中的顺序，不再单独存 RowPosition 字段。
+        /// 前后排由单位显式存储的 <see cref="UnitState.RowPosition"/> 决定（唯一真相源）。
+        /// 移动 = 直接改该单位的 RowPosition，可独立进出前/后排，两区可多人共存，不再靠列表顺序推导。
         /// </summary>
         public BattleRowPosition GetRowPosition(UnitState unit)
         {
-            if (unit == null)
-            {
-                return BattleRowPosition.BackRow;
-            }
-
-            var team = unit.IsPlayerUnit ? PlayerUnits : EnemyUnits;
-            if (team == null || team.Count == 0)
-            {
-                return BattleRowPosition.BackRow;
-            }
-
-            return team[0] == unit ? BattleRowPosition.FrontRow : BattleRowPosition.BackRow;
+            return unit?.RowPosition ?? BattleRowPosition.BackRow;
         }
 
         /// <summary>
-        /// 单位是否处于前排（列表第一个位置）
+        /// 单位是否处于前排
         /// </summary>
         public bool IsFrontRow(UnitState unit)
         {

@@ -5,10 +5,10 @@ using UnityEngine;
 namespace Ashlight.Battle.Core.Commands
 {
     /// <summary>
-    /// 换位指令，对应 MovePositionEffect。
-    /// 位置模型：前排 = 同阵营列表里的第一个位置（索引 0，唯一），其余皆后排。
-    /// 效果 = 施法者和【指定目标】交换在阵营列表中的顺序，前后排随之推导（唯一真相源为列表顺序）。
-    /// UI 收到 PositionSwappedEvent 后交换二者的 sibling 顺序完成视觉重排。
+    /// 移动指令，对应 MovePositionEffect。
+    /// 效果 = 把【施法者自己】移动到目标区（前排/后排），可独立进出、两区多人共存，**不再与他人换位**。
+    /// 目标区由 <see cref="Mode"/> 决定："FrontRow" 去前排 / "BackRow" 去后排 / "Toggle"(或空) 前后翻转。
+    /// 直接改施法者的 <see cref="UnitState.RowPosition"/>（唯一真相源），UI 收到 PositionSwappedEvent 后把该角色重挂到对应区容器。
     /// </summary>
     public class MovePositionCommand : ICommand
     {
@@ -28,45 +28,40 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            // 永远和指定目标交换位置
-            var target = state.GetUnitById(targetId);
-            if (target == null || target == owner)
+            var before = owner.RowPosition;
+            var dest = ResolveDestination(Mode, before);
+            if (dest == before)
             {
-                Debug.Log($"[MovePositionCommand] {ownerId} 换位目标无效或即为自身: {targetId}，跳过");
-                return;
-            }
-            if (target.IsDead)
-            {
-                Debug.Log($"[MovePositionCommand] {ownerId} 换位目标已死亡: {targetId}，跳过");
-                return;
-            }
-            if (target.IsPlayerUnit != owner.IsPlayerUnit)
-            {
-                Debug.LogWarning($"[MovePositionCommand] {ownerId} 换位目标不同阵营: {targetId}，跳过");
+                Debug.Log($"[MovePositionCommand] {ownerId} 已在 {dest}，无需移动 (mode={Mode})");
                 return;
             }
 
-            // 交换二者在阵营列表中的顺序（列表顺序 = 唯一真相源，前后排由此推导）
-            var team = owner.IsPlayerUnit ? state.PlayerUnits : state.EnemyUnits;
-            int ownerIndex = team.IndexOf(owner);
-            int targetIndex = team.IndexOf(target);
-            if (ownerIndex < 0 || targetIndex < 0)
-            {
-                Debug.LogWarning($"[MovePositionCommand] 单位不在阵营列表中: owner#{ownerIndex}, target#{targetIndex}，跳过");
-                return;
-            }
-            team[ownerIndex] = target;
-            team[targetIndex] = owner;
-            Debug.Log($"[MovePositionCommand] {ownerId} <-> {target.UnitId} 交换位置 " +
-                      $"(owner 现在={state.GetRowPosition(owner)}, mode={Mode})");
+            owner.RowPosition = dest;
+            Debug.Log($"[MovePositionCommand] {ownerId} 移动 {before} -> {dest} (mode={Mode})");
 
-            // 发事件让 UI 交换二者 sibling 顺序；不发的话逻辑变了但画面不动，玩家会以为“没有效果”。
+            // 独立移动（无换位对象）：UnitIdB 留空，UI 只把施法者重挂到新区容器。
             GameEvent.Publish(new PositionSwappedEvent
             {
                 UnitIdA = ownerId,
-                UnitIdB = target.UnitId,
+                UnitIdB = null,
                 IsPrediction = state.IsPrediction
             });
+        }
+
+        /// <summary>把 Mode 解析成目标区：FrontRow/BackRow 指定去向；Toggle 或空/未知则相对当前翻转。</summary>
+        private static BattleRowPosition ResolveDestination(string mode, BattleRowPosition current)
+        {
+            string m = mode?.Trim();
+            if (m == "FrontRow" || m == "Front")
+            {
+                return BattleRowPosition.FrontRow;
+            }
+            if (m == "BackRow" || m == "Back")
+            {
+                return BattleRowPosition.BackRow;
+            }
+            // Toggle / 空 / 未知：前后翻转
+            return current == BattleRowPosition.FrontRow ? BattleRowPosition.BackRow : BattleRowPosition.FrontRow;
         }
 
         public int GetPriority()

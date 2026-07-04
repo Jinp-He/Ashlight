@@ -22,8 +22,11 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            int added = state.DeckSystem.AddCardToHand(CardId, Count);
-            Debug.Log($"[AddToHandCommand] added {added}/{Count} card(s): {CardId}");
+            // 动态归属：token（如飞刀）按「生成者」写入 owner，使其可被生成者打出（而非卡牌静态 BelongTo）
+            var owner = state.GetUnitById(ownerId);
+            var ownerCharacterId = owner?.GetCharacterId();
+            int added = state.DeckSystem.AddCardToHand(CardId, Count, ownerCharacterId);
+            Debug.Log($"[AddToHandCommand] added {added}/{Count} card(s): {CardId}, owner={ownerCharacterId}");
         }
 
         public int GetPriority()

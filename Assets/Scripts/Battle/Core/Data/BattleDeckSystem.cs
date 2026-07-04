@@ -484,6 +484,14 @@ namespace Ashlight.Battle.Core.Data
 
         public int AddCardToHand(string cardId, int count)
         {
+            return AddCardToHand(cardId, count, null);
+        }
+
+        /// <summary>
+        /// 往手牌加卡，可指定动态归属 <paramref name="ownerCharacterId"/>（生成型 token 用生成者覆盖静态 BelongTo）。
+        /// </summary>
+        public int AddCardToHand(string cardId, int count, cfg.CharacterEnum? ownerCharacterId)
+        {
             if (string.IsNullOrEmpty(cardId) || count <= 0)
             {
                 return 0;
@@ -497,10 +505,12 @@ namespace Ashlight.Battle.Core.Data
 
             for (int i = 0; i < count; i++)
             {
-                Hand.Add(CardRuntimeState.CreateDefault(cardId));
+                var card = CardRuntimeState.CreateDefault(cardId);
+                card.OwnerCharacterId = ownerCharacterId;
+                Hand.Add(card);
             }
 
-            Debug.Log($"[BattleDeckSystem] AddCardToHand: {cardId} x{count}, hand={Hand.Count}");
+            Debug.Log($"[BattleDeckSystem] AddCardToHand: {cardId} x{count} owner={ownerCharacterId}, hand={Hand.Count}");
             return count;
         }
 

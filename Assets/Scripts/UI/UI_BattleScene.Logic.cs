@@ -528,17 +528,15 @@ namespace Scripts.UI
         /// </summary>
         private void CreatePlayerCharacters()
         {
-            if (PlayerPosition == null)
-            {
-                Debug.LogError("[UI_BattleScene] PlayerPosition未绑定");
-                return;
-            }
-
             if (characterPrefab == null)
             {
                 Debug.LogError("[UI_BattleScene] Character预制体未设置");
                 return;
             }
+
+            // 两区容器：确保各自有 HorizontalLayoutGroup + ContentSizeFitter（缺失才补，不覆盖场景设置）
+            EnsureRowLayout(PlayerFrontRow);
+            EnsureRowLayout(PlayerBackRow);
 
             var playerUnits = _battleManager.CurrentState.PlayerUnits;
             Debug.Log($"[UI_BattleScene] 创建 {playerUnits.Count} 个玩家角色UI");
@@ -546,9 +544,16 @@ namespace Scripts.UI
             for (int i = 0; i < playerUnits.Count; i++)
             {
                 var unitState = playerUnits[i];
-                
-                // 实例化Character预制体
-                GameObject characterObj = Instantiate(characterPrefab, PlayerPosition);
+
+                // 按单位显式前后排(RowPosition)放入对应容器；由容器的 HLG 负责排布，不再手动摆位
+                RectTransform parent = ResolveRowParent(unitState);
+                if (parent == null)
+                {
+                    Debug.LogError("[UI_BattleScene] 前后排容器与 PlayerPosition 均未绑定");
+                    return;
+                }
+
+                GameObject characterObj = Instantiate(characterPrefab, parent);
                 Character character = characterObj.GetComponent<Character>();
 
                 if (character == null)
@@ -558,22 +563,49 @@ namespace Scripts.UI
                     continue;
                 }
 
-                // 使用UnitState初始化Character
                 character.Initialize(unitState);
-
-                // 设置位置（如果有多个角色，可以排列）
-                RectTransform rectTransform = characterObj.GetComponent<RectTransform>();
-                if (rectTransform != null && playerUnits.Count > 1)
-                {
-                    // 水平排列多个角色
-                    float spacing = 200f; // 角色之间的间距
-                    float totalWidth = (playerUnits.Count - 1) * spacing;
-                    float startX = -totalWidth / 2f;
-                    rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
-                }
-
                 _unitUIManager.RegisterCharacter(character);
-                Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId})");
+                Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId}) -> {parent.name}");
+            }
+
+            // Instantiate 到 HLG 后不会自动重排，强制立即重建两区（及父级 PlayerPosition）布局
+            RebuildRowLayout();
+        }
+
+        /// <summary>强制立即重建前后排容器（及父级 PlayerPosition）的布局——HLG 加入子物体后需手动触发。</summary>
+        private void RebuildRowLayout()
+        {
+            if (PlayerFrontRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerFrontRow);
+            if (PlayerBackRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerBackRow);
+            if (PlayerPosition != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerPosition);
+        }
+
+        /// <summary>按单位当前前后排返回对应容器：前排→PlayerFrontRow，后排→PlayerBackRow；容器缺失时回退 PlayerPosition。</summary>
+        private RectTransform ResolveRowParent(UnitState unit)
+        {
+            bool front = unit != null && _battleManager.CurrentState.IsFrontRow(unit);
+            RectTransform target = front ? PlayerFrontRow : PlayerBackRow;
+            return target != null ? target : PlayerPosition;
+        }
+
+        /// <summary>确保前后排容器有水平布局 + ContentSizeFitter（仅在缺失时添加，尊重场景已有设置）。</summary>
+        private void EnsureRowLayout(RectTransform row)
+        {
+            if (row == null) return;
+
+            if (row.GetComponent<HorizontalLayoutGroup>() == null)
+            {
+                var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+                hlg.childForceExpandWidth = false;
+                hlg.childForceExpandHeight = false;
+                hlg.childControlWidth = false;
+                hlg.childControlHeight = false;
+            }
+
+            if (row.GetComponent<ContentSizeFitter>() == null)
+            {
+                var csf = row.gameObject.AddComponent<ContentSizeFitter>();
+                csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
             }
         }
 
@@ -586,26 +618,30 @@ namespace Scripts.UI
         {
             if (e.IsPrediction) return; // 预解算不移动
 
+            // 独立移动：UnitIdA 必移动；UnitIdB 可空（旧的双人换位才有两个）
             var a = _unitUIManager?.FindCharacter(e.UnitIdA);
-            var b = _unitUIManager?.FindCharacter(e.UnitIdB);
-            if (a == null || b == null) return;
+            if (a != null) ReparentToRow(a);
 
-            var ta = a.transform;
-            var tb = b.transform;
-            int siA = ta.GetSiblingIndex();
-            int siB = tb.GetSiblingIndex();
-            if (siA == siB) return;
+            var b = string.IsNullOrEmpty(e.UnitIdB) ? null : _unitUIManager?.FindCharacter(e.UnitIdB);
+            if (b != null) ReparentToRow(b);
 
-            // 交换两个 sibling 槽位：先把靠后的挪到靠前的位置，再把原靠前的挪到靠后位置，
-            // 避免连续 SetSiblingIndex 时索引偏移导致错位。
-            int lower = Mathf.Min(siA, siB);
-            int higher = Mathf.Max(siA, siB);
-            Transform tLower = siA < siB ? ta : tb;
-            Transform tHigher = siA < siB ? tb : ta;
-            tHigher.SetSiblingIndex(lower);
-            tLower.SetSiblingIndex(higher);
+            if (a == null && b == null) return;
+            RebuildRowLayout(); // 移动/换位后强制重排两区
 
-            Debug.Log($"[UI_BattleScene] 换位 {e.UnitIdA}(#{siA}) <-> {e.UnitIdB}(#{siB})");
+            Debug.Log($"[UI_BattleScene] 移动重排 {e.UnitIdA}{(string.IsNullOrEmpty(e.UnitIdB) ? "" : " <-> " + e.UnitIdB)}");
+        }
+
+        /// <summary>把角色 UI 重新挂到其当前前后排对应的容器下（HLG 负责实际排布）。</summary>
+        private void ReparentToRow(Character character)
+        {
+            var unit = character?.GetUnitState();
+            if (unit == null) return;
+
+            RectTransform parent = ResolveRowParent(unit);
+            if (parent != null && character.transform.parent != parent)
+            {
+                character.transform.SetParent(parent, false);
+            }
         }
 
         /// <summary>
@@ -1543,7 +1579,9 @@ namespace Scripts.UI
 
                         // 【回合制】Swift 牌/跳过/啥都不干：从当前行动点（X=0）往后 3 格（绝对位置）。
                         // 类似 ATB 时间轴：无论其他人在哪，本单位下次行动时间 = 现在 + 3 格。
-                        ATB.SetPositionBySlots(currentTurnUnitId, 3);
+                        // 过载代价：本回合过载过则额外 +1 格（下次行动更晚，直接体现在行动顺序视图上）。
+                        int reCostSlots = 3 + ((currentTurnUnit.Overload != null && currentTurnUnit.Overload.OverloadCountThisTurn > 0) ? 1 : 0);
+                        ATB.SetPositionBySlots(currentTurnUnitId, reCostSlots);
                         ATB.TriggerNextUnit();
                         Debug.Log($"[UI_BattleScene] 玩家回合结束（Swift/跳过），触发下一单位: {currentTurnUnitId}");
                         yield break;

@@ -83,6 +83,10 @@
         <var name="value" type="float" comment="Buff参数/数值"/>
     </bean>
 
+    <bean name="DrawEffect" parent="Effect">
+        <var name="count" type="int" comment="立即抽牌数量 {V}"/>
+    </bean>
+
 
     <!-- ============================================================== -->
     <!-- 升级选项效果 (UpgradeOptions.Effects)                          -->

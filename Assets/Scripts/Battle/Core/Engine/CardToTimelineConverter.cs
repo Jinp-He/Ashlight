@@ -163,6 +163,12 @@ namespace Ashlight.Battle.Core.Engine
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
             }
 
+            // DrawEffect -> DrawCommand（即时抽牌，与 CardPlayResolver 一致）
+            if (effect is DrawEffect drawEffect)
+            {
+                return new DrawCommand(drawEffect.Count);
+            }
+
             if (effect is MovePositionEffect movePositionEffect)
             {
                 return new MovePositionCommand(movePositionEffect.Mode);

@@ -37,6 +37,12 @@ namespace Ashlight.State.Runtime
         public int ExtensionData;
 
         /// <summary>
+        /// 动态归属角色：生成型 token（如飞刀 Extra001）在生成时按「生成者」写入，
+        /// 覆盖卡牌静态 BelongTo，使其可被生成者打出。为 null 时回退到 CardInfo.BelongTo。
+        /// </summary>
+        public cfg.CharacterEnum? OwnerCharacterId;
+
+        /// <summary>
         /// 创建默认卡牌状态
         /// </summary>
         /// <param name="cardId">卡牌ID</param>
@@ -65,7 +71,8 @@ namespace Ashlight.State.Runtime
                 InstanceId = this.InstanceId, // 保持相同的实例 ID
                 Level = this.Level,
                 UpgradeCount = this.UpgradeCount,
-                ExtensionData = this.ExtensionData
+                ExtensionData = this.ExtensionData,
+                OwnerCharacterId = this.OwnerCharacterId
             };
         }
     }

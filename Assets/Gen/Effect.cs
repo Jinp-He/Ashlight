@@ -41,6 +41,7 @@ public abstract partial class Effect : Luban.BeanBase
             case "ChannelEffect": return new ChannelEffect(_buf);
             case "TauntEffect": return new TauntEffect(_buf);
             case "BuffEffect": return new BuffEffect(_buf);
+            case "DrawEffect": return new DrawEffect(_buf);
             default: throw new SerializationException();
         }
     }

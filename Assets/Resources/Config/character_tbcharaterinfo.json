@@ -57,6 +57,7 @@
     ],
     "Speed": 3,
     "Draw": 4,
-    "Energy": 3
+    "Energy": 3,
+    "Trait": "FirstMoveFree"
   }
 ]

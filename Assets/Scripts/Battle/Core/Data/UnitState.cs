@@ -94,8 +94,16 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public OverloadState Overload { get; set; }
 
-        // 前后排不再单独存字段：由单位在阵营列表中的位置推导（索引 0 = 前排），
-        // 见 BattleStateSnapshot.GetRowPosition / IsFrontRow。
+        /// <summary>
+        /// 本回合是否已用掉「首张移动免费」（游侠百相 FirstMoveFree）。每回合开始时重置。
+        /// </summary>
+        public bool FreeMoveUsedThisTurn { get; set; }
+
+        /// <summary>
+        /// 前后排（显式存储，唯一真相源）。移动 = 改这个值，可独立进出前/后排，无需与他人换位；
+        /// 两区可多人共存。默认后排，开局由 BattleManager 设定（战士前排）。
+        /// </summary>
+        public BattleRowPosition RowPosition { get; set; } = BattleRowPosition.BackRow;
 
         // ========== 敌人意图轴/执行轴字段 ==========
 
@@ -437,6 +445,8 @@ namespace Ashlight.Battle.Core.Data
                 Track = this.Track?.Clone(),
                 ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
                 Overload = this.Overload?.Clone() ?? new OverloadState(),
+                FreeMoveUsedThisTurn = this.FreeMoveUsedThisTurn,
+                RowPosition = this.RowPosition,
                 // 敌人意图轴/执行轴
                 CurrentPhase = this.CurrentPhase,
                 IntentAxisLength = this.IntentAxisLength,

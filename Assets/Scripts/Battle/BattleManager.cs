@@ -251,7 +251,11 @@ namespace Ashlight.Battle
                     BaseEnergy = Mathf.Max(0, characterConfig.Energy),
                     BaseDrawCount = Mathf.Max(0, characterConfig.Draw),
                     ActionBar = new ActionBarState(),
-                    Overload = new OverloadState()
+                    Overload = new OverloadState(),
+                    // 开局站位：战士(Rocket)前排，其余后排
+                    RowPosition = characterId == CharacterEnum.Rocket
+                        ? BattleRowPosition.FrontRow
+                        : BattleRowPosition.BackRow
                 };
 
                 CurrentState.PlayerUnits.Add(unitState);
@@ -524,10 +528,23 @@ namespace Ashlight.Battle
             }
 
             int energyCost = GetCardEnergyCost(cardInfo);
+            // 游侠百相 FirstMoveFree：本回合第一张「带移动」的牌费用为 0
+            bool isFreeMove = IsFreeMoveForOwner(owner, cardInfo);
+            if (isFreeMove)
+            {
+                energyCost = 0;
+            }
+            // 能量不足时尝试过载（每人每回合限 1 次；代价 = 结束回合重排额外 +1 格）
+            bool willOverload = false;
             if (owner.CurrentEnergy < energyCost)
             {
-                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：能量不足 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
-                return false;
+                bool canOverload = !isFreeMove && owner.Overload != null && owner.Overload.OverloadCountThisTurn == 0;
+                if (!canOverload)
+                {
+                    Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：能量不足且不可过载 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
+                    return false;
+                }
+                willOverload = true;
             }
 
             // 发布卡牌执行事件（用于 UI 动画触发）
@@ -554,7 +571,21 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            owner.CurrentEnergy -= energyCost;
+            if (willOverload)
+            {
+                owner.Overload.OverloadCountThisTurn++; // 本回合已过载 → 结束回合重排 +1 格
+                owner.Overload.IsOverloaded = true;
+                owner.CurrentEnergy = 0;                // 透支：能量清空
+                Debug.Log($"[BattleManager] {ownerId} 过载打出 {cardInfo.Id}，本回合结束重排将 +1 格");
+            }
+            else
+            {
+                owner.CurrentEnergy -= energyCost;
+                if (isFreeMove)
+                {
+                    owner.FreeMoveUsedThisTurn = true; // 用掉本回合的免费移动额度
+                }
+            }
 
             // 从手牌消费这张卡
             bool consumed = false;
@@ -747,11 +778,19 @@ namespace Ashlight.Battle
             CurrentState.CurrentTurnUnitId = unitId;
 
             playerUnit.CurrentEnergy = Mathf.Max(0, playerUnit.BaseEnergy);
+            playerUnit.FreeMoveUsedThisTurn = false; // 每回合重置「首张移动免费」
+            if (playerUnit.Overload != null)
+            {
+                playerUnit.Overload.OverloadCountThisTurn = 0; // 每回合重置过载额度
+                playerUnit.Overload.IsOverloaded = false;
+            }
             if (CurrentState.DeckSystem != null)
             {
                 // 新玩家回合开始时替换手牌：避免战斗初始抽牌 + 本回合抽牌叠加，或多角色连续行动时手牌累加
                 DiscardCurrentHand();
                 DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
+                // 回合开始注入本角色的基础移动牌（虚无+消耗：打出/未用都自动清除，不污染牌库）
+                InjectBasicMoveCard(playerUnit);
             }
 
             if (generateEnemyIntentions)
@@ -772,6 +811,71 @@ namespace Ashlight.Battle
         public void StartPlayerTurn(string unitId)
         {
             StartPlayerTurn(unitId, true);
+        }
+
+        /// <summary>
+        /// 回合开始给该角色注入其基础移动牌（Id = 角色枚举名 + "000"，如 Zhouzhou000）。
+        /// 该牌带虚无(IsEthereal)+消耗(IsExhaust)：打出即除、未用则回合末消失，不污染牌库。
+        /// </summary>
+        private void InjectBasicMoveCard(UnitState playerUnit)
+        {
+            var cid = playerUnit?.GetCharacterId();
+            if (cid == null || CurrentState?.DeckSystem == null)
+            {
+                return;
+            }
+
+            string moveCardId = $"{cid.Value}000";
+            if (ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(moveCardId) == null)
+            {
+                Debug.LogWarning($"[BattleManager] 未找到基础移动牌配置: {moveCardId}，跳过注入");
+                return;
+            }
+
+            CurrentState.DeckSystem.AddCardToHand(moveCardId, 1);
+            Debug.Log($"[BattleManager] 回合开始注入基础移动牌: {moveCardId} -> {playerUnit.UnitId}");
+        }
+
+        /// <summary>卡牌是否「带移动」（Effects 含 MovePositionEffect）。</summary>
+        private static bool CardHasMoveEffect(cfg.Character.CardInfo card)
+        {
+            return card?.Effects != null && card.Effects.Any(e => e is MovePositionEffect);
+        }
+
+        /// <summary>
+        /// 该 owner 打这张牌是否触发「首张移动免费」（游侠百相 FirstMoveFree）：
+        /// 拥有该 Trait + 是移动牌 + 本回合尚未用掉免费额度。
+        /// </summary>
+        private bool IsFreeMoveForOwner(UnitState owner, cfg.Character.CardInfo card)
+        {
+            if (owner == null || owner.FreeMoveUsedThisTurn || !CardHasMoveEffect(card))
+            {
+                return false;
+            }
+
+            var info = owner.GetCharacterInfo();
+            return info != null && info.Trait == "FirstMoveFree";
+        }
+
+        /// <summary>
+        /// 卡牌对指定施法者的「有效能量费用」：命中游侠百相 FirstMoveFree（本回合首张移动牌）时为 0，否则为基础费用。
+        /// 供 UI 显示卡面费用 / 判定是否打得起时调用，保证显示与实际扣费一致。
+        /// </summary>
+        public int GetEffectiveEnergyCost(cfg.Character.CardInfo card, string ownerUnitId)
+        {
+            if (card == null)
+            {
+                return 0;
+            }
+
+            int baseCost = GetCardEnergyCost(card);
+            var owner = CurrentState?.GetUnitById(ownerUnitId);
+            if (owner != null && IsFreeMoveForOwner(owner, card))
+            {
+                return 0;
+            }
+
+            return baseCost;
         }
 
         /// <summary>
@@ -1225,7 +1329,7 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var zonePool = ZoneTargeting.FilterByZone(alivePlayers, selectedSkill.TargetZone);
+            var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, selectedSkill.TargetZone);
             target = zonePool[Random.Range(0, zonePool.Count)];
             Debug.Log($"[BattleManager] 敌人技能 {selectedSkill.Id} 选定目标 {target.UnitId} " +
                       $"(TargetType={selectedSkill.TargetType}, TargetZone={selectedSkill.TargetZone})");
@@ -1254,7 +1358,7 @@ namespace Ashlight.Battle
                 return null;
             }
 
-            var zonePool = ZoneTargeting.FilterByZone(alivePlayers, skill.TargetZone);
+            var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, skill.TargetZone);
             if (zonePool.Count == 0)
             {
                 return null;

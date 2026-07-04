@@ -12,13 +12,15 @@ namespace Scripts.UI
     {
         #region UI Bindings
 
-        public RectTransform PlayerPosition;
-        public RectTransform EnemyPostion;
-        public TextMeshProUGUI Txt_Money;
         public Image CardContainer;
         public RectTransform TimeLineContainer;
         public RectTransform CardDeck;
         public RectTransform CardBin;
+        public RectTransform PlayerPosition;
+        public RectTransform PlayerFrontRow;
+        public RectTransform PlayerBackRow;
+        public RectTransform EnemyPostion;
+        public TextMeshProUGUI Txt_Money;
         public ATB ATB;
         public Button Btn_EndRoundBase;
         public Button Btn_EmptyBase;
@@ -47,15 +49,6 @@ namespace Scripts.UI
                 string bindName = bind.GetBindName();
                 switch (bindName)
                 {
-                    case "PlayerPosition":
-                        PlayerPosition = bind.GetComponent<RectTransform>();
-                        break;
-                    case "EnemyPostion":
-                        EnemyPostion = bind.GetComponent<RectTransform>();
-                        break;
-                    case "Txt_Money":
-                        Txt_Money = bind.GetComponent<TextMeshProUGUI>();
-                        break;
                     case "CardContainer":
                         CardContainer = bind.GetComponent<Image>();
                         break;
@@ -67,6 +60,21 @@ namespace Scripts.UI
                         break;
                     case "CardBin":
                         CardBin = bind.GetComponent<RectTransform>();
+                        break;
+                    case "PlayerPosition":
+                        PlayerPosition = bind.GetComponent<RectTransform>();
+                        break;
+                    case "PlayerFrontRow":
+                        PlayerFrontRow = bind.GetComponent<RectTransform>();
+                        break;
+                    case "PlayerBackRow":
+                        PlayerBackRow = bind.GetComponent<RectTransform>();
+                        break;
+                    case "EnemyPostion":
+                        EnemyPostion = bind.GetComponent<RectTransform>();
+                        break;
+                    case "Txt_Money":
+                        Txt_Money = bind.GetComponent<TextMeshProUGUI>();
                         break;
                     case "ATB":
                         ATB = bind.GetComponent<ATB>();

@@ -289,10 +289,9 @@
     "Description": "抽{V}张牌",
     "Effects": [
       {
-        "$type": "BuffEffect",
+        "$type": "DrawEffect",
         "EffectType": 6,
-        "buff_id": "DrawCard",
-        "value": 1
+        "count": 1
       }
     ],
     "CardType": 0,
@@ -367,7 +366,7 @@
     ],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 0,
+    "TargetType": 2,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
@@ -494,13 +493,76 @@
     ],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 0,
+    "TargetType": 2,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false
+  },
+  {
+    "Id": "Irene000",
+    "Name": "移动",
+    "Description": "[移动]",
+    "Effects": [
+      {
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true
+  },
+  {
+    "Id": "Rocket000",
+    "Name": "移动",
+    "Description": "[移动]",
+    "Effects": [
+      {
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true
+  },
+  {
+    "Id": "Zhouzhou000",
+    "Name": "移动",
+    "Description": "[移动]",
+    "Effects": [
+      {
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true
   },
   {
     "Id": "Extra001",

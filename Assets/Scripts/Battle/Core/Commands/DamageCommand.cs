@@ -96,7 +96,7 @@ namespace Ashlight.Battle.Core.Commands
                 : state.GetAlivePlayerUnits();
 
             // 分区过滤：AllEnemy+Front 只扫前区，+Back 只扫后区；Any 不过滤。
-            targets = ZoneTargeting.FilterByZone(targets, TargetZone);
+            targets = ZoneTargeting.FilterByZone(state, targets, TargetZone);
 
             int adjustedDamage = ApplyAttackerModifiers(owner, Damage);
 

@@ -28,14 +28,17 @@
   - [x] 数据字段：`EnemySkillInfo` 加 `TargetZone`（`TargetZoneEnum`: Front/Back/Any/Conditional），14 条敌技已按描述填好分区示例。单/群仍由 `TargetType`(SingleEnemy/AllEnemy) 管。
   - [x] 代码消费：索敌层读 `TargetZone` 选目标——载体选择+AOE扩散都按区过滤(共用 `ZoneTargeting.FilterByZone`)。玩家卡默认 `Any` 不受影响。
   - [x] **动态索敌**：目标在「执行那一刻」按当前站位重解(`BattleManager.ResolveExecutionTarget`)——原目标仍在区内则继续打、被移出/死亡则改选该区其他人；AOE 本就在 `DamageCommand` 执行时现算。→ 移动躲伤害真正生效。空区暂回退全体(见 `ZoneTargeting` TODO)。
-  - [ ] 意图 UI 表达目标区：`IntentionView` 需显示敌人打「前区/后区/全体」，否则玩家读不出该躲哪——两区 counterplay 的可读性依赖它。
+  - [ ] **意图 UI 表达目标区（今日剩余·优先）**：`IntentionView` 需显示敌人打「前排/后排/全体」，让玩家读得出该躲哪——数据(`TargetZone`)与索敌都已就绪，只差表现。
+  - [ ] **修改卡牌设计（今日剩余）**：按三职业设计（`docs/职业设计_三职业与公用系统.md`）调整卡表。
   - [ ] 空区落空表现：目前空区回退全体；待「闪避/miss」表现就绪后改为真正落空（`ZoneTargeting` 里已留 TODO）。
   - [ ] 嘲讽 `Taunt` 覆盖索敌。
   - [ ] `Conditional` 的具体规则（枚举位已占，逻辑待定）。
-- [ ] **角色特性（百相）实装**：需 **datatable 定义签名百相 + 开局同时贴给对应角色**（复用 `UpgradeEffectApplier`）。游侠＝首张移动免费；法师＝双开执行。
-- [ ] **每回合的移动牌加入牌库**：各角色牌库补基础移动牌，游侠牌库移动牌更多、且带触发（移动→闪避/小刀/毒）。
-- [ ] **基础移动动作**：每人每回合可花能量做一次「基础移动」（挪自己一步、不占卡）。
-- [ ] **过载代价重写**：`ApplyOverloadPenalty` 的 0–100 负债与离散 Slots 队列脱节，改为「重排时额外 +1~2 格」。
+- [~] **角色特性（百相）实装**：`CharaterInfo` 加 `Trait` 字段；游侠 `FirstMoveFree`＝本回合首张「带移动」的牌费用0（`BattleManager.IsFreeMoveForOwner`）已实装。法师双开执行仍待做。开局贴百相的通用框架（复用 `UpgradeEffectApplier`）仍待做。
+- [x] **每回合注入移动牌**：`Irene000/Rocket000/Zhouzhou000`（Swift，虚无+消耗，不污染牌库），`StartPlayerTurn` 里 `InjectBasicMoveCard` 注入。各角色牌库「更多移动牌+触发」仍待做。
+- [x] **过载代价（离散）**：改为「本回合过载过 → 结束回合重排 +1 格」(`UI_BattleScene` 1547)。触发＝能量不足时自动透支(每回合1次)。旧 0–100 `ApplyOverloadPenalty` 仅剩敌人 `ActionBarResolver` 路径在用，待清理。
+  - [ ] 过载显式图标：目前靠 +1 格后移体现，`UI_行动顺序` 卡片加过载徽标需 Unity 侧动预制体。
+  - [ ] 过载触发 UX 待定：现为「能量不足自动透支」，若要改成按钮/确认再说。
+- [ ] **移动牌费用的 UI 显示**：游侠首张移动实际扣0但卡面仍显示1，需动态显示。
 - [ ] **两区站位系统**：前排区/后排区（可多人），移动＝相邻交换一步，射程软处理。
 - [ ] 待测：法师执行是否可被敌人打断；过载「越用越贵」是否需要；移动/毒/小刀/闪避数值。
 

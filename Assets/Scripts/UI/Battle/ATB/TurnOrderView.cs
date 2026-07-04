@@ -428,6 +428,12 @@ namespace Scripts.UI
             hlg.childControlWidth      = false;
             hlg.childControlHeight     = false;
             hlg.childAlignment         = TextAnchor.MiddleLeft;
+
+            // 让 CardRow 自身尺寸跟随子卡片（HLG 计算出的 preferred size）自适应
+            var fitter = cardsContainer.GetComponent<ContentSizeFitter>();
+            if (fitter == null) fitter = cardsContainer.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
         }
 
         #endregion

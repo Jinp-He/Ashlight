@@ -158,6 +158,11 @@ namespace Ashlight.Battle.Core.Engine
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
             }
 
+            if (effect is DrawEffect drawEffect)
+            {
+                return new DrawCommand(drawEffect.Count);
+            }
+
             // ATB 新增：PushCollisionEffect 映射到 ActionBarShiftCommand
             if (effect is PushCollisionEffect pushEffect)
             {
