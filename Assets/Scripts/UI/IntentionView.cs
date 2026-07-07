@@ -70,6 +70,13 @@ namespace Scripts.UI
         [Tooltip("相邻坐标点之间的水平间距（像素）")]
         [SerializeField] private float _dotSpacing = 60f;
 
+        // ===== 分区颜色（前排红 / 后排蓝）：被攻击的玩家点按其所在排上色 =====
+        // 颜色数据来源(通道)：TbCustomColor（Luban 表 Id→hex）。读不到时用兜底常量。
+        private const string FrontRowColorId = "FrontRow";
+        private const string BackRowColorId  = "BackRow";
+        private static readonly Color FrontRowFallback = new Color32(0xcc, 0x5a, 0x3c, 0xff); // 前排·红
+        private static readonly Color BackRowFallback  = new Color32(0x3c, 0x8f, 0xcc, 0xff); // 后排·蓝
+
         [Header("Tooltip（敌人技能详情）")]
         [Tooltip("DescriptionViewController 预制体（与 CardViewController 用的是同一个）。鼠标悬停在意图上时弹出，显示当前 EnemySkillInfo 的详情")]
         [SerializeField] private GameObject _descriptionViewControllerPrefab;
@@ -80,6 +87,17 @@ namespace Scripts.UI
         [Tooltip("勾选时 tooltip 跟随鼠标位置出现；不勾选则锚定在 IntentionView 自身的右侧")]
         [SerializeField] private bool _tooltipFollowMouse = true;
 
+        /// <summary>
+        /// UnitId → 目标角色 UI Transform 的解析器（由 UI_BattleScene 在战斗初始化时注入）。
+        /// 悬停意图时用它把「锁定目标 UnitId」解析为当前 UI 位置，画抛物线指向之。
+        /// 角色移动后 Transform 仍有效，抛物线自动指向其新位置。
+        /// </summary>
+        public static System.Func<string, Transform> TargetTransformResolver;
+
+        // 悬停时从意图指向锁定目标的抛物线（复用玩家出牌的 TargetArrowRenderer；红色示意来袭攻击）
+        private TargetArrowRenderer _parabola;
+        private Canvas _canvas;
+
         // 运行时生成的坐标点列表（含模板自身）
         private readonly List<Image> _coordDots = new List<Image>();
         // 当前总坐标点数（已生成且激活的数量）
@@ -88,6 +106,8 @@ namespace Scripts.UI
         // tooltip 实例与当前对应的技能配置
         private DescriptionViewController _descriptionView;
         private EnemySkillInfo _currentSkillInfo;
+        // 当前锁定目标 UnitId（供悬停抛物线指向；空区未锁人 / 思考态为 null）
+        private string _currentTargetUnitId;
 
         // ===== 生命周期 =====
 
@@ -107,6 +127,66 @@ namespace Scripts.UI
                 Destroy(_descriptionView.gameObject);
                 _descriptionView = null;
             }
+            if (_parabola != null)
+            {
+                Destroy(_parabola.gameObject);
+                _parabola = null;
+            }
+        }
+
+        // ===== 悬停抛物线 =====
+
+        /// <summary>懒创建一条填满 Canvas 的抛物线渲染器（不拦射线、初始隐藏）。</summary>
+        private TargetArrowRenderer EnsureParabola()
+        {
+            if (_parabola != null) return _parabola;
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            if (_canvas == null) return null;
+
+            var go = new GameObject("IntentionParabola");
+            go.transform.SetParent(_canvas.transform, false);
+            go.layer = _canvas.gameObject.layer;
+
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+            rt.anchoredPosition = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            _parabola = go.AddComponent<TargetArrowRenderer>();
+            _parabola.raycastTarget = false;
+            _parabola.Hide();
+            return _parabola;
+        }
+
+        /// <summary>悬停时若已锁定目标，画一条抛物线从意图指向该目标当前 UI 位置。</summary>
+        private void TryShowParabola()
+        {
+            if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
+
+            var targetT = TargetTransformResolver(_currentTargetUnitId);
+            if (targetT == null) return;
+
+            var arrow = EnsureParabola();
+            if (arrow == null) return;
+
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            Camera cam = (_canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                ? _canvas.worldCamera
+                : null;
+
+            Vector3 startScreen = RectTransformUtility.WorldToScreenPoint(cam, transform.position);
+            Vector3 endScreen = RectTransformUtility.WorldToScreenPoint(cam, targetT.position);
+
+            arrow.transform.SetAsLastSibling();      // 画在最上层
+            arrow.UpdateLine(startScreen, endScreen, false); // false → 红色，示意来袭攻击
+            arrow.Show();
+        }
+
+        private void HideParabola()
+        {
+            if (_parabola != null) _parabola.Hide();
         }
 
         private void CreateDescriptionView()
@@ -132,7 +212,9 @@ namespace Scripts.UI
                 gameObject.SetActive(false);
 
             _currentSkillInfo = null;
+            _currentTargetUnitId = null;
             HideTooltip();
+            HideParabola();
         }
 
         /// <summary>显示</summary>
@@ -196,7 +278,9 @@ namespace Scripts.UI
             SetCoordsVisible(false); // 思考阶段不展示目标位置
 
             _currentSkillInfo = null;
+            _currentTargetUnitId = null;
             HideTooltip();
+            HideParabola();
         }
 
         /// <summary>
@@ -206,10 +290,12 @@ namespace Scripts.UI
         /// 其他 → State 图标，无数值
         /// </summary>
         /// <param name="skillInfo">技能配置</param>
-        /// <param name="targetSlot">目标在队伍中的位置索引（0 起；AOE 时忽略）</param>
-        /// <param name="totalSlots">队伍总人数（决定 Coord 总格数；&lt;=0 时保留当前）</param>
-        /// <param name="isAoe">是否 AOE（全员）</param>
-        public void ShowFromSkill(EnemySkillInfo skillInfo, int targetSlot, int totalSlots, bool isAoe)
+        /// <param name="dotStates">
+        /// 每个玩家点的状态数组（长度=玩家数，顺序=名单序）：0=未被攻击(灰)、1=被攻击且在前排(红)、2=被攻击且在后排(蓝)。
+        /// 为 null → 隐藏 Coord（自身/我方向技能）。
+        /// </param>
+        /// <param name="targetUnitId">当前锁定目标 UnitId（供悬停抛物线）</param>
+        public void ShowFromSkill(EnemySkillInfo skillInfo, int[] dotStates, string targetUnitId = null)
         {
             if (skillInfo == null)
             {
@@ -217,14 +303,9 @@ namespace Scripts.UI
                 return;
             }
 
-            // 缓存当前技能，供 hover tooltip 使用
+            // 缓存当前技能 + 锁定目标，供 hover tooltip / 抛物线使用
             _currentSkillInfo = skillInfo;
-
-            // 调整总格数
-            if (totalSlots > 0 && totalSlots != _currentTotalCoords)
-            {
-                EnsureCoordCount(totalSlots);
-            }
+            _currentTargetUnitId = targetUnitId;
 
             // 扫效果分类
             int attackDamage = 0;
@@ -264,80 +345,107 @@ namespace Scripts.UI
                 }
             }
 
-            // 综合判定 AOE：调用方传入 || 任一效果 IsAoe || TargetType 为全体
-            bool aoe = isAoe || effectIsAoe
-                || skillInfo.TargetType == TargetTypeEnum.AllEnemy
-                || skillInfo.TargetType == TargetTypeEnum.AllAlly;
-
-            bool[] mask = BuildTargetMask(targetSlot, _currentTotalCoords, aoe);
-
+            // Coord 语义：3 个点 = 3 个玩家角色；被攻击的玩家点按其所在排上色（前排红/后排蓝），未被打为灰。
+            // 具体每个点的状态由调用方(UI_BattleScene)按当前站位算好传入；null → 隐藏 Coord。
             if (hasAttack)
-                ShowAttack(attackDamage, mask);
+                ShowAttack(attackDamage, dotStates);
             else if (hasShield)
-                ShowShield(shieldValue, mask);
+                ShowShield(shieldValue, dotStates);
             else
-                ShowState(mask);
+                ShowState(dotStates);
         }
 
-        /// <summary>旧签名兜底：没有目标信息时，所有坐标灰。</summary>
+        /// <summary>旧签名兜底：没有目标信息时隐藏 Coord。</summary>
         public void ShowFromSkill(EnemySkillInfo skillInfo)
         {
-            ShowFromSkill(skillInfo, targetSlot: -1, totalSlots: -1, isAoe: false);
+            ShowFromSkill(skillInfo, (int[])null, null);
         }
 
-        public void ShowAttack(int damage, bool[] mask)
+        public void ShowAttack(int damage, int[] dotStates)
         {
             Show();
             SetActiveIcon(_imgAttack);
             SetFigure(damage.ToString());
-            SetCoordsVisible(true);
-            SetCoordMask(mask);
+            ApplyCoordStates(dotStates);
         }
 
-        public void ShowShield(int shieldValue, bool[] mask)
+        public void ShowShield(int shieldValue, int[] dotStates)
         {
             Show();
             SetActiveIcon(_imgShield);
             SetFigure(shieldValue.ToString());
-            SetCoordsVisible(true);
-            SetCoordMask(mask);
+            ApplyCoordStates(dotStates);
         }
 
-        public void ShowState(bool[] mask)
+        public void ShowState(int[] dotStates)
         {
             Show();
             SetActiveIcon(_imgState);
             SetFigure(null);
+            ApplyCoordStates(dotStates);
+        }
+
+        /// <summary>dotStates 为 null → 隐藏整个 Coord；否则显示并按每个玩家点的状态上色。</summary>
+        private void ApplyCoordStates(int[] dotStates)
+        {
+            if (dotStates == null || dotStates.Length == 0)
+            {
+                SetCoordsVisible(false);
+                return;
+            }
             SetCoordsVisible(true);
-            SetCoordMask(mask);
+            SetCoordStates(dotStates);
+        }
+
+        // ===== 坐标点：3 个玩家点 + 前排红/后排蓝上色 =====
+
+        /// <summary>
+        /// 按每个玩家点的状态上色：0=未被攻击(灰)、1=被攻击且前排(红)、2=被攻击且后排(蓝)。
+        /// 全部点都显示（代表在场的玩家角色），只有被攻击的点染成红/蓝。
+        /// </summary>
+        private void SetCoordStates(int[] states)
+        {
+            int n = states.Length;
+            EnsureCoordCount(n);
+
+            for (int i = 0; i < n && i < _coordDots.Count; i++)
+            {
+                var dot = _coordDots[i];
+                if (dot == null) continue;
+                if (!dot.gameObject.activeSelf) dot.gameObject.SetActive(true);
+
+                Color c;
+                if (states[i] == 1) c = ReadCustomColor(FrontRowColorId, FrontRowFallback);
+                else if (states[i] == 2) c = ReadCustomColor(BackRowColorId, BackRowFallback);
+                else c = InactiveDotColor;
+                dot.color = c;
+            }
+
+            // 新方案按玩家点染色，不再用连接条长条：始终隐藏它
+            if (_imgLinkPiece != null && _imgLinkPiece.gameObject.activeSelf)
+                _imgLinkPiece.gameObject.SetActive(false);
+        }
+
+        /// <summary>从 TbCustomColor 读取指定 Id 的十六进制颜色；缺失/解析失败时返回 fallback。</summary>
+        private static Color ReadCustomColor(string id, Color fallback)
+        {
+            try
+            {
+                var entry = Ashlight.Config.ConfigLoader.Tables?.TbCustomColor?.GetOrDefault(id);
+                if (entry != null && !string.IsNullOrEmpty(entry.Color)
+                    && ColorUtility.TryParseHtmlString("#" + entry.Color.TrimStart('#'), out var c))
+                {
+                    return c;
+                }
+            }
+            catch
+            {
+                // 配置未加载等异常：静默回退
+            }
+            return fallback;
         }
 
         // ===== 内部：图标 / 数值 / 坐标 =====
-
-        /// <summary>
-        /// 构建坐标点掩码。
-        /// CoordPoint 顺序与战斗位置**相反**：
-        ///   战斗位置 pos（0起）→ 点位索引 = (totalSlots - 1 - pos)
-        /// 例：totalSlots=4 时，战斗位置3→点0，战斗位置4→点1（均1起）
-        /// AOE：全部点亮 + LinkPiece 横跨所有点。
-        /// 单体：仅对应点亮，LinkPiece 隐藏。
-        /// </summary>
-        private static bool[] BuildTargetMask(int targetSlot, int totalSlots, bool isAoe)
-        {
-            if (totalSlots <= 0) return null;
-            var mask = new bool[totalSlots];
-            if (isAoe)
-            {
-                for (int i = 0; i < totalSlots; i++) mask[i] = true;
-            }
-            else if (targetSlot >= 0 && targetSlot < totalSlots)
-            {
-                // 战斗位置与 CoordPoint 顺序相反
-                int dotIndex = (totalSlots - 1) - targetSlot;
-                mask[dotIndex] = true;
-            }
-            return mask;
-        }
 
         private void SetActiveIcon(Image active)
         {
@@ -398,82 +506,6 @@ namespace Scripts.UI
                 _imgLinkPiece.gameObject.SetActive(false);
         }
 
-        /// <summary>
-        /// 按 mask 点亮 / 熄灭坐标点。mask 为 null 时全部置灰。
-        /// </summary>
-        private void SetCoordMask(bool[] mask)
-        {
-            int total = _currentTotalCoords;
-            int firstActive = -1, lastActive = -1;
-
-            for (int i = 0; i < total; i++)
-            {
-                bool on = mask != null && i < mask.Length && mask[i];
-                if (on)
-                {
-                    if (firstActive < 0) firstActive = i;
-                    lastActive = i;
-                }
-                var dot = _coordDots[i];
-                if (dot == null) continue;
-                dot.color = on ? ActiveColor : InactiveDotColor;
-            }
-
-            UpdateLinkPieceRange(firstActive, lastActive);
-        }
-
-        /// <summary>
-        /// 连接条覆盖第 firstActive 到 lastActive 个坐标点之间的区间。
-        /// CoordLinkPiece pivot=(0,0) 左对齐：
-        ///   anchoredPosition.x = 第一个激活点中心的父级本地 x
-        ///   sizeDelta.x        = 最后一个激活点中心 x − 第一个激活点中心 x
-        /// 位置通过 InverseTransformPoint 从世界坐标换算，与 HorizontalLayoutGroup 解耦。
-        /// </summary>
-        private void UpdateLinkPieceRange(int firstActive, int lastActive)
-        {
-            if (_imgLinkPiece == null) return;
-
-            // 无高亮或单点：隐藏连接条
-            if (firstActive < 0 || firstActive == lastActive)
-            {
-                if (_imgLinkPiece.gameObject.activeSelf)
-                    _imgLinkPiece.gameObject.SetActive(false);
-                return;
-            }
-
-            if (!_imgLinkPiece.gameObject.activeSelf)
-                _imgLinkPiece.gameObject.SetActive(true);
-            _imgLinkPiece.color = ActiveColor;
-
-            var rt = _imgLinkPiece.rectTransform;
-            var linkParent = rt.parent;
-
-            // 取两端点的世界坐标，转换到 CoordLinkPiece 父级的本地空间
-            Vector2 p0 = DotCenterInLocal(firstActive, linkParent);
-            Vector2 p1 = DotCenterInLocal(lastActive, linkParent);
-
-            // pivot=(0,0)：anchoredPosition.x = 起点 x，宽度 = 终点 x - 起点 x
-            float startX = p0.x;
-            float width  = p1.x - p0.x;
-
-            rt.anchoredPosition = new Vector2(startX, rt.anchoredPosition.y);
-            var size = rt.sizeDelta;
-            size.x = width;
-            rt.sizeDelta = size;
-        }
-
-        /// <summary>将第 idx 个坐标点的世界坐标转为目标 Transform 的本地坐标</summary>
-        private Vector2 DotCenterInLocal(int idx, Transform targetParent)
-        {
-            if (idx < 0 || idx >= _coordDots.Count || _coordDots[idx] == null)
-                return Vector2.zero;
-            var lp = targetParent.InverseTransformPoint(_coordDots[idx].transform.position);
-            return new Vector2(lp.x, lp.y);
-        }
-
-        // CoordPoints 有 HorizontalLayoutGroup，位置由布局自动管理，此方法保留空实现以兼容旧调用
-        private void PlaceCoordAt(Image dot, int idx) { }
-
         // ===== 内部：自动绑定 & 工具 =====
 
         private void AutoBindIfMissing()
@@ -524,12 +556,19 @@ namespace Scripts.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (_descriptionView == null || _currentSkillInfo == null)
+            if (_currentSkillInfo == null)
             {
-                return; // 没有技能信息（思考态）或没绑 prefab，不显示
+                return; // 思考态/无意图：既不显示 tooltip 也不画抛物线
             }
-            _descriptionView.Show(_currentSkillInfo);
-            PositionTooltip(eventData);
+
+            // 抛物线指向锁定目标（即使没有 tooltip prefab 也要画）
+            TryShowParabola();
+
+            if (_descriptionView != null)
+            {
+                _descriptionView.Show(_currentSkillInfo);
+                PositionTooltip(eventData);
+            }
         }
 
         /// <summary>
@@ -571,6 +610,7 @@ namespace Scripts.UI
         public void OnPointerExit(PointerEventData eventData)
         {
             HideTooltip();
+            HideParabola();
         }
 
         private void HideTooltip()

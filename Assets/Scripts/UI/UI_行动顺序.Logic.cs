@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using cfg.Enemy;
+using Ashlight.Config;
 
 namespace Scripts.UI
 {
@@ -40,10 +41,11 @@ namespace Scripts.UI
         #region 公共 API
 
         /// <summary>
-        /// 根据 configId 显示对应的角色/敌人图片。
-        /// UnitsPiece 下的子物体名称格式为 Img_{configId}（例如 Img_Irene、Img_DogKnight）。
+        /// 根据 configId 显示对应的单位图片。
+        /// 统一从 Resources 加载「行动顺序单位图标」(UI/ActionOrder/Img_{configId})，套到复用的 Img_Dynamic 上；
+        /// 找不到时回退到旧的角色/敌人图标路径。prefab 里预置的命名子图一律隐藏（改为 Resources 驱动）。
         /// </summary>
-        public void Setup(string configId)
+        public void Setup(string configId, bool isPlayer)
         {
             if (UnitsPiece == null)
             {
@@ -51,24 +53,83 @@ namespace Scripts.UI
                 return;
             }
 
-            // 先隐藏所有子图
+            // 隐藏所有子图（含 prefab 预置命名子图与动态图），改由 Resources 图标驱动
             foreach (Transform child in UnitsPiece.transform)
                 child.gameObject.SetActive(false);
 
-            // 按名称激活匹配项
-            string targetName = $"Img_{configId}";
-            Transform target = UnitsPiece.transform.Find(targetName);
-            if (target != null)
+            var dyn = EnsureDynamicImage();
+            if (dyn == null)
             {
-                target.gameObject.SetActive(true);
+                Debug.LogWarning($"[UI_行动顺序] 无法为 {configId} 创建动态图标");
+                return;
+            }
+
+            // 敌人的美术按 AlternativePath 命名（多个 EnemyInfo 共用一套美术），与 Enemy.Logic.cs 保持一致；
+            // 玩家没有该字段，直接用 configId。
+            string iconId = ResolveArtId(configId, isPlayer);
+
+            // 优先：行动顺序专用图标（Assets/Resources/UI/ActionOrder/Img_{iconId}）
+            var sprite = Resources.Load<Sprite>(Ashlight.Common.Utils.AssetPath.GetActionOrderIconPath(iconId));
+            // 回退：旧的角色/敌人通用图标（时间轴文件夹尚未就位时不至于空图）
+            if (sprite == null) sprite = LoadUnitIconSprite(configId, isPlayer);
+
+            if (sprite != null)
+            {
+                dyn.sprite = sprite;
+                dyn.color = Color.white;
             }
             else
             {
-                Debug.LogWarning($"[UI_行动顺序] UnitsPiece 中未找到 {targetName}，保留默认子物体");
-                // 找不到时显示第一个子物体作为兜底
-                if (UnitsPiece.transform.childCount > 0)
-                    UnitsPiece.transform.GetChild(0).gameObject.SetActive(true);
+                Debug.LogWarning($"[UI_行动顺序] 未找到单位图标: UI/ActionOrder/Img_{iconId}（也无回退图，configId={configId}, isPlayer={isPlayer}）");
             }
+            dyn.gameObject.SetActive(true);
+        }
+
+        /// <summary>兼容旧调用：默认按敌人处理（保留以防外部旧引用）。</summary>
+        public void Setup(string configId) => Setup(configId, false);
+
+        /// <summary>在 UnitsPiece 下懒创建（或复用）一个铺满容器的动态图标 Image。</summary>
+        private UnityEngine.UI.Image EnsureDynamicImage()
+        {
+            var existing = UnitsPiece.transform.Find("Img_Dynamic");
+            if (existing != null) return existing.GetComponent<UnityEngine.UI.Image>();
+
+            var go = new GameObject("Img_Dynamic", typeof(RectTransform));
+            go.transform.SetParent(UnitsPiece.transform, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            var img = go.AddComponent<UnityEngine.UI.Image>();
+            img.raycastTarget = false;
+            img.preserveAspect = true;
+            return img;
+        }
+
+        /// <summary>
+        /// 解析用于拼图标名的美术 Id：敌人优先取 AlternativePath（多个 EnemyInfo 共用一套美术，
+        /// 与 Enemy.Logic.cs 的骨骼加载逻辑一致）；玩家无该字段，直接返回 configId。
+        /// </summary>
+        private static string ResolveArtId(string configId, bool isPlayer)
+        {
+            if (isPlayer) return configId;
+
+            var info = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(configId);
+            if (info != null && !string.IsNullOrEmpty(info.AlternativePath))
+                return info.AlternativePath;
+            return configId;
+        }
+
+        /// <summary>回退图标：按玩家/敌人取通用 Icon（Resources 路径统一转正斜杠）。</summary>
+        private static Sprite LoadUnitIconSprite(string configId, bool isPlayer)
+        {
+            string path = isPlayer
+                ? Ashlight.Common.Utils.AssetPath.GetCharacterIconAssetPath(configId)
+                : Ashlight.Common.Utils.AssetPath.GetEnemyIconAssetPath(configId);
+            if (string.IsNullOrEmpty(path)) return null;
+            return Resources.Load<Sprite>(path.Replace('\\', '/'));
         }
 
         /// <summary>

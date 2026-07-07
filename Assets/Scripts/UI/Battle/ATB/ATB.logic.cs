@@ -96,6 +96,13 @@ namespace Scripts.UI
         /// </summary>
         public event Action<string, bool> OnExecutionComplete;
 
+        /// <summary>
+        /// 客观回合推进一格时触发：<see cref="TriggerNextUnit"/> 里「所有单位 Slots 一起减去 minSlots」（minSlots &gt; 0）
+        /// 的那一刻——即时间真正快进、跨入下一排 slot。整排同格单位连续行动只在跨格那一次触发一次。
+        /// 上层据此推进「每客观回合」的逐回合效果（如闪避掉层）。
+        /// </summary>
+        public event Action OnObjectiveRoundAdvanced;
+
         [Obsolete("Use OnPlanningComplete instead")]
         public event Action<string, bool> OnIconReachZero
         {
@@ -278,6 +285,43 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 【敌人单轨制·开局】把敌人移入执行轨，位置排到「所有玩家当前单位之后」再 + executingCost，
+        /// 保证开局每个玩家角色都先行动一轮，敌人的首次意图才落地（避免快敌抢在玩家前手起手落）。
+        /// 之后的重报意图仍用 <see cref="MoveToExecutingTrack"/>（正常 = ExecutingCost 距离）。
+        /// </summary>
+        public void MoveToExecutingTrackBehindPlayers(string unitId, int executingCost)
+        {
+            EnsureTrackSlotsBound();
+            var icon = FindIcon(unitId);
+            if (icon == null)
+            {
+                Debug.LogWarning($"[ATB] MoveToExecutingTrackBehindPlayers 未找到图标: {unitId}");
+                return;
+            }
+            if (ExecutingATBSlot == null)
+            {
+                Debug.LogError("[ATB] ExecutingATBSlot 未绑定");
+                return;
+            }
+
+            // 取所有玩家单位当前最大的 Slots（开局即其初始格）
+            int maxPlayerSlots = 0;
+            for (int i = 0; i < _activeIcons.Count; i++)
+            {
+                var o = _activeIcons[i];
+                if (o?.Rect == null || !o.IsPlayer) continue;
+                if (o.Slots > maxPlayerSlots) maxPlayerSlots = o.Slots;
+            }
+
+            icon.CurrentTrack = AtbTrack.Executing;
+            icon.Rect.SetParent(ExecutingATBSlot.transform, false);
+            icon.Slots = maxPlayerSlots + Mathf.Max(1, executingCost);
+            icon.LastExecutingCost = executingCost;
+            icon.BlockExecutionCompleteUntil = 0f;
+            SyncVisualFromSlots(icon);
+        }
+
+        /// <summary>
         /// 玩家跳过执行轨（只用了迅捷牌或跳过），直接回到规划轨起点
         /// </summary>
         public void SkipExecutingTrack(string unitId)
@@ -439,6 +483,9 @@ namespace Scripts.UI
                         icon.Slots -= minSlots;
                         SyncVisualFromSlots(icon);
                     }
+
+                    // 跨入下一排 slot = 前进一个客观回合（同格连续行动 minSlots==0 不会走到这里）
+                    OnObjectiveRoundAdvanced?.Invoke();
                 }
 
                 next.Slots = 0;

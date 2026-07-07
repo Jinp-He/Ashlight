@@ -15,10 +15,13 @@ namespace Ashlight.Battle.Core.Data
         /// 从一组单位里筛出目标分区内的存活单位。
         /// · Front → 前排区；Back → 后排区；
         /// · Any / Conditional（未实装）→ 不过滤，返回全部存活。
-        /// 目标区为空（该区被清空/全员移走）时**暂时回退到全体存活**，避免敌人无目标空转。
-        /// TODO(索敌): 待「空区落空 / 闪避」表现就绪后，空区应改为真正 miss，而非回退全体。
+        ///
+        /// <paramref name="strict"/> 控制目标区为空（该区被清空/全员移走）时的行为：
+        /// · false（默认，向后兼容）→ 回退到全体存活，避免调用方无目标。
+        /// · true → 返回空列表，表示「该区当前无人」。敌人索敌/执行索敌用此语义实现
+        ///   「攻击回合目标区空排 → 打空 miss」；AOE 扩散同理只铺到区内剩余单位。
         /// </summary>
-        public static List<UnitState> FilterByZone(BattleStateSnapshot state, IEnumerable<UnitState> units, TargetZoneEnum zone)
+        public static List<UnitState> FilterByZone(BattleStateSnapshot state, IEnumerable<UnitState> units, TargetZoneEnum zone, bool strict = false)
         {
             var alive = units == null
                 ? new List<UnitState>()
@@ -45,7 +48,12 @@ namespace Ashlight.Battle.Core.Data
             }
 
             var inZone = alive.Where(u => state.GetRowPosition(u) == wanted).ToList();
-            return inZone.Count > 0 ? inZone : alive;
+            if (inZone.Count > 0)
+            {
+                return inZone;
+            }
+            // 空区：strict 下如实返回空（触发 miss / 只打剩余）；否则回退全体（旧行为）
+            return strict ? inZone : alive;
         }
     }
 }

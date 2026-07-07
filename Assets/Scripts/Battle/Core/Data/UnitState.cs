@@ -100,6 +100,11 @@ namespace Ashlight.Battle.Core.Data
         public bool FreeMoveUsedThisTurn { get; set; }
 
         /// <summary>
+        /// 本回合是否移动过（换过区）。供条件效果读取（如影袭「本回合移动过则叠毒」）。每回合开始时重置。
+        /// </summary>
+        public bool HasMovedThisTurn { get; set; }
+
+        /// <summary>
         /// 前后排（显式存储，唯一真相源）。移动 = 改这个值，可独立进出前/后排，无需与他人换位；
         /// 两区可多人共存。默认后排，开局由 BattleManager 设定（战士前排）。
         /// </summary>
@@ -184,6 +189,21 @@ namespace Ashlight.Battle.Core.Data
         {
             if (damage <= 0)
             {
+                return 0;
+            }
+
+            // 0. 闪避：消耗一层，完全免除这一次攻击（在护甲/易伤之前结算）。
+            //    仅拦截攻击伤害——中毒/燃烧走 TurnResolver 直接扣血、不经此处，天然不被闪避。
+            var dodge = GetBuff("Dodge");
+            if (dodge != null && dodge.Value >= 1f)
+            {
+                dodge.Value -= 1f;
+                dodge.StackCount = Mathf.Max(0, Mathf.RoundToInt(dodge.Value));
+                if (dodge.Value <= 0f)
+                {
+                    RemoveBuff("Dodge");
+                }
+                Debug.Log($"[UnitState] {UnitId} [闪避] 免除一次攻击 (剩余闪避层数: {Mathf.Max(0, Mathf.RoundToInt(dodge.Value))})");
                 return 0;
             }
 
@@ -346,14 +366,65 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
-        /// 添加Buff
+        /// 添加/叠加 Buff。
+        /// 同名 Buff 不再新增第二条，而是按配置合并到已有的那一条上：
+        /// · 可叠加（BuffInfo.MaxStack &gt; 1，如中毒/闪避/冰冻）→ 把层数累加到同一条 Buff 的 Value 上，封顶 MaxStack；
+        ///   Value 即层数（中毒每回合按 Value 掉血，闪避按 Value 计次），StackCount 与之同步供 UI 显示。
+        /// · 不可叠加（MaxStack ≤ 1，如易伤/减伤/力量）→ 只保留一条，数值取较大者，不叠层。
+        /// 两种情况都按 RefreshOnReapply 决定是否刷新剩余回合。
         /// </summary>
         public void AddBuff(BuffState buff)
         {
             if (buff == null) return;
 
-            // 简化版本：直接添加，不处理叠加逻辑
-            Buffs.Add(buff);
+            var info = ConfigLoader.Tables?.TbBuffInfo?.GetOrDefault(buff.BuffId);
+            int maxStack = info != null ? info.MaxStack : 1;
+            bool refresh = info == null || info.RefreshOnReapply;
+            bool stackable = maxStack > 1;
+
+            var existing = GetBuff(buff.BuffId);
+            if (existing == null)
+            {
+                // 首次施加：可叠加 Buff 的层数封顶，并让 StackCount 反映当前层数
+                if (stackable)
+                {
+                    buff.Value = Mathf.Min(buff.Value, maxStack);
+                    buff.StackCount = Mathf.Max(1, Mathf.RoundToInt(buff.Value));
+                }
+                else
+                {
+                    buff.StackCount = 1;
+                }
+                Buffs.Add(buff);
+                return;
+            }
+
+            if (stackable)
+            {
+                // 累加层数到同一条 Buff，封顶 MaxStack
+                existing.Value = Mathf.Min(existing.Value + buff.Value, maxStack);
+                existing.StackCount = Mathf.Max(1, Mathf.RoundToInt(existing.Value));
+            }
+            else
+            {
+                // 不可叠加：取较大数值，避免被更弱的一次覆盖降级
+                existing.Value = Mathf.Max(existing.Value, buff.Value);
+                existing.StackCount = 1;
+            }
+
+            // 刷新持续时间
+            if (refresh)
+            {
+                existing.RemainingDuration = buff.RemainingDuration;
+            }
+            else if (buff.RemainingDuration == -1)
+            {
+                existing.RemainingDuration = -1;
+            }
+            else if (existing.RemainingDuration != -1)
+            {
+                existing.RemainingDuration = Mathf.Max(existing.RemainingDuration, buff.RemainingDuration);
+            }
         }
 
         /// <summary>
@@ -446,6 +517,7 @@ namespace Ashlight.Battle.Core.Data
                 ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
                 Overload = this.Overload?.Clone() ?? new OverloadState(),
                 FreeMoveUsedThisTurn = this.FreeMoveUsedThisTurn,
+                HasMovedThisTurn = this.HasMovedThisTurn,
                 RowPosition = this.RowPosition,
                 // 敌人意图轴/执行轴
                 CurrentPhase = this.CurrentPhase,

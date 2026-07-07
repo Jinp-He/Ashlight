@@ -158,8 +158,9 @@ namespace Ashlight.Battle.Core.Engine
                         if (unit.CurrentHp <= 0) { unit.CurrentHp = 0; unit.IsDead = true; }
                         Debug.Log($"[TurnResolver] {unit.UnitId} 中毒造成 {dmg} 伤害 (剩余 HP: {unit.CurrentHp})");
                     }
-                    // 中毒 V 每回合衰减 1
+                    // 中毒 V 每回合衰减 1（层数 = Value，同步 StackCount 供 UI 显示）
                     buff.Value = Mathf.Max(0f, buff.Value - 1f);
+                    buff.StackCount = Mathf.Max(0, Mathf.RoundToInt(buff.Value));
                     if (buff.Value <= 0f)
                     {
                         unit.RemoveBuff("Poison");

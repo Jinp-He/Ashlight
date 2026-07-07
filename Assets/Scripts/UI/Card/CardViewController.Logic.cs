@@ -80,6 +80,18 @@ namespace Scripts.UI
         [Tooltip("执行（延时）卡牌左上角能量底图颜色")]
         private Color executionCostTint = new Color(1f, 0.55f, 0.2f, 1f);
 
+        [Header("条件牌高亮（Outline）")]
+        [SerializeField]
+        [Tooltip("条件牌：当前满足触发条件时的描边颜色（黄）")]
+        private Color conditionMetOutlineColor = new Color(1f, 0.85f, 0.1f, 1f);
+
+        [SerializeField]
+        [Tooltip("条件牌：当前不满足触发条件时的描边颜色（白）")]
+        private Color conditionUnmetOutlineColor = Color.white;
+
+        /// <summary>本卡是否为「自身可判定的条件牌」（描边随条件黄/白，且常驻不随悬停消失）。RefreshConditionHighlight 时缓存。</summary>
+        private bool _isSelfConditionCard;
+
         #endregion
 
         #region 私有字段
@@ -680,6 +692,9 @@ namespace Scripts.UI
             // 根据玩家当前能量刷新左上角颜色
             RefreshEnergyAffordability();
 
+            // 条件牌描边：按当前站位/移动状态着色（黄=满足 / 白=不满足）
+            RefreshConditionHighlight();
+
             // 设置右侧消耗（卡牌类型）
             bool isExecution = _currentCard.CardType == cfg.CardTypeEnum.Execution;
             if (Txt_RightCost != null)
@@ -818,10 +833,17 @@ namespace Scripts.UI
 
             _isHovering = false;
 
-            // 隐藏轮廓
+            // 隐藏轮廓——但条件牌的描边是常驻的（随条件黄/白），离开时不收起，改为按当前条件重着色
             if (Img_Outline != null)
             {
-                Img_Outline.gameObject.SetActive(false);
+                if (_isSelfConditionCard)
+                {
+                    RefreshConditionHighlight();
+                }
+                else
+                {
+                    Img_Outline.gameObject.SetActive(false);
+                }
             }
 
             // 恢复原始层级
@@ -2074,6 +2096,111 @@ namespace Scripts.UI
 
             bool affordable = HasEnoughEnergyForCard();
             Txt_LeftCost.color = affordable ? _defaultLeftCostColor : insufficientEnergyColor;
+        }
+
+        /// <summary>
+        /// 刷新「条件牌」描边：带自身可判定条件（如 SelfInBackRow / SelfInFrontRow / MovedThisTurn）的牌，
+        /// 当前满足条件 → 描边黄、常驻显示；不满足 → 描边白、常驻显示；非条件牌 → 不接管描边（仍由悬停控制）。
+        /// 站位/移动会改变判定结果，故在状态刷新（能量刷新循环）与移动换位后都应调用。
+        /// </summary>
+        public void RefreshConditionHighlight()
+        {
+            if (Img_Outline == null || _currentCard == null)
+            {
+                return;
+            }
+
+            string conditionType = GetSelfEvaluableConditionType();
+            if (string.IsNullOrEmpty(conditionType))
+            {
+                // 非（自身可判定）条件牌：把描边交回悬停控制——非悬停时收起
+                _isSelfConditionCard = false;
+                if (!_isHovering)
+                {
+                    Img_Outline.gameObject.SetActive(false);
+                }
+                return;
+            }
+
+            _isSelfConditionCard = true;
+            bool met = EvaluateSelfCondition(conditionType);
+            Img_Outline.gameObject.SetActive(true); // 条件牌描边常驻
+            Img_Outline.color = met ? conditionMetOutlineColor : conditionUnmetOutlineColor;
+        }
+
+        /// <summary>
+        /// 取本卡第一个「自身可判定」的条件类型（Attack/Defense/Buff 三种 ConditionalEffect 都算）；
+        /// 目标类条件（如 IsAttacking/InExecution，手牌里无目标、判不了）返回 null，不接管描边。
+        /// </summary>
+        private string GetSelfEvaluableConditionType()
+        {
+            var effects = _currentCard?.Effects;
+            if (effects == null)
+            {
+                return null;
+            }
+
+            foreach (var effect in effects)
+            {
+                string cond = null;
+                if (effect is AttackConditionalEffect atk) cond = atk.ConditionType;
+                else if (effect is DefenseConditionalEffect def) cond = def.ConditionType;
+                else if (effect is BuffConditionalEffect buff) cond = buff.ConditionType;
+
+                if (!string.IsNullOrEmpty(cond) && IsSelfEvaluableCondition(cond))
+                {
+                    return cond;
+                }
+            }
+            return null;
+        }
+
+        private static bool IsSelfEvaluableCondition(string conditionType)
+        {
+            switch (conditionType)
+            {
+                case "SelfInFrontRow":
+                case "SelfInBackRow":
+                case "MovedThisTurn":
+                    return true;
+                default:
+                    return false; // 目标类等条件在手牌里无法判定
+            }
+        }
+
+        /// <summary>按施法者当前状态判定自身条件是否满足。数据不可用时按「不满足」处理（描边白）。</summary>
+        private bool EvaluateSelfCondition(string conditionType)
+        {
+            var bm = Ashlight.Battle.BattleManager.Instance;
+            var state = bm?.CurrentState;
+            if (state == null)
+            {
+                return false;
+            }
+
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (string.IsNullOrEmpty(ownerUnitId))
+            {
+                return false;
+            }
+
+            var owner = state.GetUnitById(ownerUnitId);
+            if (owner == null)
+            {
+                return false;
+            }
+
+            switch (conditionType)
+            {
+                case "SelfInFrontRow":
+                    return state.IsFrontRow(owner);
+                case "SelfInBackRow":
+                    return !state.IsFrontRow(owner);
+                case "MovedThisTurn":
+                    return owner.HasMovedThisTurn;
+                default:
+                    return false;
+            }
         }
         
         /// <summary>

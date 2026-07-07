@@ -450,6 +450,59 @@ namespace Scripts.UI
             Debug.Log($"[BattleAnimationHandler] 显示伤害数字: {damage}");
         }
 
+        /// <summary>
+        /// 在指定世界坐标飘一段文字标签（如 "MISS"），上浮 + 淡出后销毁。
+        /// 与 <see cref="ShowDamageNumber"/> 同款动画，但文字与颜色可自定义、不做伤害&gt;0 过滤。
+        /// </summary>
+        public void ShowFloatingLabel(Vector3 worldPosition, string text, Color color)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            GameObject labelObj;
+            TMPro.TextMeshProUGUI textMesh;
+            RectTransform rectTransform;
+
+            if (damageTextPrefab != null)
+            {
+                labelObj = Instantiate(damageTextPrefab, transform);
+                labelObj.transform.position = worldPosition;
+                labelObj.name = "FloatingLabel";
+
+                textMesh = labelObj.GetComponent<TMPro.TextMeshProUGUI>();
+                if (textMesh == null) textMesh = labelObj.AddComponent<TMPro.TextMeshProUGUI>();
+
+                rectTransform = labelObj.GetComponent<RectTransform>();
+                if (rectTransform == null) rectTransform = labelObj.AddComponent<RectTransform>();
+            }
+            else
+            {
+                labelObj = new GameObject("FloatingLabel");
+                labelObj.transform.SetParent(transform);
+                labelObj.transform.position = worldPosition;
+
+                textMesh = labelObj.AddComponent<TMPro.TextMeshProUGUI>();
+                textMesh.fontSize = 48;
+                textMesh.alignment = TMPro.TextAlignmentOptions.Center;
+
+                rectTransform = labelObj.GetComponent<RectTransform>();
+                rectTransform.sizeDelta = new Vector2(200, 100);
+            }
+
+            if (textMesh != null)
+            {
+                textMesh.text = text;
+                textMesh.color = color;
+            }
+
+            Sequence seq = DOTween.Sequence();
+            seq.Append(rectTransform.DOAnchorPosY(rectTransform.anchoredPosition.y + 100f, 1.0f).SetEase(Ease.OutQuad));
+            if (textMesh != null)
+                seq.Join(textMesh.DOFade(0f, 1.0f).SetEase(Ease.InQuad));
+            seq.OnComplete(() => Destroy(labelObj));
+
+            Debug.Log($"[BattleAnimationHandler] 显示飘字: {text}");
+        }
+
         #endregion
 
         #region 私有辅助方法

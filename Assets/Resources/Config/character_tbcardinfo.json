@@ -1,13 +1,13 @@
 [
   {
     "Id": "Rocket001",
-    "Name": "打击",
+    "Name": "挥砍",
     "Description": "造成{A}点伤害",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 12,
+        "damage": 7,
         "is_aoe": false
       }
     ],
@@ -19,7 +19,8 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket002",
@@ -42,7 +43,8 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket003",
@@ -70,7 +72,8 @@
     "Energy": 1,
     "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket004",
@@ -98,28 +101,31 @@
     "Energy": 1,
     "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket005",
-    "Name": "守护",
-    "Description": "使友方角色获得 {D} 点护甲。",
+    "Name": "举盾",
+    "Description": "获得{D}点护甲",
     "Effects": [
       {
-        "$type": "InterceptEffect",
+        "$type": "DefenseEffect",
         "EffectType": 1,
-        "shield_value": 16
+        "value": 6,
+        "per_hit": false
       }
     ],
     "CardType": 0,
     "BelongTo": 1,
-    "TargetType": 0,
+    "TargetType": 2,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket006",
@@ -146,7 +152,8 @@
     "Energy": 1,
     "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket007",
@@ -171,7 +178,8 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket008",
@@ -197,17 +205,18 @@
     "Energy": 1,
     "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene001",
     "Name": "火球术",
-    "Description": "造成 {A} 点伤害。",
+    "Description": "造成{A}点伤害",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 16,
+        "damage": 24,
         "is_aoe": false
       }
     ],
@@ -216,76 +225,61 @@
     "TargetType": 3,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 1,
+    "Energy": 3,
+    "ExecutingCost": 3,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene002",
-    "Name": "冰霜震击",
-    "Description": "造成 {A} 点伤害，获得{D}点护甲",
+    "Name": "奥术护罩",
+    "Description": "使[前排]友军各获得{D}点护甲",
     "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 13,
-        "is_aoe": false
-      },
       {
         "$type": "DefenseEffect",
         "EffectType": 1,
-        "value": 8,
+        "value": 9,
         "per_hit": false
       }
     ],
     "CardType": 1,
     "BelongTo": 0,
-    "TargetType": 3,
+    "TargetType": 1,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 1,
+    "Energy": 3,
+    "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 0
   },
   {
     "Id": "Irene003",
-    "Name": "奥术飞弹",
-    "Description": "造成 3 次 {A} 点伤害，目标随机。",
+    "Name": "秘法飞弹",
+    "Description": "造成{A}点伤害",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 5,
-        "is_aoe": false
-      },
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 5,
-        "is_aoe": false
-      },
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 5,
+        "damage": 6,
         "is_aoe": false
       }
     ],
     "CardType": 0,
     "BelongTo": 0,
-    "TargetType": 4,
+    "TargetType": 3,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene004",
-    "Name": "奥数愚蠢",
+    "Name": "引导",
     "Description": "抽{V}张牌",
     "Effects": [
       {
@@ -299,10 +293,11 @@
     "TargetType": 2,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 1,
+    "Energy": 0,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene005",
@@ -324,23 +319,24 @@
     "Energy": 1,
     "ExecutingCost": 5,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene006",
-    "Name": "暴风雪",
-    "Description": "对所有敌人造成 {A} 点伤害并 [推迟] 1 格。",
+    "Name": "寒霜新星",
+    "Description": "对[前排]所有敌人造成{A}点伤害并[推迟]{T}格",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 21,
+        "damage": 10,
         "is_aoe": true
       },
       {
         "$type": "TimeShiftAllEffect",
         "EffectType": 2,
-        "shift_value": 1
+        "shift_value": 2
       }
     ],
     "CardType": 1,
@@ -348,86 +344,73 @@
     "TargetType": 4,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 1,
+    "Energy": 4,
     "ExecutingCost": 4,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 0
   },
   {
-    "Id": "Zhouzhou001",
-    "Name": "移动",
-    "Description": "[移动]",
+    "Id": "Irene007",
+    "Name": "静滞",
+    "Description": "造成{A}点伤害，[定身]{V}回合",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Root",
+        "value": 1
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 2,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Irene008",
+    "Name": "闪现",
+    "Description": "移动一名友军，使其获得{D}点护甲",
     "Effects": [
       {
         "$type": "MovePositionEffect",
         "EffectType": 4,
         "mode": "Toggle"
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 3,
+        "per_hit": false
       }
     ],
     "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 2,
+    "BelongTo": 0,
+    "TargetType": 0,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Zhouzhou002",
-    "Name": "快速射击",
-    "Description": "造成 {A} 点伤害",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 17,
-        "is_aoe": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false
-  },
-  {
-    "Id": "Zhouzhou003",
-    "Name": "滞后射击",
-    "Description": "造成{A}点伤害，如果你在[后排]，额外造成{A}点伤害",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 9,
-        "is_aoe": false
-      },
-      {
-        "$type": "AttackConditionalEffect",
-        "EffectType": 0,
-        "bonus_damage": 9,
-        "condition_type": "SelfInBackRow"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false
-  },
-  {
-    "Id": "Zhouzhou004",
     "Name": "闪避姿态",
-    "Description": "获得 [闪避] {V}。",
+    "Description": "获得 [闪避] {F}。",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -442,9 +425,91 @@
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou001",
+    "Name": "快速射击",
+    "Description": "造成 {A} 点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
     "ExecutingCost": 2,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou003",
+    "Name": "影袭",
+    "Description": "造成{A}点伤害；若本回合移动过，叠加{V}层[中毒]",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffConditionalEffect",
+        "EffectType": 6,
+        "buff_id": "Poison",
+        "value": 2,
+        "condition_type": "MovedThisTurn"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou004",
+    "Name": "翻滚",
+    "Description": "[移动]，获得[闪避]{V}",
+    "Effects": [
+      {
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Dodge",
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Zhouzhou005",
@@ -472,12 +537,13 @@
     "Energy": 1,
     "ExecutingCost": 4,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Zhouzhou006",
-    "Name": "刀扇",
-    "Description": "[移动],获得3张{飞刀}",
+    "Name": "疾步",
+    "Description": "[移动]，获得[闪避]{V}，获得1张小刀",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -485,10 +551,16 @@
         "mode": "Toggle"
       },
       {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Dodge",
+        "value": 1
+      },
+      {
         "$type": "AddToHandEffect",
         "EffectType": 4,
         "card_id": "Extra001",
-        "count": 3
+        "count": 1
       }
     ],
     "CardType": 0,
@@ -499,7 +571,192 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou010",
+    "Name": "标记",
+    "Description": "使目标[易伤]{V}%",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Vulnerable",
+        "value": 50
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Rocket010",
+    "Name": "盾击",
+    "Description": "造成{A}点伤害，施加[破韧]{V}",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Stagger",
+        "value": 12
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Rocket011",
+    "Name": "战吼",
+    "Description": "[嘲讽]敌人，获得{D}点护甲",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Taunt",
+        "value": 1
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 4,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Rocket012",
+    "Name": "坚壁",
+    "Description": "获得{D}点护甲",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 11,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Rocket013",
+    "Name": "重整",
+    "Description": "获得{D}点护甲，抽{V}张牌",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 4,
+        "per_hit": false
+      },
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou013",
+    "Name": "淬毒刃",
+    "Description": "造成{A}点伤害，叠加{V}层[中毒]",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Poison",
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
+  },
+  {
+    "Id": "Zhouzhou015",
+    "Name": "抽刀",
+    "Description": "获得1张小刀",
+    "Effects": [
+      {
+        "$type": "AddToHandEffect",
+        "EffectType": 4,
+        "card_id": "Extra001",
+        "count": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2
   },
   {
     "Id": "Irene000",
@@ -520,7 +777,8 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": true,
-    "IsExhaust": true
+    "IsExhaust": true,
+    "TargetZone": 2
   },
   {
     "Id": "Rocket000",
@@ -541,12 +799,13 @@
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": true,
-    "IsExhaust": true
+    "IsExhaust": true,
+    "TargetZone": 2
   },
   {
     "Id": "Zhouzhou000",
     "Name": "移动",
-    "Description": "[移动]",
+    "Description": "[移动],可以对友方角色使用",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -556,24 +815,31 @@
     ],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 2,
+    "TargetType": 0,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": true,
-    "IsExhaust": true
+    "IsExhaust": true,
+    "TargetZone": 2
   },
   {
     "Id": "Extra001",
-    "Name": "飞刀",
-    "Description": "造成{A}点伤害",
+    "Name": "小刀",
+    "Description": "造成{A}点伤害，叠加{V}层[中毒]",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 5,
+        "damage": 3,
         "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Poison",
+        "value": 1
       }
     ],
     "CardType": 0,
@@ -584,6 +850,7 @@
     "Energy": 0,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": true
+    "IsExhaust": true,
+    "TargetZone": 2
   }
 ]

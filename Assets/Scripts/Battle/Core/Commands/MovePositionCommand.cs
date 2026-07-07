@@ -21,28 +21,32 @@ namespace Ashlight.Battle.Core.Commands
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
         {
-            var owner = state.GetUnitById(ownerId);
-            if (owner == null || owner.IsDead)
+            // 移动的是「目标」：自我移动卡（疾步/翻滚，TargetType=Self）目标即施法者；
+            // 移动友军卡（法师闪现，TargetType=SingleAlly）目标是被指定的友军。targetId 为空时回退到施法者。
+            string moverId = string.IsNullOrEmpty(targetId) ? ownerId : targetId;
+            var mover = state.GetUnitById(moverId);
+            if (mover == null || mover.IsDead)
             {
-                Debug.LogWarning($"[MovePositionCommand] invalid owner: {ownerId}");
+                Debug.LogWarning($"[MovePositionCommand] invalid mover: {moverId} (owner={ownerId})");
                 return;
             }
 
-            var before = owner.RowPosition;
+            var before = mover.RowPosition;
             var dest = ResolveDestination(Mode, before);
             if (dest == before)
             {
-                Debug.Log($"[MovePositionCommand] {ownerId} 已在 {dest}，无需移动 (mode={Mode})");
+                Debug.Log($"[MovePositionCommand] {moverId} 已在 {dest}，无需移动 (mode={Mode})");
                 return;
             }
 
-            owner.RowPosition = dest;
-            Debug.Log($"[MovePositionCommand] {ownerId} 移动 {before} -> {dest} (mode={Mode})");
+            mover.RowPosition = dest;
+            mover.HasMovedThisTurn = true; // 供条件效果读取（影袭「本回合移动过则叠毒」）——记在真正移动的单位上
+            Debug.Log($"[MovePositionCommand] {moverId} 移动 {before} -> {dest} (mode={Mode}, 由 {ownerId} 发动)");
 
-            // 独立移动（无换位对象）：UnitIdB 留空，UI 只把施法者重挂到新区容器。
+            // 独立移动（无换位对象）：UnitIdB 留空，UI 只把被移动者重挂到新区容器。
             GameEvent.Publish(new PositionSwappedEvent
             {
-                UnitIdA = ownerId,
+                UnitIdA = moverId,
                 UnitIdB = null,
                 IsPrediction = state.IsPrediction
             });

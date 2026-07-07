@@ -50,7 +50,14 @@
       "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\DataTables\\\\output' -Filter '*buff*' -o Name\")",
       "Bash(powershell -Command \"Get-ChildItem -Path 'F:\\\\Ashlight\\\\DataTables' -Recurse -Filter '*.md' -o Name 2>/dev/null\")",
       "Bash(powershell -Command \"ls 'F:\\\\Ashlight\\\\DataTables\\\\output' | Where-Object Name -like '*buff*'\")",
-      "Bash(powershell -Command \"ls 'F:\\\\Ashlight\\\\DataTables\\\\output' | grep -i buff\")"
+      "Bash(powershell -Command \"ls 'F:\\\\Ashlight\\\\DataTables\\\\output' | grep -i buff\")",
+      "Bash(python -c ' *)",
+      "Bash(find F:/Ashlight/.claude -maxdepth 3 -iname \"*.md\" 2>/dev/null | grep -i skill; echo \"---skills dirs---\"; find F:/Ashlight/.claude -maxdepth 2 -type d 2>/dev/null; echo \"---user skills---\"; ls \"C:/Users/lofnh/.claude/skills\" 2>/dev/null)",
+      "Bash(python .claude/skills/card-effect-authoring/scripts/validate_cardinfo.py)",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")",
+      "Bash(grep -iE '\\\\$|CardInfo')",
+      "Bash(python -c \"import os; p='#CardInfo.xlsx'; print\\('writable:', os.access\\(p, os.W_OK\\)\\)\")",
+      "WebSearch"
     ]
   }
 }

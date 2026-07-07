@@ -15,6 +15,19 @@ using UnityEngine;
 namespace Ashlight.Battle
 {
     /// <summary>
+    /// 敌人待执行意图在「命中一刻」的动态索敌结算结果。
+    /// </summary>
+    public enum EnemyIntentResolveResult
+    {
+        /// <summary>解算到有效目标并已造成效果。</summary>
+        Hit,
+        /// <summary>目标区当前空排，打空 miss（无任何效果）。</summary>
+        Missed,
+        /// <summary>无待执行意图 / 施法者已亡等，本次无操作。</summary>
+        Aborted
+    }
+
+    /// <summary>
     /// 战斗管理器
     /// 负责战斗的初始化、状态管理和核心引擎的协调
     /// </summary>
@@ -779,6 +792,7 @@ namespace Ashlight.Battle
 
             playerUnit.CurrentEnergy = Mathf.Max(0, playerUnit.BaseEnergy);
             playerUnit.FreeMoveUsedThisTurn = false; // 每回合重置「首张移动免费」
+            playerUnit.HasMovedThisTurn = false;     // 每回合重置「本回合移动过」标记
             if (playerUnit.Overload != null)
             {
                 playerUnit.Overload.OverloadCountThisTurn = 0; // 每回合重置过载额度
@@ -962,8 +976,9 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            if (!TryPickEnemySkillAndTarget(enemyUnit, out var selectedSkill, out var target))
+            if (!TryPickEnemySkillAndTarget(enemyUnit, out var selectedSkill, out var target) || target == null)
             {
+                // target 可能为 null（目标区空排未锁人）；旧意图轴路径不支持空载体，直接放弃本次准备。
                 return false;
             }
 
@@ -1046,7 +1061,7 @@ namespace Ashlight.Battle
 
             // 动态索敌：目标在「执行这一刻」按 技能分区 + 当前站位 重新解算。
             // 原先 telegraph 的目标若仍在有效区内则继续打它；否则（被移出该区/死亡）改选该区当前的其他人。
-            var target = ResolveExecutionTarget(enemy, skill);
+            var target = ResolveExecutionTarget(enemy, skill, enemy.PendingTargetId);
             if (target == null)
             {
                 // 目标区当前无可选单位——本次施法落空。TODO(索敌): 补 miss 表现（当前 FilterByZone 会回退全体，通常不至于到这里）。
@@ -1127,55 +1142,72 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var converter = new EnemySkillToTimelineConverter();
-            var blocks = converter.ConvertEnemySkill(selectedSkill, enemyUnit.UnitId, target.UnitId);
-            var commandList = blocks
-                .Where(b => b != null && b.Commands != null && b.Commands.Count > 0)
-                .SelectMany(b => b.Commands)
-                .Where(c => c != null)
-                .OrderByDescending(c => c.GetPriority())
-                .ToList();
-
-            if (commandList.Count == 0)
+            // target 可能为 null（预告时目标区暂无人）——意图仍照常公示，命中前 ResolveExecutionTarget 会重算；
+            // 此处仅当有具体载体时做一次「技能能生成指令」的健全性检查。
+            if (target != null)
             {
-                Debug.LogWarning($"[BattleManager] 敌人技能没有可执行指令，无法准备: {selectedSkill.Id}");
-                return false;
+                var converter = new EnemySkillToTimelineConverter();
+                var blocks = converter.ConvertEnemySkill(selectedSkill, enemyUnit.UnitId, target.UnitId);
+                var commandList = blocks
+                    .Where(b => b != null && b.Commands != null && b.Commands.Count > 0)
+                    .SelectMany(b => b.Commands)
+                    .Where(c => c != null)
+                    .OrderByDescending(c => c.GetPriority())
+                    .ToList();
+
+                if (commandList.Count == 0)
+                {
+                    Debug.LogWarning($"[BattleManager] 敌人技能没有可执行指令，无法准备: {selectedSkill.Id}");
+                    return false;
+                }
             }
 
-            _pendingEnemyIntents[unitId] = (selectedSkill, target.UnitId);
+            // 载体 UnitId 允许为 null（空区预告），命中时按当前站位重算
+            targetUnitId = target?.UnitId;
+            _pendingEnemyIntents[unitId] = (selectedSkill, targetUnitId);
             preparedSkill = selectedSkill;
-            targetUnitId = target.UnitId;
             executingCost = Mathf.Max(1, selectedSkill.ExecutingCost);
             return true;
         }
 
         /// <summary>
         /// 执行轨到达终点时调用：结算待执行的敌人技能（伤害与指令）。
+        /// 【动态索敌 + 空排 miss】命中前按当前站位重算目标：
+        ///   · 原 telegraph 目标仍在目标区 → 打它；被移出该区/死亡 → 区内改选。
+        ///   · 目标区当前无人（整排空）→ 返回 <see cref="EnemyIntentResolveResult.Missed"/>，本次落空不造成任何效果。
         /// </summary>
-        public bool ExecutePendingEnemyAfterExecutionTrack(string unitId)
+        public EnemyIntentResolveResult ExecutePendingEnemyAfterExecutionTrack(string unitId)
         {
             if (CurrentState == null || string.IsNullOrEmpty(unitId))
             {
-                return false;
+                return EnemyIntentResolveResult.Aborted;
             }
 
             if (!_pendingEnemyIntents.TryGetValue(unitId, out var intent))
             {
-                return false;
+                return EnemyIntentResolveResult.Aborted;
             }
 
             var enemyUnit = CurrentState.GetUnitById(unitId);
-            var target = CurrentState.GetUnitById(intent.TargetUnitId);
-            if (enemyUnit == null || enemyUnit.IsDead || target == null || target.IsDead)
+            if (enemyUnit == null || enemyUnit.IsDead)
             {
                 ClearPendingEnemyIntent(unitId);
-                return false;
+                return EnemyIntentResolveResult.Aborted;
             }
 
             var skill = intent.Skill;
+            var target = ResolveExecutionTarget(enemyUnit, skill, intent.TargetUnitId);
             ClearPendingEnemyIntent(unitId);
+
+            if (target == null)
+            {
+                // 目标区当前无人 → 打空 miss（不造成任何效果，回合照常结束）
+                Debug.Log($"[BattleManager] 敌人 {unitId} 技能 {skill?.Id} 命中时 {skill?.TargetZone} 区空排，打空 miss");
+                return EnemyIntentResolveResult.Missed;
+            }
+
             ExecuteEnemySkillInternal(enemyUnit, skill, target);
-            return true;
+            return EnemyIntentResolveResult.Hit;
         }
 
         /// <summary>
@@ -1258,6 +1290,64 @@ namespace Ashlight.Battle
             return !string.IsNullOrEmpty(unitId) && _pendingEnemyIntents.ContainsKey(unitId);
         }
 
+        /// <summary>取当前待执行敌人意图的技能与锁定目标（targetUnitId 可能为 null）。</summary>
+        public bool TryGetPendingEnemyIntent(string unitId, out EnemySkillInfo skill, out string targetUnitId)
+        {
+            skill = null;
+            targetUnitId = null;
+            if (string.IsNullOrEmpty(unitId) || !_pendingEnemyIntents.TryGetValue(unitId, out var intent))
+            {
+                return false;
+            }
+            skill = intent.Skill;
+            targetUnitId = intent.TargetUnitId;
+            return true;
+        }
+
+        /// <summary>
+        /// 【动态索敌·预告期】重解所有待执行敌人意图的锁定目标（玩家移动站位后调用，保持预告诚实）。
+        /// 规则（复用 <see cref="ResolveExecutionTarget"/> 口径）：
+        ///   · 原锁定目标仍存活且仍在目标区 → 保持不变；
+        ///   · 否则按当前站位在目标区重新随机锁定；目标区空排 → 清空锁定（targetUnitId=null）。
+        /// 返回本次发生变化的敌人（UnitId → 新目标 UnitId，可能为 null），供 UI 刷新意图指示 / 抛物线。
+        /// </summary>
+        public Dictionary<string, string> RefreshPendingEnemyIntentTargets()
+        {
+            var changed = new Dictionary<string, string>();
+            if (CurrentState == null || _pendingEnemyIntents.Count == 0)
+            {
+                return changed;
+            }
+
+            // 先快照 key，避免遍历中改字典
+            var enemyIds = _pendingEnemyIntents.Keys.ToList();
+            foreach (var enemyId in enemyIds)
+            {
+                if (!_pendingEnemyIntents.TryGetValue(enemyId, out var intent))
+                {
+                    continue;
+                }
+
+                var enemy = CurrentState.GetUnitById(enemyId);
+                if (enemy == null || enemy.IsDead || intent.Skill == null)
+                {
+                    continue;
+                }
+
+                string oldTarget = intent.TargetUnitId;
+                var resolved = ResolveExecutionTarget(enemy, intent.Skill, oldTarget); // 有效则保持、失效则区内改选、空区返回 null
+                string newTarget = resolved?.UnitId;
+
+                if (newTarget != oldTarget)
+                {
+                    _pendingEnemyIntents[enemyId] = (intent.Skill, newTarget);
+                    changed[enemyId] = newTarget;
+                }
+            }
+
+            return changed;
+        }
+
         private void ClearPendingPlayerExecution(string unitId = null)
         {
             if (string.IsNullOrEmpty(unitId))
@@ -1316,10 +1406,12 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            // 目标选择：先按 TargetZone 过滤到目标分区，再随机选一个「承载 UnitId」。
+            // 目标选择：先按 TargetZone 过滤到目标分区（strict：空区不回退全体），再随机锁一个「承载 UnitId」。
             //   SingleEnemy（单体）→ 该载体就是真实受害者
             //   AllEnemy（全体）  → 载体仅用于意图显示/演出，AOE 真正铺开（同样按分区）在 DamageCommand 里
-            //   TargetZone: Front/Back 过滤到对应区；Any/Conditional(未实装) 不过滤；空区回退全体
+            //   TargetZone: Front/Back 过滤到对应区；Any/Conditional(未实装) 不过滤
+            // 【预告即锁定】此处只是宣告意图时的随机锁定；真正命中前会由 ResolveExecutionTarget 按当前站位重算。
+            //   目标区当前无人 → target 保持 null（意图照常公示，只是不画抛物线/不点亮坐标），命中时若仍空则 miss。
             var alivePlayers = CurrentState.PlayerUnits
                 .Where(u => u != null && !u.IsDead)
                 .ToList();
@@ -1329,21 +1421,83 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, selectedSkill.TargetZone);
-            target = zonePool[Random.Range(0, zonePool.Count)];
-            Debug.Log($"[BattleManager] 敌人技能 {selectedSkill.Id} 选定目标 {target.UnitId} " +
+            // 嘲讽优先：预告阶段也让单体意图锁定嘲讽者（保持预告与命中一致、诚实）
+            var tauntLock = GetTauntRedirectTarget(alivePlayers, selectedSkill);
+            if (tauntLock != null)
+            {
+                target = tauntLock;
+            }
+            else
+            {
+                var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, selectedSkill.TargetZone, strict: true);
+                target = zonePool.Count > 0 ? zonePool[Random.Range(0, zonePool.Count)] : null;
+            }
+            Debug.Log($"[BattleManager] 敌人技能 {selectedSkill.Id} 选定目标 {target?.UnitId ?? "(空区·暂无)"} " +
                       $"(TargetType={selectedSkill.TargetType}, TargetZone={selectedSkill.TargetZone})");
             return true;
         }
 
         /// <summary>
-        /// 【动态索敌】执行时刻按「技能分区 + 当前站位」重新解算单体载体目标。
-        /// · 原 telegraph 目标（PendingTargetId）若仍存活且仍在该技能的目标区内 → 继续打它（尊重预告）。
-        /// · 否则（被玩家移出该区 / 已死亡）→ 从该区当前存活单位里改选。
-        /// · 该区当前无人 → 返回 null（落空）。
+        /// 【动态索敌】按「技能分区 + 当前站位」重新解算单体载体目标。
+        /// · <paramref name="lockedTargetId"/> 指向预告时锁定的目标：若仍存活且仍在该技能的目标区内 → 继续打它（尊重预告）。
+        /// · 否则（被玩家移出该区 / 已死亡 / 预告时未锁人）→ 从该区当前存活单位里随机改选。
+        /// · 该区当前无人 → 返回 null（空排落空 miss）。
         /// AOE 的真正扩散由 DamageCommand 在执行时按同一分区口径现算，此处返回的载体仅用于演出/事件。
         /// </summary>
-        private UnitState ResolveExecutionTarget(UnitState enemy, EnemySkillInfo skill)
+        /// <summary>
+        /// 嘲讽重定向：若存在存活且带 [嘲讽](Taunt) 的玩家，单体敌人技能强制改打嘲讽者
+        /// （**无视分区**——这正是嘲讽「替队友扛下攻击、省去走位」的价值）。群体/自施技能不受影响；无嘲讽者返回 null。
+        /// 多名嘲讽者时取第一个（起手体系里同时只会有一个战士上嘲讽）。
+        /// </summary>
+        private UnitState GetTauntRedirectTarget(List<UnitState> alivePlayers, EnemySkillInfo skill)
+        {
+            if (skill == null || skill.TargetType != TargetTypeEnum.SingleEnemy || alivePlayers == null)
+            {
+                return null;
+            }
+            return alivePlayers.FirstOrDefault(u => u != null && !u.IsDead && u.HasBuff("Taunt"));
+        }
+
+        /// <summary>
+        /// 客观回合推进一格（整排 slot = 一个客观回合）时调用：全体存活单位的 [闪避](Dodge) 各掉 1 层。
+        /// 由 UI 侧 ATB 的 <c>OnObjectiveRoundAdvanced</c> 事件触发——即 TriggerNextUnit 中「所有单位 Slots 一起减 minSlots」
+        /// （minSlots &gt; 0，跨入下一排 slot）的那一刻；同格内多个单位连续行动 **不** 重复扣。
+        /// 这对齐「掉层按客观回合、不按某个角色自己的回合」的口径。
+        /// （闪避受击免伤在 <see cref="UnitState.TakeDamage"/> 里单独结算，与此处的自然衰减相互独立。）
+        /// </summary>
+        public void DecayAllDodgeOneObjectiveRound()
+        {
+            if (CurrentState == null)
+            {
+                return;
+            }
+
+            var affected = new List<UnitState>();
+            affected.AddRange(CurrentState.GetAlivePlayerUnits());
+            affected.AddRange(CurrentState.GetAliveEnemyUnits());
+
+            foreach (var unit in affected)
+            {
+                if (unit == null || unit.IsDead)
+                {
+                    continue;
+                }
+                var dodge = unit.GetBuff("Dodge");
+                if (dodge == null)
+                {
+                    continue;
+                }
+                dodge.Value -= 1f;
+                dodge.StackCount = Mathf.Max(0, Mathf.RoundToInt(dodge.Value));
+                if (dodge.Value <= 0f)
+                {
+                    unit.RemoveBuff("Dodge");
+                }
+                Debug.Log($"[BattleManager] 客观回合 +1：{unit.UnitId} 闪避 -1 (剩余 {Mathf.Max(0, Mathf.RoundToInt(dodge.Value))})");
+            }
+        }
+
+        private UnitState ResolveExecutionTarget(UnitState enemy, EnemySkillInfo skill, string lockedTargetId)
         {
             if (CurrentState == null || skill == null)
             {
@@ -1358,22 +1512,30 @@ namespace Ashlight.Battle
                 return null;
             }
 
-            var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, skill.TargetZone);
+            // 嘲讽优先：有存活嘲讽者时，单体技能强制打它（无视分区，命中重算与预告口径一致）
+            var tauntTarget = GetTauntRedirectTarget(alivePlayers, skill);
+            if (tauntTarget != null)
+            {
+                return tauntTarget;
+            }
+
+            // strict：目标区当前无人 → 返回空 → 上层判定为 miss（不回退全体）
+            var zonePool = ZoneTargeting.FilterByZone(CurrentState, alivePlayers, skill.TargetZone, strict: true);
             if (zonePool.Count == 0)
             {
                 return null;
             }
 
-            // 原 telegraph 目标仍在有效区内 → 继续打它
-            var pending = CurrentState.GetUnitById(enemy.PendingTargetId);
-            if (pending != null && !pending.IsDead && zonePool.Contains(pending))
+            // 原 telegraph 目标仍在有效区内 → 继续打它（lockedTargetId 可能为 null，即预告时空区未锁人）
+            var locked = CurrentState.GetUnitById(lockedTargetId);
+            if (locked != null && !locked.IsDead && zonePool.Contains(locked))
             {
-                return pending;
+                return locked;
             }
 
-            // 目标已移出该区 / 死亡 → 按当前站位改选
+            // 目标已移出该区 / 死亡 / 未锁人 → 按当前站位随机改选
             var reselected = zonePool[Random.Range(0, zonePool.Count)];
-            Debug.Log($"[BattleManager] 动态索敌重选：{enemy.UnitId} 的技能 {skill.Id} 原目标 {enemy.PendingTargetId} 已离开 {skill.TargetZone} 区，改打 {reselected.UnitId}");
+            Debug.Log($"[BattleManager] 动态索敌重选：{enemy.UnitId} 的技能 {skill.Id} 原锁定目标 {lockedTargetId ?? "(无)"} 不在 {skill.TargetZone} 区，改打 {reselected.UnitId}");
             return reselected;
         }
 

@@ -282,14 +282,13 @@ namespace Scripts.UI
         /// Coord 按"暗黑地牢式"展示目标位置：单体亮目标格、AOE 全亮。
         /// </summary>
         /// <param name="skillInfo">敌人技能配置</param>
-        /// <param name="targetSlot">目标在我方队伍中的位置索引（0 起；AOE 时可传 -1）</param>
-        /// <param name="totalSlots">我方队伍总人数（决定 Coord 总格数）</param>
-        /// <param name="isAoe">是否 AOE（全体技能）</param>
-        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, int targetSlot, int totalSlots, bool isAoe)
+        /// <param name="dotStates">每个玩家点的状态（0=未打/灰、1=打+前排/红、2=打+后排/蓝）；null=隐藏 Coord</param>
+        /// <param name="targetUnitId">当前锁定的目标 UnitId（供悬停抛物线指向；空区未锁人时为 null）</param>
+        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, int[] dotStates, string targetUnitId = null)
         {
             if (IntentionView != null)
             {
-                IntentionView.ShowFromSkill(skillInfo, targetSlot, totalSlots, isAoe);
+                IntentionView.ShowFromSkill(skillInfo, dotStates, targetUnitId);
             }
             // 兼容旧 Txt_Intention
             if (Txt_Intention != null)
@@ -297,11 +296,11 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 旧签名兜底：没有目标位置信息时调用，Coord 全灰。
+        /// 旧签名兜底：没有目标位置信息时调用，隐藏 Coord。
         /// </summary>
         public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, string targetName)
         {
-            SetIntentionExecuting(skillInfo, targetSlot: -1, totalSlots: -1, isAoe: false);
+            SetIntentionExecuting(skillInfo, (int[])null, null);
         }
 
         /// <summary>

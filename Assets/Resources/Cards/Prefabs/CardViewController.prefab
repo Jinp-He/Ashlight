@@ -2051,6 +2051,7 @@ MonoBehaviour:
   dragScale: 1.8
   dragAlpha: 0.8
   positionRestoreDuration: 0.3
+  otherCardsPushDownDistance: 100
   validTargetDimColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   insufficientEnergyColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   executionCostTint: {r: 1, g: 0.55, b: 0.2, a: 1}

@@ -209,7 +209,16 @@ namespace Scripts.UI
             {
                 ATB.OnPlanningComplete += HandleAtbPlanningComplete;
                 ATB.OnExecutionComplete += HandleAtbExecutionComplete;
+                ATB.OnObjectiveRoundAdvanced += HandleObjectiveRoundAdvanced;
             }
+        }
+
+        /// <summary>
+        /// 客观回合推进（整排 slot 前进一格）：驱动游戏侧的逐客观回合效果——目前是全体闪避各掉 1 层。
+        /// </summary>
+        private void HandleObjectiveRoundAdvanced()
+        {
+            _battleManager?.DecayAllDodgeOneObjectiveRound();
         }
 
         /// <summary>
@@ -269,6 +278,7 @@ namespace Scripts.UI
             {
                 ATB.OnPlanningComplete -= HandleAtbPlanningComplete;
                 ATB.OnExecutionComplete -= HandleAtbExecutionComplete;
+                ATB.OnObjectiveRoundAdvanced -= HandleObjectiveRoundAdvanced;
                 ATB.OnIconRemoved -= OnAtbIconRemoved;
             }
 
@@ -323,6 +333,13 @@ namespace Scripts.UI
             // 创建玩家和敌人的UI
             CreateBattleUnits();
 
+            // 悬停敌人意图时，抛物线需要把「锁定目标 UnitId」解析为角色 UI 位置：注入解析器。
+            IntentionView.TargetTransformResolver = id =>
+            {
+                var ch = FindCharacterByUnitId(id);
+                return ch != null ? ch.transform : null;
+            };
+
             // 新战斗开始：复位升级流程相关 UI（隐藏经验条、恢复手牌区、收起升级面板）
             ResetUpgradeUIForNewBattle();
 
@@ -354,6 +371,24 @@ namespace Scripts.UI
 
                 // 【回合制】暂停 ATB 后立即触发第一个单位的回合，无需等待实时推进
                 ATB.Pause();
+
+                // 【敌人单轨制】开局先让每个敌人当场宣告首次意图并入执行轨（退到第 ExecutingCost 格）。
+                // 敌人从此常驻执行轨、全程亮意图；不再需要先跑一趟规划轨来预告。
+                var bootstrapEnemies = _battleManager.CurrentState.EnemyUnits;
+                if (bootstrapEnemies != null)
+                {
+                    foreach (var enemy in bootstrapEnemies)
+                    {
+                        if (enemy == null || enemy.IsDead) continue;
+                        // behindPlayers：开局敌人排到所有玩家之后，保证每个角色先动一轮再轮到敌人首次落地
+                        if (!DeclareEnemyIntentAndQueue(enemy.UnitId, behindPlayers: true))
+                        {
+                            // 无技能可用：排到所有人之后 1 格，避免 TriggerNextUnit 卡在它身上
+                            ATB.SetPositionBehindAll(enemy.UnitId, 1);
+                        }
+                    }
+                }
+
                 ATB.TriggerNextUnit();
             }
 
@@ -628,6 +663,9 @@ namespace Scripts.UI
             if (a == null && b == null) return;
             RebuildRowLayout(); // 移动/换位后强制重排两区
 
+            // 站位变化会改变条件牌（SelfInFrontRow/SelfInBackRow 等）的判定 → 刷新手牌条件描边
+            RefreshHandEnergyAffordability();
+
             Debug.Log($"[UI_BattleScene] 移动重排 {e.UnitIdA}{(string.IsNullOrEmpty(e.UnitIdB) ? "" : " <-> " + e.UnitIdB)}");
         }
 
@@ -731,6 +769,96 @@ namespace Scripts.UI
 
             // 单位死亡后，立即把它从卡牌区域（行动顺序视图）与 ATB 队列移除，避免残留。
             RemoveDeadUnitsFromTurnViews();
+
+            // 【动态索敌·预告期】玩家移动/站位变化后，重解敌人意图锁定目标并刷新意图指示/抛物线。
+            RefreshEnemyIntentTargets();
+        }
+
+        /// <summary>
+        /// 重解所有待执行敌人意图的锁定目标（原目标离开目标区 → 区内改选 / 空区清空），
+        /// 并把发生变化的敌人意图指示（坐标高亮 + 悬停抛物线目标 / 思考态）刷新为新目标。
+        /// </summary>
+        private void RefreshEnemyIntentTargets()
+        {
+            if (_battleManager?.CurrentState == null) return;
+
+            var changed = _battleManager.RefreshPendingEnemyIntentTargets();
+            if (changed == null || changed.Count == 0) return;
+
+            foreach (var kv in changed)
+            {
+                string enemyId = kv.Key;
+                if (!_battleManager.TryGetPendingEnemyIntent(enemyId, out var skill, out var targetUnitId)) continue;
+                ApplyEnemyIntentDisplay(enemyId, skill, targetUnitId);
+            }
+        }
+
+        /// <summary>
+        /// 统一设置某敌人的意图显示（意图指示物 + 行动顺序卡攻击图标）。
+        /// 无合法目标（目标区空排、未锁到人）→ 显示思考态 intention_think（并撤下攻击图标），命中时会落空 miss；
+        /// 否则 → 显示攻击意图（图标/数值/坐标高亮 + 悬停抛物线目标）。
+        /// </summary>
+        private void ApplyEnemyIntentDisplay(string unitId, EnemySkillInfo skill, string targetUnitId)
+        {
+            var enemyUi = FindEnemyByUnitId(unitId);
+
+            if (string.IsNullOrEmpty(targetUnitId))
+            {
+                // 找不到合法目标 → 思考态；行动顺序卡撤下攻击图标（仍在执行轨、到点会 miss）
+                enemyUi?.SetIntentionThinking();
+                TurnOrderView?.SetExecuting(unitId, false);
+                return;
+            }
+
+            int[] dotStates = BuildIntentDotStates(skill, targetUnitId);
+            enemyUi?.SetIntentionExecuting(skill, dotStates, targetUnitId);
+            TurnOrderView?.SetExecuting(unitId, true, skill);
+        }
+
+        /// <summary>
+        /// 为敌人意图 Coord 计算「每个玩家点」的状态：0=未被攻击(灰)、1=被攻击且前排(红)、2=被攻击且后排(蓝)。
+        /// 点顺序 = PlayerUnits 名单序（3 个玩家 → 3 个点）。
+        /// · 单体 → 只有锁定目标 targetUnitId 那个点被标记；
+        /// · AOE → 技能目标区内的存活玩家都被标记（各按自身前/后排上色）；
+        /// · 技能不指向玩家(Self/AllAlly) → 返回 null（隐藏 Coord）。
+        /// </summary>
+        private int[] BuildIntentDotStates(EnemySkillInfo skill, string targetUnitId)
+        {
+            var state = _battleManager?.CurrentState;
+            var players = state?.PlayerUnits;
+            if (state == null || players == null || skill == null) return null;
+
+            bool targetsPlayers = skill.TargetType == cfg.TargetTypeEnum.SingleEnemy
+                || skill.TargetType == cfg.TargetTypeEnum.AllEnemy;
+            if (!targetsPlayers) return null;
+
+            bool isAoe = SkillIsAoe(skill);
+            var zone = skill.TargetZone;
+
+            int n = players.Count;
+            var states = new int[n];
+            for (int i = 0; i < n; i++)
+            {
+                var p = players[i];
+                if (p == null) { states[i] = 0; continue; }
+
+                bool front = state.IsFrontRow(p);
+                bool hit;
+                if (isAoe)
+                {
+                    if (p.IsDead) hit = false;
+                    else if (zone == cfg.TargetZoneEnum.Front) hit = front;
+                    else if (zone == cfg.TargetZoneEnum.Back) hit = !front;
+                    else hit = true; // Any / Conditional → 全体
+                }
+                else
+                {
+                    hit = (p.UnitId == targetUnitId);
+                }
+
+                states[i] = hit ? (front ? 1 : 2) : 0;
+            }
+            return states;
         }
 
         /// <summary>
@@ -1669,53 +1797,12 @@ namespace Scripts.UI
                 }
                 else
                 {
-                    _battleManager.StartEnemyTurn(unitId);
-                    if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId))
+                    // 【敌人单轨制】敌人常驻执行轨，正常不会走到规划轨触发这里（bootstrap 已入执行轨）。
+                    // 作为防御性兜底：当场宣告意图并回执行轨；无技能则排到 1 格避免卡死。
+                    // 不调用 TriggerNextUnit —— 当前正处在 TriggerNextUnit 的循环内，改回 Slots 后循环会自动继续。
+                    if (!DeclareEnemyIntentAndQueue(unitId) && ATB != null)
                     {
-                        if (ATB != null)
-                        {
-                            // 【回合制】敌人无技能可用，跳过：排到 1 格后即可。
-                            // 不调用 TriggerNextUnit —— 当前正处在 TriggerNextUnit 的循环内，
-                            // 设回 Slots=1 后循环会自动继续到下一单位（避免重入）。
-                            ATB.SetPositionBySlots(unitId, 1);
-                        }
-                        return;
-                    }
-
-                    _enemiesInExecutionTrack.Add(unitId);
-
-                    var targetState = _battleManager.CurrentState.GetUnitById(targetUnitId);
-                    string targetName = targetState?.GetCharacterInfo()?.Name ?? "目标";
-                    var enemyUi = FindEnemyByUnitId(unitId);
-
-                    // 计算 Coord 目标位置（暗黑地牢式）
-                    var playerUnits = _battleManager.CurrentState.PlayerUnits;
-                    int totalSlots = playerUnits?.Count ?? 0;
-                    int targetSlot = -1;
-                    if (!string.IsNullOrEmpty(targetUnitId) && playerUnits != null)
-                    {
-                        for (int i = 0; i < playerUnits.Count; i++)
-                        {
-                            if (playerUnits[i] != null && playerUnits[i].UnitId == targetUnitId)
-                            {
-                                targetSlot = i;
-                                break;
-                            }
-                        }
-                    }
-                    bool isAoe = SkillIsAoe(preparedSkill);
-                    enemyUi?.SetIntentionExecuting(preparedSkill, targetSlot, totalSlots, isAoe);
-
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-
-                    if (ATB != null)
-                    {
-                        // 【回合制】敌人宣告意图 → 排到第 executingCost 格等待（显示攻击图标）。
-                        // 不调用 Resume/TriggerNextUnit：当前在 TriggerNextUnit 循环内，
-                        // 单位已转入执行轨，循环会自动继续；轮到它时触发 OnExecutionComplete 结算。
-                        ATB.MoveToExecutingTrack(unitId, executingCost);
-                        TurnOrderView?.SetExecuting(unitId, true, preparedSkill);
+                        ATB.SetPositionBySlots(unitId, 1);
                     }
                 }
             }
@@ -1723,6 +1810,49 @@ namespace Scripts.UI
             {
                 _isProcessingAtbTurn = false;
             }
+        }
+
+        /// <summary>
+        /// 【敌人单轨制核心】让敌人当场宣告下一次意图并排到执行轨等待：
+        ///   刷新能量 → 选技能+锁目标 → 亮意图(图标/坐标) → MoveToExecutingTrack(退到第 ExecutingCost 格)。
+        /// 用于三处：开局 bootstrap、敌人上一次行动结算后立即预告下一次、规划轨防御性兜底。
+        /// 敌人从此常驻执行轨、全程亮着意图，走到 0 格时触发 OnExecutionComplete 结算。
+        /// 返回 false = 无技能可用（调用方需自行把它排到某格，避免 TriggerNextUnit 卡死）。
+        /// </summary>
+        private bool DeclareEnemyIntentAndQueue(string unitId, bool behindPlayers = false)
+        {
+            if (_battleManager?.CurrentState == null) return false;
+
+            var enemy = _battleManager.CurrentState.GetUnitById(unitId);
+            if (enemy == null || enemy.IsDead || enemy.IsPlayerUnit) return false;
+
+            // 单轨制下「预告即准备」：在此刷新能量（原先由 StartEnemyTurn 在规划到点时做）
+            _battleManager.StartEnemyTurn(unitId);
+
+            if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(
+                    unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId))
+            {
+                return false;
+            }
+
+            _enemiesInExecutionTrack.Add(unitId);
+
+            // 意图显示：无合法目标（目标区空排，targetUnitId==null）→ 思考态 intention_think，否则攻击意图。
+            ApplyEnemyIntentDisplay(unitId, preparedSkill, targetUnitId);
+
+            UpdateAllUnitsDisplay();
+            UpdateEnergyBarByUnitId(unitId);
+
+            if (ATB != null)
+            {
+                // 排到执行轨等待。轮到它（Slots 归零）时触发 OnExecutionComplete 结算（有目标则命中、空排则 miss）。
+                // behindPlayers（开局）：排到所有玩家之后，保证每人先动一轮；平时：第 executingCost 格。
+                if (behindPlayers)
+                    ATB.MoveToExecutingTrackBehindPlayers(unitId, executingCost);
+                else
+                    ATB.MoveToExecutingTrack(unitId, executingCost);
+            }
+            return true;
         }
 
         private bool ShouldIgnoreAtbPlanningComplete(bool isPlayerUnit)
@@ -1840,23 +1970,26 @@ namespace Scripts.UI
                 ATB.Pause();
             }
 
-            try
+            // 【动态索敌 + 空排 miss】命中一刻按当前站位重算目标；目标区空排则打空。
+            var result = _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
+            if (result == Ashlight.Battle.EnemyIntentResolveResult.Missed)
             {
-                _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
-                FindEnemyByUnitId(unitId)?.SetIntentionThinking();
-                UpdateAllUnitsDisplay();
-                UpdateEnergyBarByUnitId(unitId);
-                _battleManager.EndCurrentTurn();
+                var missUi = FindEnemyByUnitId(unitId);
+                if (missUi != null)
+                    _animationHandler?.ShowFloatingLabel(missUi.transform.position, "MISS", Color.white);
             }
-            finally
+
+            UpdateAllUnitsDisplay();
+            UpdateEnergyBarByUnitId(unitId);
+            _battleManager.EndCurrentTurn();
+
+            // 【敌人单轨制】结算完当场宣告下一次意图并回执行轨（退到第 ExecutingCost 格）。
+            // 不调用 TriggerNextUnit —— 当前在 TriggerNextUnit 循环内，改回 Slots 后循环会自动继续到下一单位。
+            if (!DeclareEnemyIntentAndQueue(unitId))
             {
+                // 无技能可用/已死亡：兜底排到 3 格，避免卡死（死亡单位会被 TriggerNextUnit 的死亡判定移除）。
                 _enemiesInExecutionTrack.Remove(unitId);
-                if (ATB != null)
-                {
-                    // 【回合制】敌人执行完成：拉回规划轨、排到 3 格后等待下次行动。
-                    // 不调用 TriggerNextUnit —— 当前在 TriggerNextUnit 循环内，循环会自动继续到下一单位。
-                    ATB.SetPositionBySlots(unitId, 3);
-                }
+                if (ATB != null) ATB.SetPositionBySlots(unitId, 3);
             }
         }
 
@@ -1911,6 +2044,7 @@ namespace Scripts.UI
                 if (cardView != null)
                 {
                     cardView.RefreshEnergyAffordability();
+                    cardView.RefreshConditionHighlight(); // 条件牌描边随站位/移动状态刷新
                 }
             }
         }

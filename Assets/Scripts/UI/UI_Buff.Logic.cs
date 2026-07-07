@@ -33,6 +33,10 @@ namespace Scripts.UI
         private Canvas _parentCanvas;
         private DescriptionViewController _descriptionView;
 
+        /// <summary>Inspector 未赋值 descriptionViewControllerPrefab 时的兜底路径（Resources 相对，不含扩展名）。</summary>
+        private const string DescriptionPrefabResourcePath = "UI/常用UI/PageViewer/DescriptionViewController";
+        private static GameObject _cachedDescriptionPrefab;
+
         #endregion
 
         #region Unity生命周期
@@ -48,6 +52,36 @@ namespace Scripts.UI
             if (Img_AttUp != null)
             {
                 Img_AttUp.raycastTarget = true;
+            }
+
+            // 与 IntentionView 一致：Awake 阶段预先创建 tooltip 实例（挂到根 Canvas、先隐藏）
+            CreateDescriptionView();
+        }
+
+        /// <summary>与 IntentionView.CreateDescriptionView 同套：预先实例化 tooltip、挂到根 Canvas 并隐藏。</summary>
+        private void CreateDescriptionView()
+        {
+            if (_descriptionView != null) return;
+
+            var prefab = descriptionViewControllerPrefab != null
+                ? descriptionViewControllerPrefab
+                : ResolveDescriptionPrefab();
+            if (prefab == null) return;
+
+            if (_parentCanvas == null) _parentCanvas = GetComponentInParent<Canvas>();
+            var hostCanvas = _parentCanvas != null ? _parentCanvas.rootCanvas : null;
+            if (hostCanvas == null) return;
+
+            var obj = Instantiate(prefab, hostCanvas.transform);
+            _descriptionView = obj.GetComponent<DescriptionViewController>();
+            if (_descriptionView != null)
+            {
+                _descriptionView.Hide();
+            }
+            else
+            {
+                Debug.LogError("[UI_Buff] descriptionViewControllerPrefab 上未找到 DescriptionViewController 组件");
+                Destroy(obj);
             }
         }
 
@@ -146,7 +180,17 @@ namespace Scripts.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            ShowTooltip();
+            Debug.Log($"[UI_Buff] OnPointerEnter: buff={_buffState?.BuffId ?? "(null)"}, view={( _descriptionView != null)}");
+
+            if (_buffInfo == null) return;
+
+            // 与 IntentionView 同：Awake 已建好 tooltip；这里兜底再试一次
+            if (_descriptionView == null) CreateDescriptionView();
+            if (_descriptionView == null) return;
+
+            _descriptionView.Show(_buffInfo, _buffState);
+            _descriptionView.transform.SetAsLastSibling();
+            PositionTooltip(eventData);
         }
 
         public void OnPointerExit(PointerEventData eventData)
@@ -211,34 +255,34 @@ namespace Scripts.UI
             Txt_Plies.gameObject.SetActive(!string.IsNullOrEmpty(display));
         }
 
+
         /// <summary>
-        /// 显示tooltip（首次悬停时懒加载实例）
+        /// 按 Canvas 渲染模式正确定位 tooltip（与 IntentionView 同一套）：把「鼠标屏幕坐标 + 偏移」用
+        /// ScreenPointToWorldPointInRectangle 换算到 Canvas 平面，兼容 Overlay / Camera / World 三种模式。
+        /// 旧实现直接用 transform.position（世界坐标）+ 像素偏移，在非 Overlay 画布下会把 tooltip 丢到屏幕外。
         /// </summary>
-        private void ShowTooltip()
+        private void PositionTooltip(PointerEventData eventData)
         {
-            if (_buffInfo == null) return;
+            if (_descriptionView == null) return;
 
-            if (_descriptionView == null)
+            var canvas = _descriptionView.GetComponentInParent<Canvas>();
+            var canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+            if (canvasRect == null) return;
+
+            Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null
+                : (eventData != null ? (eventData.pressEventCamera ?? eventData.enterEventCamera) : canvas.worldCamera);
+
+            // 有鼠标事件用鼠标屏幕坐标；没有则回退到本图标的屏幕坐标
+            Camera screenCam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            Vector2 screenPoint = (eventData != null)
+                ? eventData.position + descriptionOffset
+                : (Vector2)RectTransformUtility.WorldToScreenPoint(screenCam, transform.position) + descriptionOffset;
+
+            if (RectTransformUtility.ScreenPointToWorldPointInRectangle(canvasRect, screenPoint, cam, out var worldPoint))
             {
-                if (descriptionViewControllerPrefab == null || _parentCanvas == null)
-                {
-                    // 未配置prefab或无父Canvas，静默跳过
-                    return;
-                }
-
-                var descObj = Instantiate(descriptionViewControllerPrefab, _parentCanvas.transform);
-                _descriptionView = descObj.GetComponent<DescriptionViewController>();
-                if (_descriptionView == null)
-                {
-                    Debug.LogError("[UI_Buff] descriptionViewControllerPrefab 上未找到 DescriptionViewController 组件");
-                    Destroy(descObj);
-                    return;
-                }
+                _descriptionView.SetPosition(worldPoint);
             }
-
-            _descriptionView.Show(_buffInfo, _buffState);
-            Vector3 pos = transform.position + new Vector3(descriptionOffset.x, descriptionOffset.y, 0f);
-            _descriptionView.SetPosition(pos);
         }
 
         private void HideTooltip()
@@ -247,6 +291,23 @@ namespace Scripts.UI
             {
                 _descriptionView.Hide();
             }
+        }
+
+        /// <summary>
+        /// 兜底解析 DescriptionViewController 预制体：Inspector 未赋值时从 Resources 加载并缓存。
+        /// 找不到时返回 null（CreateDescriptionView 会静默跳过，不报错刷屏）。
+        /// </summary>
+        private static GameObject ResolveDescriptionPrefab()
+        {
+            if (_cachedDescriptionPrefab == null)
+            {
+                _cachedDescriptionPrefab = Resources.Load<GameObject>(DescriptionPrefabResourcePath);
+                if (_cachedDescriptionPrefab == null)
+                {
+                    Debug.LogWarning($"[UI_Buff] 未在 Inspector 赋值 descriptionViewControllerPrefab，也未能从 Resources 找到：{DescriptionPrefabResourcePath}");
+                }
+            }
+            return _cachedDescriptionPrefab;
         }
 
         #endregion

@@ -83,6 +83,12 @@
         <var name="value" type="float" comment="Buff参数/数值"/>
     </bean>
 
+    <bean name="BuffConditionalEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="Buff ID"/>
+        <var name="value" type="float" comment="满足条件时施加的层数/数值"/>
+        <var name="condition_type" type="string" comment="触发条件，如 'MovedThisTurn'"/>
+    </bean>
+
     <bean name="DrawEffect" parent="Effect">
         <var name="count" type="int" comment="立即抽牌数量 {V}"/>
     </bean>

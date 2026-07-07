@@ -31,6 +31,7 @@ public sealed partial class CardInfo : Luban.BeanBase
         { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
         { if(!_buf["IsEthereal"].IsBoolean) { throw new SerializationException(); }  IsEthereal = _buf["IsEthereal"]; }
         { if(!_buf["IsExhaust"].IsBoolean) { throw new SerializationException(); }  IsExhaust = _buf["IsExhaust"]; }
+        { if(!_buf["TargetZone"].IsNumber) { throw new SerializationException(); }  TargetZone = (TargetZoneEnum)_buf["TargetZone"].AsInt; }
     }
 
     public static CardInfo DeserializeCardInfo(JSONNode _buf)
@@ -52,6 +53,7 @@ public sealed partial class CardInfo : Luban.BeanBase
     public readonly int ExecutingCost;
     public readonly bool IsEthereal;
     public readonly bool IsExhaust;
+    public readonly TargetZoneEnum TargetZone;
    
     public const int __ID__ = 804331843;
     public override int GetTypeId() => __ID__;
@@ -78,6 +80,7 @@ public sealed partial class CardInfo : Luban.BeanBase
         + "ExecutingCost:" + ExecutingCost + ","
         + "IsEthereal:" + IsEthereal + ","
         + "IsExhaust:" + IsExhaust + ","
+        + "TargetZone:" + TargetZone + ","
         + "}";
     }
 }

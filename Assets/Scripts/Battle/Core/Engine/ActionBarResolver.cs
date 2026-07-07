@@ -36,7 +36,7 @@ namespace Ashlight.Battle.Core.Engine
                 return null;
             }
 
-            // 检查是否已有单位到达终点（上一次推进的残余）
+            // 检查是否已有单位到达终点（上一次推进的残余）→ 与上一行动者同格，不算跨入新回合
             var readyUnit = GetHighestPriorityReady(aliveUnits);
             if (readyUnit != null)
             {

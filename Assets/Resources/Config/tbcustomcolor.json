@@ -28,5 +28,20 @@
     "Id": "Warning_Red",
     "Color": "cc3939",
     "Desc": "极少，仅作为警示使用"
+  },
+  {
+    "Id": "FrontRow",
+    "Color": "cc5a3c",
+    "Desc": "前排索敌指示色（暖红）"
+  },
+  {
+    "Id": "BackRow",
+    "Color": "3c8fcc",
+    "Desc": "后排索敌指示色（冷蓝）"
+  },
+  {
+    "Id": "AllRow",
+    "Color": "b06fcc",
+    "Desc": "全体索敌指示色（紫）"
   }
 ]

@@ -114,14 +114,14 @@ namespace Scripts.UI
                 foreach (var u in playerUnits)
                 {
                     if (u == null || u.IsDead) continue;
-                    SpawnCard(u.UnitId, u.ConfigId);
+                    SpawnCard(u.UnitId, u.ConfigId, true);
                 }
 
             if (enemyUnits != null)
                 foreach (var u in enemyUnits)
                 {
                     if (u == null || u.IsDead) continue;
-                    SpawnCard(u.UnitId, u.ConfigId);
+                    SpawnCard(u.UnitId, u.ConfigId, false);
                 }
 
             RefreshOrder();
@@ -251,7 +251,7 @@ namespace Scripts.UI
 
         #region 卡片创建
 
-        private void SpawnCard(string unitId, string configId)
+        private void SpawnCard(string unitId, string configId, bool isPlayer)
         {
             if (actionOrderPrefab == null)
             {
@@ -267,13 +267,13 @@ namespace Scripts.UI
                 card = go.AddComponent<UI_行动顺序>();
             }
 
-            card.Setup(configId);
+            card.Setup(configId, isPlayer);
 
             _cards.Add(new CardEntry
             {
                 UnitId      = unitId,
                 Card        = card,
-                Ghost       = CreateGhostCard(configId),
+                Ghost       = CreateGhostCard(configId, isPlayer),
                 IsExecuting = false
             });
         }
@@ -282,7 +282,7 @@ namespace Scripts.UI
         /// 创建一张第二次回合幽灵卡：与真实卡同款，但整体半透明、不接收 hover、默认隐藏，
         /// 由 RefreshOrder 在预测到的位置上按需显示。
         /// </summary>
-        private UI_行动顺序 CreateGhostCard(string configId)
+        private UI_行动顺序 CreateGhostCard(string configId, bool isPlayer)
         {
             if (actionOrderPrefab == null) return null;
 
@@ -292,7 +292,7 @@ namespace Scripts.UI
             // 必须用重载了 == 的显式判空，否则会拿到伪 null 组件、访问时抛 MissingComponentException。
             var card = go.GetComponent<UI_行动顺序>();
             if (card == null) card = go.AddComponent<UI_行动顺序>();
-            card.Setup(configId);
+            card.Setup(configId, isPlayer);
 
             // 半透明标识为“预测的未来回合”；不拦射线，避免抢真实卡的 hover
             var cg = go.GetComponent<CanvasGroup>();

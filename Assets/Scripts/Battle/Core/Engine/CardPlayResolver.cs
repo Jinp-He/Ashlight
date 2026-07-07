@@ -38,7 +38,7 @@ namespace Ashlight.Battle.Core.Engine
             }
 
             var modifier = state.CardModifiers?.Get(card.Id);
-            var commands = ConvertEffectsToCommands(card.Effects, modifier);
+            var commands = ConvertEffectsToCommands(card.Effects, modifier, card.TargetType, card.TargetZone);
             if (commands.Count == 0)
             {
                 Debug.LogWarning($"[CardPlayResolver] 卡牌 {card.Name} 没有可执行的命令");
@@ -81,7 +81,7 @@ namespace Ashlight.Battle.Core.Engine
                 return new List<ICommand>();
             }
 
-            return ConvertEffectsToCommands(card.Effects, modifier);
+            return ConvertEffectsToCommands(card.Effects, modifier, card.TargetType, card.TargetZone);
         }
 
         /// <summary>
@@ -89,7 +89,8 @@ namespace Ashlight.Battle.Core.Engine
         /// 复用原 CardToTimelineConverter 的映射逻辑
         /// </summary>
         /// <param name="modifier">来自升级系统的卡牌修正（可空）</param>
-        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects, CardModifier modifier = null)
+        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects, CardModifier modifier = null,
+            TargetTypeEnum targetType = TargetTypeEnum.SingleEnemy, TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             var commands = new List<ICommand>();
             if (effects == null || effects.Count == 0)
@@ -99,7 +100,7 @@ namespace Ashlight.Battle.Core.Engine
 
             foreach (var effect in effects)
             {
-                var command = ConvertEffectToCommand(effect, modifier);
+                var command = ConvertEffectToCommand(effect, modifier, targetType, targetZone);
                 if (command != null)
                 {
                     commands.Add(command);
@@ -111,8 +112,11 @@ namespace Ashlight.Battle.Core.Engine
 
         /// <summary>
         /// 将单个 Effect 转换为 Command（叠加卡牌修正）
+        /// <paramref name="targetType"/> / <paramref name="targetZone"/> 来自卡牌本身，用于把「打哪个区/群体友军」等
+        /// 卡级信息带给自展开型 Command（AttackEffect 的 AOE 分区、DefenseEffect 的 AllAlly 群体护甲）。
         /// </summary>
-        private ICommand ConvertEffectToCommand(Effect effect, CardModifier modifier = null)
+        private ICommand ConvertEffectToCommand(Effect effect, CardModifier modifier = null,
+            TargetTypeEnum targetType = TargetTypeEnum.SingleEnemy, TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             if (effect == null)
             {
@@ -124,7 +128,8 @@ namespace Ashlight.Battle.Core.Engine
                 int damage = attackEffect.Damage + (modifier?.DamageDelta ?? 0);
                 if (damage < 0) damage = 0;
                 bool isAoe = modifier?.ForceAoe ?? attackEffect.IsAoe;
-                return new DamageCommand(damage, isAoe);
+                // 把卡牌声明的目标分区带给 AOE 扩散（如寒霜新星只打前排）；单体攻击忽略分区
+                return new DamageCommand(damage, isAoe) { TargetZone = targetZone };
             }
 
             if (effect is AttackConditionalEffect attackConditionalEffect)
@@ -138,7 +143,13 @@ namespace Ashlight.Battle.Core.Engine
             {
                 int value = defenseEffect.Value + (modifier?.DefenseDelta ?? 0);
                 if (value < 0) value = 0;
-                return new DefenseCommand(value, defenseEffect.PerHit);
+                // AllAlly 卡（如奥术护罩）= 群体护甲，按卡牌分区给一整排友军加甲；其余仍是单体（自己/指定友军）
+                bool defenseAoe = targetType == TargetTypeEnum.AllAlly;
+                return new DefenseCommand(value, defenseEffect.PerHit)
+                {
+                    IsAoe = defenseAoe,
+                    TargetZone = defenseAoe ? targetZone : TargetZoneEnum.Any
+                };
             }
 
             if (effect is DefenseConditionalEffect defenseConditionalEffect)
@@ -156,6 +167,14 @@ namespace Ashlight.Battle.Core.Engine
             if (effect is BuffEffect buffEffect)
             {
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
+            }
+
+            if (effect is BuffConditionalEffect buffConditionalEffect)
+            {
+                return new BuffConditionalCommand(
+                    buffConditionalEffect.BuffId,
+                    buffConditionalEffect.Value,
+                    buffConditionalEffect.ConditionType);
             }
 
             if (effect is DrawEffect drawEffect)

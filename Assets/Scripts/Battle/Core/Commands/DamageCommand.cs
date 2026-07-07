@@ -96,7 +96,8 @@ namespace Ashlight.Battle.Core.Commands
                 : state.GetAlivePlayerUnits();
 
             // 分区过滤：AllEnemy+Front 只扫前区，+Back 只扫后区；Any 不过滤。
-            targets = ZoneTargeting.FilterByZone(state, targets, TargetZone);
+            // strict：目标区空排时只打区内剩余单位、不回退全体（与「空排 miss」口径一致）。
+            targets = ZoneTargeting.FilterByZone(state, targets, TargetZone, strict: true);
 
             int adjustedDamage = ApplyAttackerModifiers(owner, Damage);
 

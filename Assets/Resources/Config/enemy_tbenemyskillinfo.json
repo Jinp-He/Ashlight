@@ -61,7 +61,7 @@
     ],
     "ExecutingCost": 5,
     "TargetType": 4,
-    "TargetZone": 2
+    "TargetZone": 1
   },
   {
     "Id": "ES005",
@@ -98,7 +98,7 @@
       }
     ],
     "ExecutingCost": 1,
-    "TargetType": 3,
+    "TargetType": 0,
     "TargetZone": 0
   },
   {
