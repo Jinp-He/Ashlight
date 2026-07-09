@@ -50,6 +50,9 @@ namespace Ashlight.Battle.Core.Commands
                 UnitIdB = null,
                 IsPrediction = state.IsPrediction
             });
+
+            // 回合内移动触发器（铁蒺藜/隧穿效应）：任何单位完成移动都触发一次
+            Engine.MoveTriggerProcessor.OnUnitMoved(state, mover);
         }
 
         /// <summary>把 Mode 解析成目标区：FrontRow/BackRow 指定去向；Toggle 或空/未知则相对当前翻转。</summary>

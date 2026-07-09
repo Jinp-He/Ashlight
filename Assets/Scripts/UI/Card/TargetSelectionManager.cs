@@ -104,9 +104,12 @@ namespace Scripts.UI
         /// </summary>
         /// <param name="target">目标GameObject</param>
         /// <param name="targetType">卡牌目标类型</param>
-        /// <param name="ownerId">卡牌所有者ID</param>
+        /// <param name="ownerCharacterId">卡牌所有者ID</param>
+        /// <param name="targetZone">卡牌 TargetZone：单体牌（SingleEnemy/SingleAlly）声明 Front/Back 时
+        /// 目标必须在对应排（【近战】/【远程】）；群体牌的 TargetZone 是 AOE 扩散分区，不限制载体点击。</param>
         /// <returns>是否为合法目标</returns>
-        public bool IsValidTarget(GameObject target, TargetTypeEnum targetType, CharacterEnum ownerCharacterId)
+        public bool IsValidTarget(GameObject target, TargetTypeEnum targetType, CharacterEnum ownerCharacterId,
+            TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             if (target == null)
             {
@@ -116,7 +119,7 @@ namespace Scripts.UI
             switch (targetType)
             {
                 case TargetTypeEnum.SingleAlly:
-                    return ValidateSingleAlly(target, ownerCharacterId);
+                    return ValidateSingleAlly(target, ownerCharacterId) && IsTargetInZone(target, targetZone);
 
                 case TargetTypeEnum.AllAlly:
                     return ValidateAllAlly(target, ownerCharacterId);
@@ -125,7 +128,7 @@ namespace Scripts.UI
                     return ValidateSelf(target, ownerCharacterId);
 
                 case TargetTypeEnum.SingleEnemy:
-                    return ValidateSingleEnemy(target);
+                    return ValidateSingleEnemy(target) && IsTargetInZone(target, targetZone);
 
                 case TargetTypeEnum.AllEnemy:
                     return ValidateAllEnemy(target);
@@ -137,6 +140,21 @@ namespace Scripts.UI
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// 【近战/远程】目标是否处于卡牌限制的分区（Any 恒为 true）
+        /// </summary>
+        private static bool IsTargetInZone(GameObject target, TargetZoneEnum zone)
+        {
+            if (zone != TargetZoneEnum.Front && zone != TargetZoneEnum.Back)
+            {
+                return true;
+            }
+
+            UnitState state = target.GetComponent<Character>()?.GetUnitState()
+                              ?? target.GetComponent<Enemy>()?.GetUnitState();
+            return ZoneTargeting.IsUnitInZone(state, zone);
         }
 
         /// <summary>

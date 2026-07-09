@@ -106,11 +106,6 @@ namespace Ashlight.Battle
         // ========== ATB 引擎组件 ==========
 
         /// <summary>
-        /// 行动条推进解算器
-        /// </summary>
-        public ActionBarResolver ActionBarResolver { get; private set; }
-
-        /// <summary>
         /// 回合解算器
         /// </summary>
         public TurnResolver TurnResolver { get; private set; }
@@ -137,9 +132,8 @@ namespace Ashlight.Battle
             _battleEndEventRaised = false;
 
             // 初始化 ATB 核心引擎
-            ActionBarResolver = new ActionBarResolver();
             CardPlayResolver = new CardPlayResolver();
-            TurnResolver = new TurnResolver(CardPlayResolver, ActionBarResolver);
+            TurnResolver = new TurnResolver(CardPlayResolver);
             EnemyIntentAxisResolver = new EnemyIntentAxisResolver();
             Predictor = new BattlePredictor();
             PredictionManager = new BattlePredictionManager(this);
@@ -217,7 +211,97 @@ namespace Ashlight.Battle
 
             // 5. 初始化回合数（不立即开始回合，等待UI初始化完成）
             CurrentRound = 0;
+
+            // 6. 摇天气（全局权重池，v1 只有雷暴必中；表为空则本场无天气）
+            RollWeather();
         }
+
+        // ────────────────────────────────────────────────────────────────
+        #region 天气系统
+
+        /// <summary>
+        /// 本场战斗的天气（战斗开始时从天气表按 Weight 全局随机）。null = 无天气。
+        /// 天气在时钟里是虚拟单位（第三方阵营，无 UnitState），调度由 UI 侧 ATB 负责，
+        /// 这里只持有配置与结算逻辑。见 docs/天气系统设计_v1.md。
+        /// </summary>
+        public WeatherInfo CurrentWeather { get; private set; }
+
+        /// <summary>
+        /// 战斗开始时按 Weight 从天气表随机一个天气。表为空/未加载时本场无天气（防御性，不报错）。
+        /// </summary>
+        private void RollWeather()
+        {
+            CurrentWeather = null;
+
+            var table = ConfigLoader.Tables?.TbWeatherInfo;
+            if (table == null || table.DataList == null || table.DataList.Count == 0)
+            {
+                Debug.Log("[BattleManager] 天气表为空，本场无天气");
+                return;
+            }
+
+            float totalWeight = 0f;
+            foreach (var w in table.DataList)
+            {
+                if (w != null && w.Weight > 0f) totalWeight += w.Weight;
+            }
+            if (totalWeight <= 0f)
+            {
+                Debug.Log("[BattleManager] 天气表权重全为 0，本场无天气");
+                return;
+            }
+
+            float roll = Random.Range(0f, totalWeight);
+            foreach (var w in table.DataList)
+            {
+                if (w == null || w.Weight <= 0f) continue;
+                roll -= w.Weight;
+                if (roll <= 0f)
+                {
+                    CurrentWeather = w;
+                    break;
+                }
+            }
+            if (CurrentWeather == null) CurrentWeather = table.DataList[table.DataList.Count - 1];
+
+            Debug.Log($"[BattleManager] 本场天气: {CurrentWeather.Name} (每 {CurrentWeather.Period} 回合结算，伤害 {CurrentWeather.Damage})");
+        }
+
+        /// <summary>
+        /// 天气落雷结算：对给定单位（= 行动排在雷击回合的单位）各造成 CurrentWeather.Damage 点环境伤害。
+        /// 走普通伤害管线（吃易伤/减伤/护甲），**不吃闪避**（canBeDodged=false）。
+        /// 劈死走正常死亡流程（TakeDamage 内置）+ CheckBattleEnd。
+        /// </summary>
+        /// <param name="unitIds">被劈单位 Id 列表（死亡/不存在的自动跳过）</param>
+        /// <returns>unitId → 实际造成的伤害（被护甲全挡也会有条目，值为 0），供 UI 飘字</returns>
+        public Dictionary<string, int> ResolveWeatherStrike(IReadOnlyList<string> unitIds)
+        {
+            var results = new Dictionary<string, int>();
+            if (CurrentState == null || CurrentWeather == null || unitIds == null)
+            {
+                return results;
+            }
+
+            foreach (var id in unitIds)
+            {
+                var unit = CurrentState.GetUnitById(id);
+                if (unit == null || unit.IsDead) continue;
+
+                int dealt = unit.TakeDamage(CurrentWeather.Damage, canBeDodged: false);
+                results[id] = dealt;
+                Debug.Log($"[BattleManager] [{CurrentWeather.Name}] 劈中 {id}：{dealt} 伤害 (剩余 HP: {unit.CurrentHp}{(unit.IsDead ? "，死亡" : "")})");
+            }
+
+            if (results.Count == 0)
+            {
+                Debug.Log($"[BattleManager] [{CurrentWeather.Name}] 本次结算无人在场（空劈），节拍照常推进");
+            }
+
+            CurrentState.CheckBattleEnd();
+            return results;
+        }
+
+        #endregion
 
         /// <summary>
         /// 创建玩家单位
@@ -540,6 +624,21 @@ namespace Ashlight.Battle
                 return false;
             }
 
+            // 【前排/后排】打出站位限制：卡牌声明 CastZone 时施法者必须站在对应排
+            if (!ZoneTargeting.CanCastFromCurrentRow(cardInfo, owner))
+            {
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：站位不满足 CastZone={cardInfo.CastZone}, owner={ownerId}");
+                return false;
+            }
+
+            // 【近战/远程】单体牌索敌分区限制：目标必须站在卡牌声明的排
+            var zoneTarget = string.IsNullOrEmpty(targetId) ? null : CurrentState.GetUnitById(targetId);
+            if (!ZoneTargeting.IsSingleTargetZoneValid(cardInfo, zoneTarget))
+            {
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：目标不在限制分区 TargetZone={cardInfo.TargetZone}, target={targetId}");
+                return false;
+            }
+
             int energyCost = GetCardEnergyCost(cardInfo);
             // 游侠百相 FirstMoveFree：本回合第一张「带移动」的牌费用为 0
             bool isFreeMove = IsFreeMoveForOwner(owner, cardInfo);
@@ -551,7 +650,7 @@ namespace Ashlight.Battle
             bool willOverload = false;
             if (owner.CurrentEnergy < energyCost)
             {
-                bool canOverload = !isFreeMove && owner.Overload != null && owner.Overload.OverloadCountThisTurn == 0;
+                bool canOverload = !isFreeMove && owner.Overload != null && !owner.Overload.EnergyOverdraftUsedThisTurn;
                 if (!canOverload)
                 {
                     Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：能量不足且不可过载 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
@@ -587,6 +686,7 @@ namespace Ashlight.Battle
             if (willOverload)
             {
                 owner.Overload.OverloadCountThisTurn++; // 本回合已过载 → 结束回合重排 +1 格
+                owner.Overload.EnergyOverdraftUsedThisTurn = true; // 透支额度每回合限 1 次（与卡牌 [过载] 分开计）
                 owner.Overload.IsOverloaded = true;
                 owner.CurrentEnergy = 0;                // 透支：能量清空
                 Debug.Log($"[BattleManager] {ownerId} 过载打出 {cardInfo.Id}，本回合结束重排将 +1 格");
@@ -680,6 +780,20 @@ namespace Ashlight.Battle
             if (!string.IsNullOrEmpty(CurrentState.CurrentTurnUnitId) && CurrentState.CurrentTurnUnitId != ownerId)
             {
                 Debug.LogWarning($"[BattleManager] 无法挂起执行牌：当前回合单位为 {CurrentState.CurrentTurnUnitId}，非 {ownerId}");
+                return false;
+            }
+
+            // 【前排/后排】打出站位限制
+            if (!ZoneTargeting.CanCastFromCurrentRow(cardInfo, owner))
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：站位不满足 CastZone={cardInfo.CastZone}, owner={ownerId}");
+                return false;
+            }
+
+            // 【近战/远程】单体牌索敌分区限制（挂起时按当前站位校验；执行时的动态站位由结算逻辑处理）
+            if (!ZoneTargeting.IsSingleTargetZoneValid(cardInfo, target))
+            {
+                Debug.LogWarning($"[BattleManager] 无法挂起执行牌：目标不在限制分区 TargetZone={cardInfo.TargetZone}, target={targetId}");
                 return false;
             }
 
@@ -796,6 +910,7 @@ namespace Ashlight.Battle
             if (playerUnit.Overload != null)
             {
                 playerUnit.Overload.OverloadCountThisTurn = 0; // 每回合重置过载额度
+                playerUnit.Overload.EnergyOverdraftUsedThisTurn = false;
                 playerUnit.Overload.IsOverloaded = false;
             }
             if (CurrentState.DeckSystem != null)
@@ -920,13 +1035,7 @@ namespace Ashlight.Battle
             // 3. 清除回合标记
             CurrentState.CurrentTurnUnitId = null;
 
-            // 4. 重置该玩家ATB
-            if (ActionBarResolver != null)
-            {
-                ActionBarResolver.RestartUnitActionBar(playerUnit);
-            }
-
-            // 5. 解除全场暂停
+            // 4. 解除全场暂停（重排由 ATB 公共回合调度负责，不再重置行动条段位）
             CurrentState.IsGlobalPaused = false;
 
             Debug.Log($"[BattleManager] 玩家回合结束，全场恢复: {unitId}");
@@ -1024,12 +1133,8 @@ namespace Ashlight.Battle
                     firedEnemyIds.Add(enemy.UnitId);
                 }
 
-                // 重置阶段并重启ATB
+                // 重置阶段（旧意图轴系统；重排由 ATB 公共回合调度负责）
                 EnemyIntentAxisResolver.ResetPhase(enemy);
-                if (ActionBarResolver != null)
-                {
-                    ActionBarResolver.RestartUnitActionBar(enemy);
-                }
 
                 if (CurrentState.IsBattleEnded)
                 {
@@ -1606,6 +1711,14 @@ namespace Ashlight.Battle
 
             CurrentState.CurrentTurnUnitId = null;
 
+            // 回合内移动触发器（铁蒺藜/隧穿效应）与全局移动计数只存活一个原子回合
+            if (CurrentState.MoveTriggers != null && CurrentState.MoveTriggers.Count > 0)
+            {
+                Debug.Log($"[BattleManager] 回合结束，清空移动触发器 x{CurrentState.MoveTriggers.Count}");
+                CurrentState.MoveTriggers.Clear();
+            }
+            CurrentState.MovesThisTurn = 0;
+
             // 安全兜底：确保全场暂停被解除（兼容旧 UI 调用路径）
             if (CurrentState.IsGlobalPaused)
             {
@@ -1963,20 +2076,6 @@ namespace Ashlight.Battle
         // ========== ATB 新增方法 ==========
 
         /// <summary>
-        /// ATB：推进行动条直到有单位获得行动权
-        /// </summary>
-        /// <returns>获得行动权的单位ID</returns>
-        public string AdvanceActionBarUntilAction()
-        {
-            if (CurrentState == null || CurrentState.IsBattleEnded)
-            {
-                return null;
-            }
-
-            return ActionBarResolver.AdvanceUntilAction(CurrentState);
-        }
-
-        /// <summary>
         /// ATB：执行指定单位的完整回合
         /// </summary>
         public bool ExecuteUnitTurn(string unitId, List<CardAction> cardActions)
@@ -2020,19 +2119,6 @@ namespace Ashlight.Battle
             }
 
             return Predictor.SimulateCard(CurrentState, cardInfo, ownerId, targetId);
-        }
-
-        /// <summary>
-        /// ATB：获取预测的行动顺序
-        /// </summary>
-        public List<string> GetPredictedActionOrder(int lookAhead = 5)
-        {
-            if (CurrentState == null)
-            {
-                return new List<string>();
-            }
-
-            return ActionBarResolver.PredictActionOrder(CurrentState, lookAhead);
         }
 
         /// <summary>

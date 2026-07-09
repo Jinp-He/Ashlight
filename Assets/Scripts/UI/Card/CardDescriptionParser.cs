@@ -73,16 +73,105 @@ namespace Scripts.UI
             // 追加关键词标签（[一次性]/[虚无]），复用绿色 + 悬停词条渲染
             description = AppendKeywordTags(description, cardInfo);
 
+            // 移动触发牌（隧穿/铁蒺藜）：战斗中卡面补充显示本回合全场已移动次数
+            description = AppendMoveCounter(description, cardInfo, mode);
+
             return description;
         }
 
         /// <summary>
-        /// 根据卡牌标记追加关键词标签（[一次性]/[虚无]）。
+        /// 【动态计数】卡牌带移动触发效果（OnMoveAddCard/OnMoveDamage）时，
+        /// 战斗模式下在描述末尾追加「本回合已移动 N 次」（N = BattleStateSnapshot.MovesThisTurn，
+        /// 全场任何单位每完成一次换排 +1，回合结束清零）。
+        /// 手牌在移动发生后由 UI_BattleScene.RefreshHandEnergyAffordability 触发重解析刷新。
+        /// </summary>
+        private static string AppendMoveCounter(string description, CardInfo cardInfo, DescriptionMode mode)
+        {
+            if (mode != DescriptionMode.Battle || cardInfo.Effects == null)
+            {
+                return description;
+            }
+
+            bool hasMoveTrigger = false;
+            foreach (var effect in cardInfo.Effects)
+            {
+                if (effect is OnMoveAddCardEffect || effect is OnMoveDamageEffect)
+                {
+                    hasMoveTrigger = true;
+                    break;
+                }
+            }
+            if (!hasMoveTrigger)
+            {
+                return description;
+            }
+
+            var state = Ashlight.Battle.BattleManager.Instance?.CurrentState;
+            if (state == null)
+            {
+                return description;
+            }
+
+            string count = WrapWithColor(state.MovesThisTurn.ToString(), AmountColor);
+            return description + $"\n（本回合已移动 {count} 次）";
+        }
+
+        /// <summary>
+        /// 根据卡牌标记追加关键词标签（[一次性]/[虚无]/[前排]/[后排]/[近战]/[远程]/[过载]）。
         /// 若描述里已手写该关键词则不重复追加。
         /// </summary>
         private static string AppendKeywordTags(string text, CardInfo cardInfo)
         {
             var tags = new List<string>();
+
+            void AddKeyword(string keyword, string extra = null)
+            {
+                if (!string.IsNullOrEmpty(text) && text.Contains(keyword))
+                {
+                    return;
+                }
+                string tag = WrapWithColorAndLink(keyword, keyword, TagColor);
+                if (!string.IsNullOrEmpty(extra))
+                {
+                    tag += WrapWithColor(extra, AmountColor);
+                }
+                tags.Add(tag);
+            }
+
+            // 【前排/后排】打出站位限制（CastZone）
+            if (cardInfo.CastZone == TargetZoneEnum.Front)
+            {
+                AddKeyword("前排");
+            }
+            else if (cardInfo.CastZone == TargetZoneEnum.Back)
+            {
+                AddKeyword("后排");
+            }
+
+            // 【近战/远程】单体牌索敌分区限制（TargetZone）
+            bool isSingleTarget = cardInfo.TargetType == TargetTypeEnum.SingleEnemy
+                                  || cardInfo.TargetType == TargetTypeEnum.SingleAlly;
+            if (isSingleTarget && cardInfo.TargetZone == TargetZoneEnum.Front)
+            {
+                AddKeyword("近战");
+            }
+            else if (isSingleTarget && cardInfo.TargetZone == TargetZoneEnum.Back)
+            {
+                AddKeyword("远程");
+            }
+
+            // 【过载】使用后自身过载 V 格
+            if (cardInfo.Effects != null)
+            {
+                foreach (Effect effect in cardInfo.Effects)
+                {
+                    if (effect is OverloadEffect overloadEffect)
+                    {
+                        AddKeyword("过载", overloadEffect.Value.ToString());
+                        break;
+                    }
+                }
+            }
 
             if (cardInfo.IsExhaust && (string.IsNullOrEmpty(text) || !text.Contains("一次性")))
             {
@@ -230,6 +319,9 @@ namespace Scripts.UI
 
                 case DrawEffect drawEffect:
                     return drawEffect.Count.ToString();
+
+                case OverloadEffect overloadEffect:
+                    return overloadEffect.Value.ToString();
 
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");

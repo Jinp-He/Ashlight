@@ -146,14 +146,9 @@ namespace Scripts.UI
         /// </summary>
         private BattleAnimationHandler _animationHandler;
         private bool _isProcessingAtbTurn;
-        /// <summary>
-        /// 当前正在执行轨中的敌人 unitId 集合（支持多敌人同时在执行轨）
-        /// </summary>
-        private readonly HashSet<string> _enemiesInExecutionTrack = new HashSet<string>();
-        private bool _isProcessingPlayerExecutionTurn;
 
         /// <summary>
-        /// 当前规划回合内是否已打出过执行牌（用于 ATB 执行轨与手牌压制）
+        /// 当前回合内是否已打出过执行牌（用于手牌压制：一回合限一张执行牌）。
         /// </summary>
         private bool _playerPlayedExecutionCardThisAtbTurn;
 
@@ -207,8 +202,7 @@ namespace Scripts.UI
 
             if (ATB != null)
             {
-                ATB.OnPlanningComplete += HandleAtbPlanningComplete;
-                ATB.OnExecutionComplete += HandleAtbExecutionComplete;
+                ATB.OnUnitTurn += HandleAtbUnitTurn;
                 ATB.OnObjectiveRoundAdvanced += HandleObjectiveRoundAdvanced;
             }
         }
@@ -276,8 +270,7 @@ namespace Scripts.UI
 
             if (ATB != null)
             {
-                ATB.OnPlanningComplete -= HandleAtbPlanningComplete;
-                ATB.OnExecutionComplete -= HandleAtbExecutionComplete;
+                ATB.OnUnitTurn -= HandleAtbUnitTurn;
                 ATB.OnObjectiveRoundAdvanced -= HandleObjectiveRoundAdvanced;
                 ATB.OnIconRemoved -= OnAtbIconRemoved;
             }
@@ -369,23 +362,33 @@ namespace Scripts.UI
                         _battleManager.CurrentState.EnemyUnits);
                 }
 
+                // 【公共回合镜像】开局把调度同步进快照（CurrentRound / 各单位 NextActionRound），
+                // 供 Core 命令查询「当前回合的敌人」。之后每个原子回合开始时都会再同步。
+                ATB.SyncScheduleToState(_battleManager.CurrentState);
+
+                // 【天气】把本场天气挂进公共回合时钟（虚拟单位·第三方阵营，首次结算=第 Period 回合），
+                // 并做开场预告（TurnOrderView 雷暴格 / 常驻角标 / 开场横幅）。
+                var weather = _battleManager.CurrentWeather;
+                if (weather != null)
+                {
+                    ATB.AddWeatherIcon(weather.IconPath, weather.Period);
+                    TurnOrderView?.SetWeather(weather);
+                    ShowWeatherAnnouncement(weather);
+                }
+
                 // 【回合制】暂停 ATB 后立即触发第一个单位的回合，无需等待实时推进
                 ATB.Pause();
 
-                // 【敌人单轨制】开局先让每个敌人当场宣告首次意图并入执行轨（退到第 ExecutingCost 格）。
-                // 敌人从此常驻执行轨、全程亮意图；不再需要先跑一趟规划轨来预告。
+                // 【公共回合制】敌人开局种子回合 = Speed（由 InitializeByUnits 设定），我方 = 第 1 回合。
+                // 这里只为每个敌人预告首次意图（telegraph，供行动顺序视图显示），不做任何排队；
+                // 轮到敌人回合（第 Speed 个公共回合）时才结算。
                 var bootstrapEnemies = _battleManager.CurrentState.EnemyUnits;
                 if (bootstrapEnemies != null)
                 {
                     foreach (var enemy in bootstrapEnemies)
                     {
                         if (enemy == null || enemy.IsDead) continue;
-                        // behindPlayers：开局敌人排到所有玩家之后，保证每个角色先动一轮再轮到敌人首次落地
-                        if (!DeclareEnemyIntentAndQueue(enemy.UnitId, behindPlayers: true))
-                        {
-                            // 无技能可用：排到所有人之后 1 格，避免 TriggerNextUnit 卡在它身上
-                            ATB.SetPositionBehindAll(enemy.UnitId, 1);
-                        }
+                        DeclareEnemyIntent(enemy.UnitId);
                     }
                 }
 
@@ -1294,9 +1297,8 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 玩家打出执行牌：挂起动作、压暗其余执行牌、并立即把 ATB 图标排入执行轨（Slots=执行费用）。
-        /// 【回合制】图标停在第 cost 格等待，等玩家结束回合后由 TriggerNextUnit 推进；
-        /// 轮到它时触发 OnExecutionComplete 结算（不再靠 Tick 实时推进）。
+        /// 玩家打出执行牌：挂起动作 + 压暗其余执行牌（一回合限一张执行牌）。
+        /// 【原子回合】执行牌不再进入执行轨；其效果在玩家结束回合（EndRoundCoroutine）时统一结算。
         /// </summary>
         public void OnPlayerPlayedExecutionCard(CardViewController playedCard, string ownerUnitId)
         {
@@ -1307,13 +1309,6 @@ namespace Scripts.UI
 
             _playerPlayedExecutionCardThisAtbTurn = true;
             ApplyHandExecutionSuppressionExcept(playedCard);
-
-            if (ATB != null && _battleManager != null)
-            {
-                int executingCost = _battleManager.GetPendingPlayerExecutionCost(ownerUnitId);
-                ATB.MoveToExecutingTrack(ownerUnitId, executingCost);
-                TurnOrderView?.SetExecuting(ownerUnitId, true);
-            }
         }
 
         private void ApplyHandExecutionSuppressionExcept(CardViewController playedCard)
@@ -1664,6 +1659,24 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 【公共回合镜像】把命令结算累计的推迟（PendingRoundDelay）落到 ATB 真调度并刷新行动顺序视图。
+        /// 每次卡牌/敌技结算完成后调用（CardViewController 出牌成功、执行牌结算、敌人原子回合）。
+        /// </summary>
+        public void ApplyPendingScheduleChanges()
+        {
+            if (ATB == null || _battleManager?.CurrentState == null)
+            {
+                return;
+            }
+
+            if (ATB.ApplyPendingDelays(_battleManager.CurrentState))
+            {
+                ATB.SyncScheduleToState(_battleManager.CurrentState);
+                TurnOrderView?.RefreshOrder();
+            }
+        }
+
+        /// <summary>
         /// 结束回合协程（真正的回合结束清理）
         /// </summary>
         private IEnumerator EndRoundCoroutine()
@@ -1681,37 +1694,37 @@ namespace Scripts.UI
                         currentTurnUnit.CurrentEnergy = 0;
                         _battleManager.DiscardCurrentHand();
                         DisplayHandCards();
-
                         ClearHandExecutionSuppression();
 
+                        // 过载次数要在 EndCurrentTurn 之前读取（= 下次行动的额外回合延迟）。
+                        int overloadDelay = currentTurnUnit.Overload != null ? currentTurnUnit.Overload.OverloadCountThisTurn : 0;
+
+                        // 【原子回合】结算本回合挂起的执行牌（若有），效果立即发生（不再走执行轨）。
                         if (_battleManager.HasPendingPlayerExecutionCard(currentTurnUnitId))
                         {
-                            _isProcessingPlayerExecutionTurn = true;
-                            // 图标可能已在 OnPlayerPlayedExecutionCard 时提前移入执行轨，避免重置位置
-                            if (!ATB.IsInExecutionTrack(currentTurnUnitId))
-                            {
-                                int executingCost = _battleManager.GetPendingPlayerExecutionCost(currentTurnUnitId);
-                                ATB.MoveToExecutingTrack(currentTurnUnitId, executingCost);
-                            }
-                            // 【回合制】玩家执行牌已排到第 cost 格等待，推进到下一单位。
-                            // 轮到该执行牌时 TriggerNextUnit 会触发 OnExecutionComplete 结算（不再靠 Tick）。
-                            ATB.TriggerNextUnit();
-                            Debug.Log($"[UI_BattleScene] 玩家结束回合，执行牌进入执行轨队列: {currentTurnUnitId}");
-                            yield break;
+                            _battleManager.ExecutePendingPlayerCardAfterExecutionTrack(currentTurnUnitId);
+                            UpdateAllUnitsDisplay();
                         }
 
-                        ATB.SkipExecutingTrack(currentTurnUnitId);
+                        // 【推迟落账】本回合所有卡牌积累的行动推迟统一落到 ATB 调度（含执行牌刚结算的）。
+                        ApplyPendingScheduleChanges();
 
                         _playerPlayedExecutionCardThisAtbTurn = false;
                         _battleManager.EndCurrentTurn();
 
-                        // 【回合制】Swift 牌/跳过/啥都不干：从当前行动点（X=0）往后 3 格（绝对位置）。
-                        // 类似 ATB 时间轴：无论其他人在哪，本单位下次行动时间 = 现在 + 3 格。
-                        // 过载代价：本回合过载过则额外 +1 格（下次行动更晚，直接体现在行动顺序视图上）。
-                        int reCostSlots = 3 + ((currentTurnUnit.Overload != null && currentTurnUnit.Overload.OverloadCountThisTurn > 0) ? 1 : 0);
-                        ATB.SetPositionBySlots(currentTurnUnitId, reCostSlots);
+                        // 结算执行牌可能打死敌人 → 战斗结束：停止推进，等结算面板。
+                        if (_battleManager.CurrentState.IsBattleEnded)
+                        {
+                            ATB.AutoAdvanceSuspended = true;
+                            yield break;
+                        }
+
+                        // 【公共回合制】重排：下次行动 = 当前公共回合 + Speed + 过载次数。
+                        ATB.Reschedule(currentTurnUnitId, currentTurnUnit.Speed, overloadDelay);
+                        // 记录已落账的过载负债，供肾上腺素（ClearOverload）拉回
+                        currentTurnUnit.AppliedOverloadRoundDelay = overloadDelay;
                         ATB.TriggerNextUnit();
-                        Debug.Log($"[UI_BattleScene] 玩家回合结束（Swift/跳过），触发下一单位: {currentTurnUnitId}");
+                        Debug.Log($"[UI_BattleScene] 玩家回合结束，重排 {currentTurnUnitId} (speed={currentTurnUnit.Speed}, overload={overloadDelay})");
                         yield break;
                     }
                 }
@@ -1747,63 +1760,75 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 规划轨到点处理：
-        /// 1. 玩家到点必须始终能进入出牌阶段，并暂停整条 ATB（包括敌人执行轨）
-        /// 2. 敌人执行轨存在全局挂起状态，执行完成前不允许其他敌人再次进入规划完成逻辑
+        /// 【公共回合制·原子回合】轮到某单位行动（由 ATB.OnUnitTurn 触发）：
+        ///   · 玩家 → 进入出牌阶段，停下等玩家结束回合（EndRoundCoroutine 再重排+推进）。
+        ///   · 敌人 → 立即结算其预告意图 → 结束回合 → 重排(Speed+过载) → 预告下一次意图；
+        ///           全程在 TriggerNextUnit 的循环内同步完成，循环自动继续到下一单位。
         /// </summary>
-        private void HandleAtbPlanningComplete(string unitId, bool isPlayerUnit)
+        private void HandleAtbUnitTurn(string unitId, bool isPlayerUnit)
         {
-            if (ShouldIgnoreAtbPlanningComplete(isPlayerUnit))
+            if (_battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn)
             {
                 return;
             }
 
-            // 【死亡/结束保护】战斗已结束，或该单位已死亡：不再开启回合，移除其残留图标。
+            // 【死亡/结束保护】战斗已结束：不再开启回合。
             if (_battleManager.CurrentState.IsBattleEnded)
             {
-                Debug.Log($"[UI_BattleScene] 规划完成时战斗已结束，跳过单位回合: {unitId}");
+                Debug.Log($"[UI_BattleScene] 轮到 {unitId} 时战斗已结束，停止推进");
                 if (ATB != null) ATB.AutoAdvanceSuspended = true;
                 return;
             }
-            var planningUnit = _battleManager.CurrentState.GetUnitById(unitId);
-            if (planningUnit == null || planningUnit.IsDead)
+
+            // 【天气虚拟单位】轮到天气结算（第三方阵营，无 UnitState）——
+            // 必须在下面的 GetUnitById 死亡保护之前拦截，否则会被当"已不存在"移除图标。
+            if (unitId == ATB.WeatherUnitId)
             {
-                Debug.Log($"[UI_BattleScene] 规划完成时单位已死亡，移除其ATB图标: {unitId}");
+                _isProcessingAtbTurn = true;
+                try
+                {
+                    ResolveWeatherAtomicTurn();
+                }
+                finally
+                {
+                    _isProcessingAtbTurn = false;
+                }
+                return;
+            }
+
+            var unit = _battleManager.CurrentState.GetUnitById(unitId);
+            if (unit == null || unit.IsDead)
+            {
+                Debug.Log($"[UI_BattleScene] 轮到 {unitId} 时单位已死亡，移除其ATB图标");
                 ATB?.RemoveUnitIcon(unitId);
                 return;
             }
 
-            // 高亮当前行动单位
-            TurnOrderView?.SetActiveUnit(unitId);
+            // 【公共回合镜像】原子回合开始：把最新调度同步进快照（Core 命令按此判「当前回合的敌人」）。
+            ATB?.SyncScheduleToState(_battleManager.CurrentState);
+
+            // 行动到来 = 过载负债已偿还，清零（此后肾上腺素无可拉回）
+            unit.AppliedOverloadRoundDelay = 0;
 
             _isProcessingAtbTurn = true;
             try
             {
-                if (ATB != null)
-                {
-                    ATB.Pause();
-                }
-
                 if (isPlayerUnit)
                 {
-                    _isProcessingPlayerExecutionTurn = false;
+                    // 玩家原子回合：进入出牌阶段并停下等输入。
+                    TurnOrderView?.SetActiveUnit(unitId);
+                    if (ATB != null) ATB.Pause();
                     _playerPlayedExecutionCardThisAtbTurn = false;
                     ClearHandExecutionSuppression();
                     _battleManager.StartPlayerTurn(unitId, false);
                     DisplayHandCards();
                     UpdateAllUnitsDisplay();
                     UpdateEnergyBarByUnitId(unitId);
-                    Debug.Log($"[UI_BattleScene] 玩家回合开始并暂停ATB: {unitId}");
+                    Debug.Log($"[UI_BattleScene] 玩家回合开始: {unitId} (公共回合 {ATB?.CurrentRound})");
                 }
                 else
                 {
-                    // 【敌人单轨制】敌人常驻执行轨，正常不会走到规划轨触发这里（bootstrap 已入执行轨）。
-                    // 作为防御性兜底：当场宣告意图并回执行轨；无技能则排到 1 格避免卡死。
-                    // 不调用 TriggerNextUnit —— 当前正处在 TriggerNextUnit 的循环内，改回 Slots 后循环会自动继续。
-                    if (!DeclareEnemyIntentAndQueue(unitId) && ATB != null)
-                    {
-                        ATB.SetPositionBySlots(unitId, 1);
-                    }
+                    ResolveEnemyAtomicTurn(unitId, unit);
                 }
             }
             finally
@@ -1813,54 +1838,195 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 【敌人单轨制核心】让敌人当场宣告下一次意图并排到执行轨等待：
-        ///   刷新能量 → 选技能+锁目标 → 亮意图(图标/坐标) → MoveToExecutingTrack(退到第 ExecutingCost 格)。
-        /// 用于三处：开局 bootstrap、敌人上一次行动结算后立即预告下一次、规划轨防御性兜底。
-        /// 敌人从此常驻执行轨、全程亮着意图，走到 0 格时触发 OnExecutionComplete 结算。
-        /// 返回 false = 无技能可用（调用方需自行把它排到某格，避免 TriggerNextUnit 卡死）。
+        /// 天气的原子回合（如雷暴落雷）：劈所有行动排在当前公共回合的真单位 → 检查战斗结束 → 按绝对节拍重排(+Period)。
+        /// 走普通伤害管线（吃易伤/减伤/护甲，不吃闪避）；空劈只有日志，节拍照常推进。
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，重排后循环自动继续。见 docs/天气系统设计_v1.md。
         /// </summary>
-        private bool DeclareEnemyIntentAndQueue(string unitId, bool behindPlayers = false)
+        private void ResolveWeatherAtomicTurn()
+        {
+            var weather = _battleManager?.CurrentWeather;
+            if (weather == null || ATB == null)
+            {
+                // 防御：无天气本不该有天气图标。兜底重排避免时钟反复选中它卡死。
+                ATB?.Reschedule(ATB.WeatherUnitId, weather != null ? weather.Period : 6, 0);
+                return;
+            }
+
+            // 先取受劈名单再重排（GetUnitIdsAtRound 自带排除天气自身）。
+            var victims = ATB.GetUnitIdsAtRound(ATB.CurrentRound);
+            var results = _battleManager.ResolveWeatherStrike(victims);
+
+            // 掉血表现：飘字 + 全体状态刷新（v1 无全屏特效）。
+            foreach (var kv in results)
+            {
+                var ui = FindUnitUiTransform(kv.Key);
+                if (ui != null)
+                {
+                    string label = kv.Value > 0 ? $"-{kv.Value}" : "格挡";
+                    _animationHandler?.ShowFloatingLabel(ui.position, label, new Color(1f, 0.85f, 0.2f));
+                }
+            }
+            UpdateAllUnitsDisplay();
+            Debug.Log($"[UI_BattleScene] [{weather.Name}] 公共回合 {ATB.CurrentRound} 结算：命中 {results.Count} 个单位");
+
+            // 劈死可能终结战斗（全灭=失败 / 最后一个敌人被劈死=胜利）。
+            if (_battleManager.CurrentState != null && _battleManager.CurrentState.IsBattleEnded)
+            {
+                ATB.AutoAdvanceSuspended = true;
+                return;
+            }
+
+            // 绝对节拍：下次结算 = 当前回合 + Period（k, 2k, 3k, ...）。
+            ATB.Reschedule(ATB.WeatherUnitId, weather.Period, 0);
+        }
+
+        /// <summary>本场的天气 HUD（常驻角标 + 开场横幅）。新战斗初始化时销毁重建。</summary>
+        private WeatherHud _weatherHud;
+
+        /// <summary>
+        /// 开场预告天气：创建常驻角标（hover 弹天气说明）并播一次开场横幅。
+        /// </summary>
+        private void ShowWeatherAnnouncement(cfg.WeatherInfo weather)
+        {
+            if (weather == null) return;
+
+            if (_weatherHud != null)
+            {
+                Destroy(_weatherHud.gameObject);
+                _weatherHud = null;
+            }
+
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[UI_BattleScene] 找不到 Canvas，天气角标/横幅未创建");
+                return;
+            }
+
+            _weatherHud = WeatherHud.Create(canvas, weather);
+            Debug.Log($"[UI_BattleScene] 天气预告: {weather.Name}（每 {weather.Period} 回合结算）");
+        }
+
+        /// <summary>按 UnitId 找单位的 UI Transform（先查我方角色再查敌人），找不到返回 null。</summary>
+        private Transform FindUnitUiTransform(string unitId)
+        {
+            var ch = FindCharacterByUnitId(unitId);
+            if (ch != null) return ch.transform;
+            var en = FindEnemyByUnitId(unitId);
+            return en != null ? en.transform : null;
+        }
+
+        /// <summary>
+        /// 敌人的原子回合：结算其（此前已预告的）意图 → 结束回合 → 重排(Speed+过载) → 预告下一次意图。
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，重排后循环会自动继续到下一单位。
+        /// 敌人意图选择/动态索敌逻辑沿用 BattleManager 现有实现，不在此改动。
+        /// </summary>
+        private void ResolveEnemyAtomicTurn(string unitId, UnitState enemyUnit)
+        {
+            // 【晕眩】带 Stun buff 的敌人跳过本次行动：扣 1 层、照常重排，预告的意图保留到下次。
+            var stun = enemyUnit.GetBuff("Stun");
+            if (stun != null)
+            {
+                stun.Value -= 1f;
+                stun.StackCount = Mathf.Max(0, Mathf.RoundToInt(stun.Value));
+                if (stun.Value <= 0f)
+                {
+                    enemyUnit.RemoveBuff("Stun");
+                }
+
+                var stunUi = FindEnemyByUnitId(unitId);
+                if (stunUi != null)
+                    _animationHandler?.ShowFloatingLabel(stunUi.transform.position, "晕眩", new Color(1f, 0.9f, 0.3f));
+
+                Debug.Log($"[UI_BattleScene] {unitId} 晕眩中，跳过本次行动 (剩余 {Mathf.Max(0, Mathf.RoundToInt(stun.Value))} 回合)");
+
+                TurnOrderView?.SetActiveUnit(null);
+                UpdateAllUnitsDisplay();
+                if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, 0);
+                if (!_battleManager.HasPendingEnemyIntent(unitId))
+                {
+                    DeclareEnemyIntent(unitId);
+                }
+                return;
+            }
+
+            // 若尚无预告意图（理论上 bootstrap/上一次已预告），当场补一次。
+            if (!_battleManager.HasPendingEnemyIntent(unitId))
+            {
+                if (!DeclareEnemyIntent(unitId))
+                {
+                    // 无技能可用：直接重排到下一轮，避免卡死。
+                    if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, 0);
+                    return;
+                }
+            }
+
+            // 【动态索敌 + 空排 miss】命中一刻按当前站位重算目标；目标区空排则打空。
+            var result = _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
+            if (result == Ashlight.Battle.EnemyIntentResolveResult.Missed)
+            {
+                var missUi = FindEnemyByUnitId(unitId);
+                if (missUi != null)
+                    _animationHandler?.ShowFloatingLabel(missUi.transform.position, "MISS", Color.white);
+            }
+
+            // 【推迟落账】敌技若带推迟效果（推玩家），在此落到 ATB 调度。
+            ApplyPendingScheduleChanges();
+
+            TurnOrderView?.SetActiveUnit(null);
+            TurnOrderView?.SetExecuting(unitId, false);
+            UpdateAllUnitsDisplay();
+            UpdateEnergyBarByUnitId(unitId);
+
+            // 结算可能打死玩家 → 战斗结束：停止推进。
+            if (_battleManager.CurrentState.IsBattleEnded)
+            {
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+                _battleManager.EndCurrentTurn();
+                return;
+            }
+
+            int overloadDelay = enemyUnit.Overload != null ? enemyUnit.Overload.OverloadCountThisTurn : 0;
+            _battleManager.EndCurrentTurn();
+
+            // 【公共回合制】重排：下次行动 = 当前公共回合 + Speed + 过载次数。
+            if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, overloadDelay);
+            enemyUnit.AppliedOverloadRoundDelay = overloadDelay;
+
+            // 预告下一次意图（telegraph），供行动顺序视图显示。
+            DeclareEnemyIntent(unitId);
+            UpdateAllUnitsDisplay();
+        }
+
+        /// <summary>
+        /// 让敌人当场准备并公示下一次意图（刷新能量 → 选技能+锁目标 → 亮意图图标/坐标）。
+        /// 仅做「预告」，不涉及回合调度（种子/重排由 ATB 的公共回合负责）。
+        /// 敌人意图与选目标逻辑沿用 BattleManager 现有实现，不在此改动。
+        /// 返回 false = 无技能可用。
+        /// </summary>
+        private bool DeclareEnemyIntent(string unitId)
         {
             if (_battleManager?.CurrentState == null) return false;
 
             var enemy = _battleManager.CurrentState.GetUnitById(unitId);
             if (enemy == null || enemy.IsDead || enemy.IsPlayerUnit) return false;
 
-            // 单轨制下「预告即准备」：在此刷新能量（原先由 StartEnemyTurn 在规划到点时做）
+            // 「预告即准备」：刷新能量后选技能+锁目标。
             _battleManager.StartEnemyTurn(unitId);
 
             if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(
-                    unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId))
+                    unitId, out int _, out EnemySkillInfo preparedSkill, out string targetUnitId))
             {
                 return false;
             }
-
-            _enemiesInExecutionTrack.Add(unitId);
 
             // 意图显示：无合法目标（目标区空排，targetUnitId==null）→ 思考态 intention_think，否则攻击意图。
             ApplyEnemyIntentDisplay(unitId, preparedSkill, targetUnitId);
 
             UpdateAllUnitsDisplay();
             UpdateEnergyBarByUnitId(unitId);
-
-            if (ATB != null)
-            {
-                // 排到执行轨等待。轮到它（Slots 归零）时触发 OnExecutionComplete 结算（有目标则命中、空排则 miss）。
-                // behindPlayers（开局）：排到所有玩家之后，保证每人先动一轮；平时：第 executingCost 格。
-                if (behindPlayers)
-                    ATB.MoveToExecutingTrackBehindPlayers(unitId, executingCost);
-                else
-                    ATB.MoveToExecutingTrack(unitId, executingCost);
-            }
             return true;
-        }
-
-        private bool ShouldIgnoreAtbPlanningComplete(bool isPlayerUnit)
-        {
-            // 只做重入保护和空值检查；不再因"敌人在执行轨中"而拦截任何单位的规划完成。
-            // 规则：任意单位（包括多个敌人）可以独立进入执行轨；
-            //       只有玩家到达规划轨终点时才全局暂停 ATB，冻结所有执行轨。
-            return _battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn;
         }
 
         /// <summary>
@@ -1882,115 +2048,6 @@ namespace Scripts.UI
                 }
             }
             return false;
-        }
-
-        /// <summary>
-        /// 执行轨到达终点：结算敌人技能伤害，结束回合并恢复 ATB
-        /// </summary>
-        private void HandleAtbExecutionComplete(string unitId, bool isPlayerUnit)
-        {
-            // 执行完成后清除高亮和攻击图标
-            TurnOrderView?.SetActiveUnit(null);
-            TurnOrderView?.SetExecuting(unitId, false);
-
-            if (_battleManager == null || _battleManager.CurrentState == null)
-            {
-                return;
-            }
-
-            // 【死亡/结束保护】战斗已结束：停止自动推进，等待结算弹窗。
-            if (_battleManager.CurrentState.IsBattleEnded)
-            {
-                Debug.Log($"[UI_BattleScene] 执行结算时战斗已结束，停止推进: {unitId}");
-                if (ATB != null) ATB.AutoAdvanceSuspended = true;
-                _enemiesInExecutionTrack.Remove(unitId);
-                return;
-            }
-
-            // 【死亡保护】执行单位已死亡（如其意图结算前被反伤/连锁打死）：移除其图标，不结算。
-            var execUnit = _battleManager.CurrentState.GetUnitById(unitId);
-            if (execUnit == null || execUnit.IsDead)
-            {
-                Debug.Log($"[UI_BattleScene] 执行结算时单位已死亡，移除其ATB图标: {unitId}");
-                _enemiesInExecutionTrack.Remove(unitId);
-                ATB?.RemoveUnitIcon(unitId);
-                return;
-            }
-
-            if (isPlayerUnit)
-            {
-                bool hasPendingPlayerExecution = _battleManager.HasPendingPlayerExecutionCard(unitId);
-                if (!_isProcessingPlayerExecutionTurn && !hasPendingPlayerExecution)
-                {
-                    ClearHandExecutionSuppression();
-                    _playerPlayedExecutionCardThisAtbTurn = false;
-                    return;
-                }
-
-                if (ATB != null)
-                {
-                    ATB.Pause();
-                }
-
-                try
-                {
-                    _battleManager.ExecutePendingPlayerCardAfterExecutionTrack(unitId);
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-                    _battleManager.EndCurrentTurn();
-
-                    // 非 Swift（执行）牌结算完直接进入新回合：刷新能量、重抽手牌，
-                    // ATB 保持暂停由玩家继续操作，而不是回到规划轨起点重新等条。
-                    _battleManager.StartPlayerTurn(unitId, false);
-                    DisplayHandCards();
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-                    Debug.Log($"[UI_BattleScene] 执行牌结算后直接开启新回合: {unitId}");
-                }
-                finally
-                {
-                    _isProcessingPlayerExecutionTurn = false;
-                    _playerPlayedExecutionCardThisAtbTurn = false;
-                    ClearHandExecutionSuppression();
-                    // 【回合制】把该玩家从执行轨拉回规划轨、Slots=0（立刻开始新回合）。
-                    // TriggerNextUnit 循环检测到“执行轨单位是玩家”后会停下等玩家操作。
-                    if (ATB != null) ATB.SetPositionBySlots(unitId, 0);
-                }
-
-                return;
-            }
-
-            if (!_battleManager.HasPendingEnemyIntent(unitId))
-            {
-                return;
-            }
-
-            if (ATB != null)
-            {
-                ATB.Pause();
-            }
-
-            // 【动态索敌 + 空排 miss】命中一刻按当前站位重算目标；目标区空排则打空。
-            var result = _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
-            if (result == Ashlight.Battle.EnemyIntentResolveResult.Missed)
-            {
-                var missUi = FindEnemyByUnitId(unitId);
-                if (missUi != null)
-                    _animationHandler?.ShowFloatingLabel(missUi.transform.position, "MISS", Color.white);
-            }
-
-            UpdateAllUnitsDisplay();
-            UpdateEnergyBarByUnitId(unitId);
-            _battleManager.EndCurrentTurn();
-
-            // 【敌人单轨制】结算完当场宣告下一次意图并回执行轨（退到第 ExecutingCost 格）。
-            // 不调用 TriggerNextUnit —— 当前在 TriggerNextUnit 循环内，改回 Slots 后循环会自动继续到下一单位。
-            if (!DeclareEnemyIntentAndQueue(unitId))
-            {
-                // 无技能可用/已死亡：兜底排到 3 格，避免卡死（死亡单位会被 TriggerNextUnit 的死亡判定移除）。
-                _enemiesInExecutionTrack.Remove(unitId);
-                if (ATB != null) ATB.SetPositionBySlots(unitId, 3);
-            }
         }
 
         private void UpdateEnergyBarByUnitId(string unitId)
@@ -2045,6 +2102,7 @@ namespace Scripts.UI
                 {
                     cardView.RefreshEnergyAffordability();
                     cardView.RefreshConditionHighlight(); // 条件牌描边随站位/移动状态刷新
+                    cardView.RefreshDynamicDescription(); // 隧穿/铁蒺藜卡面「本回合已移动 N 次」计数刷新
                 }
             }
         }

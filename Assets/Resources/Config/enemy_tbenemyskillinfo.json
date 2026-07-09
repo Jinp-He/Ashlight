@@ -66,7 +66,7 @@
   {
     "Id": "ES005",
     "Name": "铁壁加固",
-    "Description": "获得{D}点护甲，并减伤{V}%",
+    "Description": "获得{D}点护甲，并减伤{B}%",
     "Effects": [
       {
         "$type": "DefenseEffect",
@@ -148,7 +148,7 @@
   {
     "Id": "ES009",
     "Name": "战吼",
-    "Description": "获得{V}层力量",
+    "Description": "获得{B}层力量",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -164,7 +164,7 @@
   {
     "Id": "ES010",
     "Name": "易伤诅咒",
-    "Description": "对目标施加{V}%易伤",
+    "Description": "对目标施加{B}%易伤",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -212,7 +212,7 @@
   {
     "Id": "ES013",
     "Name": "战争咆哮",
-    "Description": "获得{V}层力量与{D}点护甲",
+    "Description": "获得{B}层力量与{D}点护甲",
     "Effects": [
       {
         "$type": "BuffEffect",
@@ -234,7 +234,7 @@
   {
     "Id": "ES014",
     "Name": "湮灭一击",
-    "Description": "蓄力轰击，造成{A}点毁灭伤害；引导期间受到{V}点伤害即被打断",
+    "Description": "蓄力轰击，造成{A}点毁灭伤害；引导期间受到{B}点伤害即被打断",
     "Effects": [
       {
         "$type": "AttackEffect",

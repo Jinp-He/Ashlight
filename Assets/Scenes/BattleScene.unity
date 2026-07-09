@@ -183,8 +183,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u7ED3\u7B97\u56DE\u5408"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 2100000, guid: f2e1a52c10bd1414892f5c53d609b024, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
+  m_sharedMaterial: {fileID: 9038812693520946310, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1740,7 +1740,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 674.449, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &632262920
@@ -2281,7 +2281,7 @@ MonoBehaviour:
   levelIndicatorPrefab: {fileID: 0}
   cardsContainer: {fileID: 0}
   cardSpacing: 8
-  ghostAlpha: 0.5
+  windowSize: 10
   atb: {fileID: 6409102427222875274}
   descriptionViewControllerPrefab: {fileID: 0}
 --- !u!114 &669032334
@@ -6240,8 +6240,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 0}
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -7714,7 +7714,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 749.449, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2045189137
@@ -11038,12 +11038,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   PlayerIconPrefab: {fileID: 5529372145793415572, guid: 3cb5c874edf1f304ea83938630e1d9ab, type: 3}
   EnemyIconPrefab: {fileID: 5899073032166619977, guid: b076996bbdefeea42a3369453f89e998, type: 3}
-  advanceSpeed: 180
+  WeatherIconPrefab: {fileID: 0}
   segmentWidth: 77
-  maxSpeedForPosition: 8
   iconBaseY: 0
   overlapThreshold: 15
   overlapSeparation: 18
+  enemyTurnPacing: 0.6
   ExecutingATBSlot: {fileID: 1881072715}
   PlanningATBSlot: {fileID: 1457491300}
 --- !u!114 &6409102427222875275

@@ -182,6 +182,12 @@ namespace Ashlight.Battle.Core.Engine
                 return new DrawCommand(drawEffect.Count);
             }
 
+            // 【过载】使用后自身过载 V 格：下次行动重排额外 +V 回合
+            if (effect is OverloadEffect overloadEffect)
+            {
+                return new OverloadCommand(0, overloadEffect.Value);
+            }
+
             // ATB 新增：PushCollisionEffect 映射到 ActionBarShiftCommand
             if (effect is PushCollisionEffect pushEffect)
             {
@@ -202,6 +208,76 @@ namespace Ashlight.Battle.Core.Engine
             if (effect is AddToHandEffect addToHandEffect)
             {
                 return new AddToHandCommand(addToHandEffect.CardId, addToHandEffect.Count);
+            }
+
+            // 迅猛打击：目标处于[执行]中（公共回合口径 = 本回合将行动）则伤害乘倍率
+            if (effect is AttackExtraEffect attackExtraEffect)
+            {
+                int extraDamage = attackExtraEffect.Damage + (modifier?.DamageDelta ?? 0);
+                if (extraDamage < 0) extraDamage = 0;
+                return new AttackExtraCommand(extraDamage, attackExtraEffect.Conditions, attackExtraEffect.Multiplier);
+            }
+
+            // 挺身而出：嘲讽 = 给自己贴 Taunt buff（敌人索敌优先攻击持有者，见 BattleManager 嘲讽选目标）
+            if (effect is TauntEffect)
+            {
+                return new BuffCommand("Taunt", 1);
+            }
+
+            // 杀戮时刻：立即获得能量（费用已在出牌前扣除，加量可用于本回合继续出牌）
+            if (effect is EnergyEffect energyEffect)
+            {
+                return new EnergyCommand(energyEffect.Value);
+            }
+
+            // 肾上腺素：清除目标未落账的过载计数
+            if (effect is ClearOverloadEffect)
+            {
+                return new ClearOverloadCommand();
+            }
+
+            // 掩护射击：施法者自身移动（区别于 MovePositionEffect 移动的是卡牌目标）
+            if (effect is MoveSelfEffect moveSelfEffect)
+            {
+                return new MoveSelfCommand(moveSelfEffect.Mode);
+            }
+
+            // 紧急避险：施法者所在排整排翻转
+            if (effect is MoveRowEffect)
+            {
+                return new MoveRowCommand();
+            }
+
+            // 铁蒺藜：本回合每次移动随机对一名敌人造成伤害
+            if (effect is OnMoveDamageEffect onMoveDamageEffect)
+            {
+                return new RegisterMoveTriggerCommand(MoveTriggerState.TypeDamage, onMoveDamageEffect.Damage);
+            }
+
+            // 隧穿效应：本回合每次移动加牌进手
+            if (effect is OnMoveAddCardEffect onMoveAddCardEffect)
+            {
+                return new RegisterMoveTriggerCommand(MoveTriggerState.TypeAddCard, onMoveAddCardEffect.Count, onMoveAddCardEffect.CardId);
+            }
+
+            // 预知一击：打「当前公共回合将行动」的所有敌人
+            if (effect is AttackCurrentRoundEffect attackCurrentRoundEffect)
+            {
+                int crDamage = attackCurrentRoundEffect.Damage + (modifier?.DamageDelta ?? 0);
+                if (crDamage < 0) crDamage = 0;
+                return new AttackCurrentRoundCommand(crDamage);
+            }
+
+            // 示现/眩晕飞镖：晕眩当前回合敌人（random_one=true 随机一名）
+            if (effect is StunCurrentRoundEffect stunCurrentRoundEffect)
+            {
+                return new StunCurrentRoundCommand(stunCurrentRoundEffect.Duration, stunCurrentRoundEffect.RandomOne);
+            }
+
+            // 全知全闪：按当前回合敌人数给自己叠 buff
+            if (effect is BuffPerCurrentRoundEnemyEffect buffPerEffect)
+            {
+                return new BuffPerCurrentRoundEnemyCommand(buffPerEffect.BuffId, buffPerEffect.Value);
             }
 
             // TODO: 待 Luban schema 新增 StunEffect 后启用

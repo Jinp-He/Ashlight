@@ -73,6 +73,23 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public CardModifierRegistry CardModifiers { get; set; }
 
+        /// <summary>
+        /// 【公共回合镜像】当前公共回合号（真相在 ATB.CurrentRound，UI 层在原子回合开始时同步）。
+        /// 与 <see cref="UnitState.NextActionRound"/> 搭配判断「当前回合将行动的单位」。
+        /// </summary>
+        public int CurrentRound { get; set; }
+
+        /// <summary>
+        /// 回合内移动触发器列表（「这回合每次有角色移动就 XX」）。回合结束时清空。
+        /// </summary>
+        public List<MoveTriggerState> MoveTriggers { get; set; }
+
+        /// <summary>
+        /// 本回合（当前原子回合内）全场累计移动次数——任何单位每完成一次换排 +1。
+        /// 供隧穿/铁蒺藜卡面动态显示「本回合已移动 N 次」；回合结束清零。
+        /// </summary>
+        public int MovesThisTurn { get; set; }
+
         public BattleStateSnapshot()
         {
             PlayerUnits = new List<UnitState>();
@@ -87,6 +104,8 @@ namespace Ashlight.Battle.Core.Data
             TurnCount = 0;
             IsGlobalPaused = false;
             CardModifiers = new CardModifierRegistry();
+            CurrentRound = 0;
+            MoveTriggers = new List<MoveTriggerState>();
         }
 
         /// <summary>
@@ -150,6 +169,17 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
+        /// 【公共回合】从 <paramref name="owner"/> 的视角，取「当前公共回合将行动」的存活敌对单位
+        /// （NextActionRound == CurrentRound；我方回合先于敌方，故这些单位是本回合稍后行动者）。
+        /// 依赖 UI 层已把 ATB 调度同步进快照（NextActionRound 为 -1 的单位视为未知、不命中）。
+        /// </summary>
+        public List<UnitState> GetCurrentRoundOpponents(UnitState owner)
+        {
+            var pool = owner != null && owner.IsPlayerUnit ? EnemyUnits : PlayerUnits;
+            return pool.Where(u => !u.IsDead && u.NextActionRound == CurrentRound && u.NextActionRound >= 0).ToList();
+        }
+
+        /// <summary>
         /// 检查战斗是否结束
         /// </summary>
         public void CheckBattleEnd()
@@ -190,8 +220,13 @@ namespace Ashlight.Battle.Core.Data
                 CurrentTurnUnitId = this.CurrentTurnUnitId,
                 TurnCount = this.TurnCount,
                 IsGlobalPaused = this.IsGlobalPaused,
+                CurrentRound = this.CurrentRound,
                 PlayerUnits = new List<UnitState>(),
-                EnemyUnits = new List<UnitState>()
+                EnemyUnits = new List<UnitState>(),
+                MoveTriggers = this.MoveTriggers != null
+                    ? this.MoveTriggers.Select(t => t.Clone()).ToList()
+                    : new List<MoveTriggerState>(),
+                MovesThisTurn = this.MovesThisTurn
             };
 
             // 深拷贝玩家方单位

@@ -3,7 +3,7 @@
     "Id": "E001",
     "EnemySet": [
       "Enemy001",
-      "Enemy002"
+      "Enemy001"
     ],
     "StrategySet": [
       {
@@ -18,8 +18,9 @@
   {
     "Id": "E002",
     "EnemySet": [
-      "Enemy001",
-      "Enemy005"
+      "Enemy002",
+      "Enemy003",
+      "Enemy004"
     ],
     "StrategySet": [
       {
@@ -34,8 +35,7 @@
   {
     "Id": "E003",
     "EnemySet": [
-      "Enemy003",
-      "Enemy004"
+      "Enemy006"
     ],
     "StrategySet": [
       {
@@ -44,24 +44,6 @@
           0
         ],
         "Weight": 0.3
-      }
-    ]
-  },
-  {
-    "Id": "E004",
-    "EnemySet": [
-      "Enemy003",
-      "Enemy001",
-      "Enemy005"
-    ],
-    "StrategySet": [
-      {
-        "EnemyIntentionsScript": [
-          0,
-          0,
-          0
-        ],
-        "Weight": 0.5
       }
     ]
   }

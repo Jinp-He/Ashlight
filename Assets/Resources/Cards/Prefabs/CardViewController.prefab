@@ -1103,8 +1103,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u6218\u6280"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 777ebdee292dbe7459a25a8a4a2b79ea, type: 2}
-  m_sharedMaterial: {fileID: -1320416041770165265, guid: 777ebdee292dbe7459a25a8a4a2b79ea, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
+  m_sharedMaterial: {fileID: 9038812693520946310, guid: 8105ba63beda66849976e9a2d5f48122, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2055,6 +2055,8 @@ MonoBehaviour:
   validTargetDimColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   insufficientEnergyColor: {r: 1, g: 0.25, b: 0.25, a: 1}
   executionCostTint: {r: 1, g: 0.55, b: 0.2, a: 1}
+  conditionMetOutlineColor: {r: 1, g: 0.85, b: 0.1, a: 1}
+  conditionUnmetOutlineColor: {r: 1, g: 1, b: 1, a: 1}
   enableDetailedDebugLogs: 0
   Card: {fileID: 453507312664506188}
   Img_CardBas: {fileID: 6839321531033731531}

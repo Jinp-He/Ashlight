@@ -35,7 +35,7 @@
       "Irene003",
       "Irene003"
     ],
-    "Speed": 5,
+    "Speed": 3,
     "Draw": 5,
     "Energy": 4
   },
@@ -55,7 +55,7 @@
       "Zhouzhou015",
       "Zhouzhou015"
     ],
-    "Speed": 3,
+    "Speed": 2,
     "Draw": 5,
     "Energy": 2,
     "Trait": "FirstMoveFree"

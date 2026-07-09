@@ -14,18 +14,15 @@ namespace Ashlight.Battle.Core.Engine
     public class TurnResolver
     {
         private readonly CardPlayResolver _cardPlayResolver;
-        private readonly ActionBarResolver _actionBarResolver;
 
         public TurnResolver()
         {
             _cardPlayResolver = new CardPlayResolver();
-            _actionBarResolver = new ActionBarResolver();
         }
 
-        public TurnResolver(CardPlayResolver cardPlayResolver, ActionBarResolver actionBarResolver)
+        public TurnResolver(CardPlayResolver cardPlayResolver)
         {
             _cardPlayResolver = cardPlayResolver ?? new CardPlayResolver();
-            _actionBarResolver = actionBarResolver ?? new ActionBarResolver();
         }
 
         /// <summary>
@@ -106,8 +103,7 @@ namespace Ashlight.Battle.Core.Engine
             // 5. 回合结束处理
             OnTurnEnd(state, unit);
 
-            // 6. 行动条重启
-            _actionBarResolver.RestartUnitActionBar(unit);
+            // 注：行动条重排已交由 ATB 公共回合调度（UI 层）负责，这里不再重置段位。
 
             state.CurrentTurnUnitId = null;
 
@@ -282,6 +278,14 @@ namespace Ashlight.Battle.Core.Engine
             {
                 unit.Overload.OnTurnEnd();
             }
+
+            // 回合内移动触发器（铁蒺藜/隧穿效应）与全局移动计数只存活一个原子回合
+            if (state.MoveTriggers != null && state.MoveTriggers.Count > 0)
+            {
+                Debug.Log($"[TurnResolver] 清空回合内移动触发器 x{state.MoveTriggers.Count}");
+                state.MoveTriggers.Clear();
+            }
+            state.MovesThisTurn = 0;
 
             // 清空当前回合能量
             unit.CurrentEnergy = 0;

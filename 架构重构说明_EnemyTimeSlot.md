@@ -1,5 +1,7 @@
 # EnemyTimeSlot 架构重构说明
 
+> ⚠️ **已过时（2026-07-09 标注）**：本文围绕的 `TimelineTrackView` / `EnemyTimeSlot`（每单位 15 格规划轨）整套 UI 已**暂停使用**（见 [docs/游戏区域术语.md](docs/游戏区域术语.md) 一节），行动顺序现由 `TurnOrderView` + ATB 公共回合时钟呈现，敌人意图走 `IntentionView` + 单轨原子回合。仅作架构决策历史存档。
+
 ## 问题描述
 
 原来的架构存在以下问题：

@@ -43,6 +43,16 @@ public abstract partial class Effect : Luban.BeanBase
             case "BuffEffect": return new BuffEffect(_buf);
             case "BuffConditionalEffect": return new BuffConditionalEffect(_buf);
             case "DrawEffect": return new DrawEffect(_buf);
+            case "OverloadEffect": return new OverloadEffect(_buf);
+            case "MoveSelfEffect": return new MoveSelfEffect(_buf);
+            case "ClearOverloadEffect": return new ClearOverloadEffect(_buf);
+            case "OnMoveDamageEffect": return new OnMoveDamageEffect(_buf);
+            case "AttackCurrentRoundEffect": return new AttackCurrentRoundEffect(_buf);
+            case "StunCurrentRoundEffect": return new StunCurrentRoundEffect(_buf);
+            case "MoveRowEffect": return new MoveRowEffect(_buf);
+            case "OnMoveAddCardEffect": return new OnMoveAddCardEffect(_buf);
+            case "BuffPerCurrentRoundEnemyEffect": return new BuffPerCurrentRoundEnemyEffect(_buf);
+            case "EnergyEffect": return new EnergyEffect(_buf);
             default: throw new SerializationException();
         }
     }

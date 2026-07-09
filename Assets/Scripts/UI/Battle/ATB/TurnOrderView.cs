@@ -7,9 +7,15 @@ using cfg.Enemy;
 namespace Scripts.UI
 {
     /// <summary>
-    /// 行动顺序视图
-    /// 管理一排 UI_ActionOrder 卡片，按 ATB 位置从左到右排列。
-    /// 最左侧 = 最先行动；金框 = 当前行动单位；攻击图标 = 进入执行轨。
+    /// 行动顺序视图（公共回合制）。
+    ///
+    /// 平铺展示「接下来 N 个行动」的时间线（最左 = 最先行动）：
+    ///   · 从 <see cref="ATB.GetTurnOrderWithFuture"/> 取平铺顺序，快单位会重复出现多次（正确）。
+    ///   · 按绝对公共回合分组，组与组之间插一条分隔条并标注该组的回合号。
+    ///   · 无空回合空格、无幽灵半透明——每次出现都是一张普通卡。
+    ///   · 金框 = 当前行动单位；敌人卡显示意图图标 + 悬停技能说明。
+    ///
+    /// 卡片是「按位置」复用的对象池（非每单位一张），因此同一单位可在时间线上出现多次。
     /// </summary>
     public class TurnOrderView : MonoBehaviour
     {
@@ -22,7 +28,7 @@ namespace Scripts.UI
 
         [Header("回合分隔条 Prefab")]
         [SerializeField]
-        [Tooltip("Prefab_LevelIndicator（竖线分隔条），用于在不同 Slot 格之间分隔；留空则从 Resources 自动加载")]
+        [Tooltip("Prefab_LevelIndicator（竖线分隔条），插在不同回合组之间并标注回合号；留空则从 Resources 自动加载")]
         private GameObject levelIndicatorPrefab;
 
         [Header("子容器")]
@@ -32,39 +38,50 @@ namespace Scripts.UI
         [Header("布局")]
         [SerializeField] private float cardSpacing = 6f;
 
-        [Header("第二次回合幽灵卡")]
-        [Tooltip("预测的第二次回合用半透明幽灵卡标识；此值为其透明度")]
-        [SerializeField] private float ghostAlpha = 0.5f;
+        [Header("显示窗口")]
+        [Tooltip("时间线展示接下来多少个行动")]
+        [SerializeField] private int windowSize = 10;
 
         [Header("ATB 引用")]
         [SerializeField] private ATB atb;
 
         [Header("技能 Tooltip")]
         [SerializeField]
-        [Tooltip("DescriptionViewController 预制体（与 IntentionView 同款）。敌人进执行轨后 hover 卡片显示技能说明；留空则从 Resources 加载")]
+        [Tooltip("DescriptionViewController 预制体（与 IntentionView 同款）。敌人卡 hover 显示技能说明；留空则从 Resources 加载")]
         private GameObject descriptionViewControllerPrefab;
 
         #endregion
 
         #region 内部数据
 
-        private class CardEntry
+        /// <summary>一个池化的卡槽（按时间线位置复用，可承载不同单位）。</summary>
+        private class CardSlot
         {
-            public string        UnitId;
-            public UI_行动顺序   Card;
-            public UI_行动顺序   Ghost;       // 第二次回合幽灵卡（alpha=ghostAlpha，默认隐藏）
-            public bool          IsExecuting; // 是否处于执行轨
-            public bool          GhostUsedThisFrame; // RefreshOrder 内部：本帧幽灵卡是否被用到
+            public UI_行动顺序 Card;
+            public string      UnitId;   // 当前承载的单位（用于避免每帧重复 Setup 加载图标）
         }
 
-        private readonly List<CardEntry> _cards = new List<CardEntry>();
+        /// <summary>单位静态信息（configId + 是否玩家），供卡片 Setup 使用。</summary>
+        private struct UnitInfo
+        {
+            public string ConfigId;
+            public bool   IsPlayer;
+        }
+
+        private readonly List<CardSlot> _slots = new List<CardSlot>();
+        private readonly List<LevelIndicator> _separators = new List<LevelIndicator>();
+        private readonly Dictionary<string, UnitInfo> _unitInfo = new Dictionary<string, UnitInfo>();
+
+        /// <summary>各敌人当前的意图（供其最近一张卡显示攻击图标 + 悬停说明）。</summary>
+        private readonly Dictionary<string, EnemySkillInfo> _intents = new Dictionary<string, EnemySkillInfo>();
+
+        /// <summary>本场天气（null = 无天气）。天气条目由 ATB 的虚拟单位提供，这里只负责渲染天气卡 + hover 说明。</summary>
+        private cfg.WeatherInfo _weather;
+
         private string _activeUnitId;
 
-        /// <summary>共享的技能说明 tooltip（所有卡片共用一个，hover 时显示）</summary>
+        /// <summary>共享的技能说明 tooltip（所有卡片共用一个，hover 时显示）。</summary>
         private DescriptionViewController _skillTooltip;
-
-        /// <summary>回合分隔条对象池（穿插在卡片之间，按需创建、复用、隐藏）</summary>
-        private readonly List<LevelIndicator> _separators = new List<LevelIndicator>();
 
         #endregion
 
@@ -75,14 +92,10 @@ namespace Scripts.UI
             EnsureContainer();
             EnsurePrefab();
             EnsureLevelIndicatorPrefab();
-
-            // 在 Awake 就设好 HLG，防止 Initialize() 早于 Start() 被调用时布局缺失
             ApplyLayoutGroup();
-
             EnsureSkillTooltip();
         }
 
-        /// <summary>创建共享技能 tooltip（挂在所在 Canvas 下，初始隐藏）。预制体留空时从 Resources 加载。</summary>
         private void EnsureSkillTooltip()
         {
             if (_skillTooltip != null) return;
@@ -104,251 +117,235 @@ namespace Scripts.UI
         #region 公共 API
 
         /// <summary>
-        /// 初始化：根据战斗单位创建卡片，在 ATB.InitializeByUnits 之后调用
+        /// 初始化：登记所有单位的 configId / 阵营（供卡片显示用）。在 ATB.InitializeByUnits 之后调用。
         /// </summary>
         public void Initialize(IReadOnlyList<UnitState> playerUnits, IReadOnlyList<UnitState> enemyUnits)
         {
-            ClearCards();
+            _unitInfo.Clear();
+            _intents.Clear();
+            _activeUnitId = null;
+            _weather = null; // 新战斗默认无天气，由 SetWeather 重新注入
 
-            if (playerUnits != null)
-                foreach (var u in playerUnits)
-                {
-                    if (u == null || u.IsDead) continue;
-                    SpawnCard(u.UnitId, u.ConfigId, true);
-                }
-
-            if (enemyUnits != null)
-                foreach (var u in enemyUnits)
-                {
-                    if (u == null || u.IsDead) continue;
-                    SpawnCard(u.UnitId, u.ConfigId, false);
-                }
+            RegisterUnits(playerUnits, true);
+            RegisterUnits(enemyUnits, false);
 
             RefreshOrder();
         }
 
-        /// <summary>
-        /// 设置高亮（金框）：当前行动单位；传 null 清除所有高亮
-        /// </summary>
+        private void RegisterUnits(IReadOnlyList<UnitState> units, bool isPlayer)
+        {
+            if (units == null) return;
+            foreach (var u in units)
+            {
+                if (u == null || u.IsDead || string.IsNullOrEmpty(u.UnitId)) continue;
+                _unitInfo[u.UnitId] = new UnitInfo { ConfigId = u.ConfigId, IsPlayer = isPlayer };
+            }
+        }
+
+        /// <summary>设置高亮（金框）：当前行动单位；传 null 清除。</summary>
         public void SetActiveUnit(string unitId)
         {
             _activeUnitId = unitId;
-            ApplyHighlight();
+        }
+
+        /// <summary>注入本场天气（在 ATB.AddWeatherIcon 之后调用）。传 null 清除。</summary>
+        public void SetWeather(cfg.WeatherInfo weather)
+        {
+            _weather = weather;
         }
 
         /// <summary>
-        /// 标记单位进入/退出执行轨（显示攻击图标）。
-        /// executing=true 且传入敌人技能时，hover 该卡会弹出技能说明；退出时清除。
+        /// 标记单位（敌人）的意图：executing=true 且传入技能时，其最近一张卡显示攻击图标并可 hover 出说明；
+        /// executing=false 则清除该单位的意图显示。
         /// </summary>
         public void SetExecuting(string unitId, bool executing, EnemySkillInfo skill = null)
         {
-            var entry = FindEntry(unitId);
-            if (entry == null) return;
-            entry.IsExecuting = executing;
-            entry.Card.SetAttacking(executing);
-            entry.Card.SetExecutingSkill(executing ? skill : null, _skillTooltip);
+            if (string.IsNullOrEmpty(unitId)) return;
+            if (executing && skill != null)
+                _intents[unitId] = skill;
+            else
+                _intents.Remove(unitId);
+        }
+
+        /// <summary>单位死亡：从登记表与意图表移除（其卡片会在下一次 RefreshOrder 自动消失）。</summary>
+        public void RemoveUnit(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+            _unitInfo.Remove(unitId);
+            _intents.Remove(unitId);
+            if (_activeUnitId == unitId) _activeUnitId = null;
         }
 
         /// <summary>
-        /// 每帧刷新卡片排列顺序（根据 ATB 行动顺序重排 sibling index），
-        /// 并在相邻卡片所属 Slot 格不同处插入一条 LevelIndicator 分隔条。
-        /// 同格（相同 DistanceTo0）的单位挨在一起不分隔；执行轨单位（-1）算同一组。
-        /// 分隔条会显示其右侧那一组的格数（即“后面这些单位在 N 个回合之后行动”）。
+        /// 每帧刷新：读取 ATB 的「接下来 N 个行动」，按绝对回合分组平铺；组间插分隔条并标回合号。
         /// </summary>
         public void RefreshOrder()
         {
             if (atb == null || cardsContainer == null) return;
 
-            // 含未来的顺序：Cycle 0 = 当前真实回合，Cycle 1 = 预测的第二次回合（幽灵卡）
-            var order = atb.GetTurnOrderWithFuture();
+            var order = atb.GetTurnOrderWithFuture(Mathf.Max(1, windowSize));
 
-            if (order == null || order.Count == 0)
-            {
-                foreach (var e in _cards) SetGhostActive(e, false);
-                HideSeparatorsFrom(0);
-                return;
-            }
-
-            // 本帧用到哪些幽灵卡，先记下，最后把没用到的关掉
-            for (int i = 0; i < _cards.Count; i++) _cards[i].GhostUsedThisFrame = false;
-
-            int  sibling = 0;     // 当前要分配的 sibling index
-            int  sepUsed = 0;     // 本次已使用的分隔条数量
-            bool hasPrev = false;
-            int  prevKey = 0;     // 上一张卡片的分组键（GroupKey：执行轨 -1，规划轨 Slots）
+            int sibling = 0;   // 当前分配的 sibling index
+            int sepUsed = 0;   // 已使用的分隔条数量
+            int cardUsed = 0;  // 已使用的卡槽数量
+            bool activeShown = false;                 // 金框只给当前单位的第一张卡
+            var intentShownFor = new HashSet<string>(); // 每个敌人意图只标在其最近一张卡上
+            int prevRound = int.MinValue;
 
             for (int i = 0; i < order.Count; i++)
             {
-                var entry = FindEntry(order[i].UnitId);
-                if (entry == null) continue;
+                var entry = order[i];
 
-                bool isFuture = order[i].Cycle == 1;
-                var card = isFuture ? entry.Ghost : entry.Card;
-                if (card == null) continue;
-
-                // 幽灵卡按需显示（用到才开），并标记本帧已用
-                if (isFuture)
+                // 天气条目（虚拟单位）不查单位登记表，用天气卡渲染；普通条目查不到=已死亡/未登记。
+                bool isWeatherEntry = entry.IsWeather;
+                UnitInfo info = default;
+                if (isWeatherEntry)
                 {
-                    SetGhostActive(entry, true);
-                    entry.GhostUsedThisFrame = true;
+                    if (_weather == null) continue;
+                }
+                else if (!_unitInfo.TryGetValue(entry.UnitId, out info))
+                {
+                    continue;
                 }
 
-                var t = card.transform;
-                if (t.parent != cardsContainer) continue;
-
-                int key = order[i].GroupKey;
-
-                // 跨组：进入新的一组前插入一条分隔条，并标注新组的格数
-                // （执行轨整组 GroupKey=-1，彼此不分隔，共享同一条执行轨）
-                // Cycle 0 → Cycle 1 边界处 GroupKey 必然跳变，会自动插入一条分隔条区隔"第二轮"。
-                if (hasPrev && key != prevKey)
+                // 跨回合：进入新回合组前插一条分隔条并标该组回合号。
+                if (entry.Round != prevRound)
                 {
                     var sep = GetSeparator(sepUsed++);
                     if (sep != null)
                     {
                         sep.transform.SetSiblingIndex(sibling++);
-                        sep.SetLevel(Mathf.Max(0, key));
+                        sep.SetLevel(entry.Round);
                     }
+                    prevRound = entry.Round;
                 }
 
-                t.SetSiblingIndex(sibling++);
-                prevKey = key;
-                hasPrev = true;
+                var slot = GetSlot(cardUsed++);
+                if (slot?.Card == null) continue;
+
+                // 仅当该卡槽承载的单位变化时才 Setup（避免每帧 Resources.Load）。
+                if (slot.UnitId != entry.UnitId)
+                {
+                    if (isWeatherEntry)
+                        slot.Card.SetupWeather(_weather);
+                    else
+                        slot.Card.Setup(info.ConfigId, info.IsPlayer);
+                    slot.UnitId = entry.UnitId;
+                }
+
+                var go = slot.Card.gameObject;
+                if (!go.activeSelf) go.SetActive(true);
+                slot.Card.transform.SetSiblingIndex(sibling++);
+
+                // 金框高亮：当前行动单位的第一张卡（天气卡不高亮）。
+                bool highlight = !isWeatherEntry && !activeShown && entry.UnitId == _activeUnitId;
+                slot.Card.SetHighlight(highlight);
+                if (highlight) activeShown = true;
+
+                // 天气卡 hover 显示天气说明；普通卡清除天气引用（卡槽是复用的）。
+                slot.Card.SetWeatherInfo(isWeatherEntry ? _weather : null, _skillTooltip);
+
+                // 敌人意图：标在该敌人最近一张卡上（其余卡不显示）。
+                bool showIntent = !isWeatherEntry
+                                  && !info.IsPlayer
+                                  && !intentShownFor.Contains(entry.UnitId)
+                                  && _intents.TryGetValue(entry.UnitId, out var skill)
+                                  && skill != null;
+                if (showIntent)
+                {
+                    slot.Card.SetAttacking(true);
+                    slot.Card.SetExecutingSkill(_intents[entry.UnitId], _skillTooltip);
+                    intentShownFor.Add(entry.UnitId);
+                }
+                else
+                {
+                    slot.Card.SetAttacking(false);
+                    slot.Card.SetExecutingSkill(null, _skillTooltip);
+                }
             }
 
-            // 关掉本帧没用到的幽灵卡
-            for (int i = 0; i < _cards.Count; i++)
-                if (!_cards[i].GhostUsedThisFrame) SetGhostActive(_cards[i], false);
-
-            // 隐藏本次未用到的多余分隔条
+            HideSlotsFrom(cardUsed);
             HideSeparatorsFrom(sepUsed);
-        }
-
-        /// <summary>切换幽灵卡显隐（仅在状态变化时调用 SetActive，避免每帧触发 layout 重建）。</summary>
-        private static void SetGhostActive(CardEntry entry, bool active)
-        {
-            if (entry?.Ghost == null) return;
-            var go = entry.Ghost.gameObject;
-            if (go.activeSelf != active) go.SetActive(active);
-        }
-
-        /// <summary>
-        /// 移除指定单位的卡片（单位死亡时调用）
-        /// </summary>
-        public void RemoveUnit(string unitId)
-        {
-            for (int i = _cards.Count - 1; i >= 0; i--)
-            {
-                if (_cards[i].UnitId != unitId) continue;
-                if (_cards[i].Card  != null) Destroy(_cards[i].Card.gameObject);
-                if (_cards[i].Ghost != null) Destroy(_cards[i].Ghost.gameObject);
-                _cards.RemoveAt(i);
-                break;
-            }
         }
 
         #endregion
 
-        #region 卡片创建
+        #region 卡槽 / 分隔条池
 
-        private void SpawnCard(string unitId, string configId, bool isPlayer)
+        private CardSlot GetSlot(int index)
+        {
+            while (_slots.Count <= index)
+            {
+                var slot = new CardSlot { Card = SpawnCard(), UnitId = null };
+                _slots.Add(slot);
+            }
+            return _slots[index];
+        }
+
+        private UI_行动顺序 SpawnCard()
         {
             if (actionOrderPrefab == null)
             {
                 Debug.LogError("[TurnOrderView] actionOrderPrefab 未设置");
-                return;
+                return null;
             }
 
-            var go   = Instantiate(actionOrderPrefab, cardsContainer);
-            var card = go.GetComponent<UI_行动顺序>();
-            if (card == null)
-            {
-                // Prefab 上还没手动挂脚本时，运行时自动添加（Awake 会立即执行并完成 UIBind 绑定）
-                card = go.AddComponent<UI_行动顺序>();
-            }
-
-            card.Setup(configId, isPlayer);
-
-            _cards.Add(new CardEntry
-            {
-                UnitId      = unitId,
-                Card        = card,
-                Ghost       = CreateGhostCard(configId, isPlayer),
-                IsExecuting = false
-            });
-        }
-
-        /// <summary>
-        /// 创建一张第二次回合幽灵卡：与真实卡同款，但整体半透明、不接收 hover、默认隐藏，
-        /// 由 RefreshOrder 在预测到的位置上按需显示。
-        /// </summary>
-        private UI_行动顺序 CreateGhostCard(string configId, bool isPlayer)
-        {
-            if (actionOrderPrefab == null) return null;
-
-            var go   = Instantiate(actionOrderPrefab, cardsContainer);
-            go.name  = $"Ghost_{configId}";
-            // 注意：Unity 的 GetComponent 不存在时返回“伪 null”，不能用 ?? （?? 只认真 null），
-            // 必须用重载了 == 的显式判空，否则会拿到伪 null 组件、访问时抛 MissingComponentException。
+            var go = Instantiate(actionOrderPrefab, cardsContainer);
             var card = go.GetComponent<UI_行动顺序>();
             if (card == null) card = go.AddComponent<UI_行动顺序>();
-            card.Setup(configId, isPlayer);
-
-            // 半透明标识为“预测的未来回合”；不拦射线，避免抢真实卡的 hover
-            var cg = go.GetComponent<CanvasGroup>();
-            if (cg == null) cg = go.AddComponent<CanvasGroup>();
-            cg.alpha          = ghostAlpha;
-            cg.blocksRaycasts = false;
-            cg.interactable   = false;
-
-            go.SetActive(false); // 默认隐藏，用到才开
             return card;
         }
 
-        #endregion
-
-        #region 高亮逻辑
-
-        private void ApplyHighlight()
+        private void HideSlotsFrom(int startIndex)
         {
-            bool anyActive = !string.IsNullOrEmpty(_activeUnitId);
-            foreach (var entry in _cards)
+            for (int i = startIndex; i < _slots.Count; i++)
             {
-                bool isActive = entry.UnitId == _activeUnitId;
-                entry.Card.SetHighlight(isActive);
+                var slot = _slots[i];
+                if (slot?.Card == null) continue;
+                if (slot.Card.gameObject.activeSelf) slot.Card.gameObject.SetActive(false);
+                slot.UnitId = null; // 复用前清掉承载单位，下次强制 Setup
+            }
+        }
+
+        private LevelIndicator GetSeparator(int index)
+        {
+            if (levelIndicatorPrefab == null)
+            {
+                Debug.LogWarning("[TurnOrderView] levelIndicatorPrefab 未设置，无法显示回合分隔条");
+                return null;
+            }
+
+            while (_separators.Count <= index)
+            {
+                var go = Instantiate(levelIndicatorPrefab, cardsContainer);
+                go.name = $"LevelIndicator_{_separators.Count}";
+                var li = go.GetComponent<LevelIndicator>();
+                if (li == null) li = go.AddComponent<LevelIndicator>();
+                _separators.Add(li);
+            }
+
+            var sep = _separators[index];
+            if (sep != null) sep.SetVisible(true);
+            return sep;
+        }
+
+        private void HideSeparatorsFrom(int startIndex)
+        {
+            for (int i = startIndex; i < _separators.Count; i++)
+            {
+                if (_separators[i] != null)
+                    _separators[i].SetVisible(false);
             }
         }
 
         #endregion
 
-        #region 工具方法
-
-        private CardEntry FindEntry(string unitId)
-        {
-            foreach (var e in _cards)
-                if (e.UnitId == unitId) return e;
-            return null;
-        }
-
-        private void ClearCards()
-        {
-            foreach (var e in _cards)
-            {
-                if (e.Card  != null) Destroy(e.Card.gameObject);
-                if (e.Ghost != null) Destroy(e.Ghost.gameObject);
-            }
-            _cards.Clear();
-            _activeUnitId = null;
-
-            // 重新初始化时隐藏所有分隔条（对象池保留，等下次 RefreshOrder 复用）
-            HideSeparatorsFrom(0);
-        }
+        #region 容器 / 布局
 
         private void EnsureContainer()
         {
             if (cardsContainer != null) return;
 
-            // 在自身下自动创建 CardRow 子物体
             var go = new GameObject("CardRow", typeof(RectTransform));
             go.transform.SetParent(transform, false);
             cardsContainer = go.GetComponent<RectTransform>();
@@ -357,7 +354,6 @@ namespace Scripts.UI
         private void EnsurePrefab()
         {
             if (actionOrderPrefab != null) return;
-            // 尝试从 Resources 加载
             var loaded = Resources.Load<GameObject>("UI/BattleScene/UI_ActionOrder");
             if (loaded != null)
                 actionOrderPrefab = loaded;
@@ -375,48 +371,6 @@ namespace Scripts.UI
                 Debug.LogWarning("[TurnOrderView] 未在 Inspector 赋值 levelIndicatorPrefab，也未能从 Resources 找到");
         }
 
-        /// <summary>
-        /// 获取第 index 条分隔条（不够则实例化新的），并确保其处于激活态。
-        /// 返回 null 表示 prefab 缺失。
-        /// </summary>
-        private LevelIndicator GetSeparator(int index)
-        {
-            if (levelIndicatorPrefab == null)
-            {
-                Debug.LogWarning("[TurnOrderView] levelIndicatorPrefab 未设置，无法显示回合分隔条");
-                return null;
-            }
-
-            while (_separators.Count <= index)
-            {
-                var go  = Instantiate(levelIndicatorPrefab, cardsContainer);
-                go.name = $"LevelIndicator_{_separators.Count}";
-                var li  = go.GetComponent<LevelIndicator>();
-                if (li == null)
-                {
-                    // prefab 上还没手动挂脚本时，运行时自动添加
-                    li = go.AddComponent<LevelIndicator>();
-                }
-                _separators.Add(li);
-            }
-
-            var sep = _separators[index];
-            if (sep != null) sep.SetVisible(true);
-            return sep;
-        }
-
-        /// <summary>
-        /// 隐藏下标 &gt;= startIndex 的所有分隔条（本帧未用到的）。
-        /// </summary>
-        private void HideSeparatorsFrom(int startIndex)
-        {
-            for (int i = startIndex; i < _separators.Count; i++)
-            {
-                if (_separators[i] != null)
-                    _separators[i].SetVisible(false);
-            }
-        }
-
         private void ApplyLayoutGroup()
         {
             if (cardsContainer == null) return;
@@ -429,7 +383,6 @@ namespace Scripts.UI
             hlg.childControlHeight     = false;
             hlg.childAlignment         = TextAnchor.MiddleLeft;
 
-            // 让 CardRow 自身尺寸跟随子卡片（HLG 计算出的 preferred size）自适应
             var fitter = cardsContainer.GetComponent<ContentSizeFitter>();
             if (fitter == null) fitter = cardsContainer.gameObject.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;

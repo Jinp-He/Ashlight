@@ -89,9 +89,10 @@ namespace Ashlight.Battle.Core.Commands
             switch (ConditionType)
             {
                 case "IsAttacking":
-                    // 旧条件：检查目标时间轴上是否有Active阶段（兼容旧系统）
-                    // 新系统中等价于 EnemyInExecuteAxis
-                    return target.CurrentPhase == EnemyPhase.ExecuteAxis || HasAttackingPhase(target);
+                    // 【公共回合口径】目标本回合将行动（NextActionRound == CurrentRound）即视为「正在攻击/执行」。
+                    // 保留旧执行轴/时间轴检查作兜底（旧路径兼容）。
+                    return IsActingThisRound(state, target)
+                        || target.CurrentPhase == EnemyPhase.ExecuteAxis || HasAttackingPhase(target);
 
                 case "IsDefending":
                 case "HasShield":
@@ -122,7 +123,8 @@ namespace Ashlight.Battle.Core.Commands
                         || target.CurrentPhase == EnemyPhase.ExecuteAxis;
 
                 case "InExecution":
-                    return target.CurrentPhase == EnemyPhase.ExecuteAxis;
+                    // 【公共回合口径】同 IsAttacking：目标本回合将行动。
+                    return IsActingThisRound(state, target) || target.CurrentPhase == EnemyPhase.ExecuteAxis;
 
                 case "SelfInFrontRow":
                     return owner != null && state.IsFrontRow(owner);
@@ -138,6 +140,14 @@ namespace Ashlight.Battle.Core.Commands
                     Debug.LogWarning($"[AttackConditionalCommand] 未知的条件类型: {ConditionType}");
                     return false;
             }
+        }
+
+        /// <summary>
+        /// 【公共回合口径】目标是否在当前公共回合行动（调度镜像，见 UnitState.NextActionRound）。
+        /// </summary>
+        internal static bool IsActingThisRound(BattleStateSnapshot state, UnitState target)
+        {
+            return target != null && target.NextActionRound >= 0 && target.NextActionRound == state.CurrentRound;
         }
 
         /// <summary>

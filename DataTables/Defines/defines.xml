@@ -93,6 +93,48 @@
         <var name="count" type="int" comment="立即抽牌数量 {V}"/>
     </bean>
 
+    <bean name="OverloadEffect" parent="Effect">
+        <var name="value" type="int" comment="过载格数：使用后自身过载，下次行动额外推迟 {V} 格"/>
+    </bean>
+
+    <!-- 0709 新增（战斗侧映射已接入 CardPlayResolver，见 effect-catalog） -->
+    <bean name="MoveSelfEffect" parent="Effect">
+        <var name="mode" type="string" comment="施法者自身移动（区别于 MovePositionEffect 移动的是卡牌目标），模式同 Toggle/FrontRow/BackRow"/>
+    </bean>
+
+    <bean name="ClearOverloadEffect" parent="Effect">
+        </bean>
+
+    <bean name="OnMoveDamageEffect" parent="Effect">
+        <var name="damage" type="int" comment="本回合内每次有角色移动，随机对一名敌人造成 {A} 点伤害"/>
+    </bean>
+
+    <bean name="AttackCurrentRoundEffect" parent="Effect">
+        <var name="damage" type="int" comment="对当前回合（本轮将行动）的所有敌人造成 {A} 点伤害"/>
+    </bean>
+
+    <bean name="StunCurrentRoundEffect" parent="Effect">
+        <var name="duration" type="int" comment="晕眩回合数"/>
+        <var name="random_one" type="bool" comment="true=随机晕眩一名当前回合敌人, false=晕眩全部当前回合敌人"/>
+    </bean>
+
+    <bean name="MoveRowEffect" parent="Effect">
+        </bean>
+
+    <bean name="OnMoveAddCardEffect" parent="Effect">
+        <var name="card_id" type="string" comment="本回合内每次有角色移动，加入手牌的卡牌 Id"/>
+        <var name="count" type="int" comment="每次触发加入的张数"/>
+    </bean>
+
+    <bean name="BuffPerCurrentRoundEnemyEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="Buff ID"/>
+        <var name="value" type="float" comment="当前回合每有一个敌人，获得的层数"/>
+    </bean>
+
+    <bean name="EnergyEffect" parent="Effect">
+        <var name="value" type="int" comment="立即获得 {V} 点能量"/>
+    </bean>
+
 
     <!-- ============================================================== -->
     <!-- 升级选项效果 (UpgradeOptions.Effects)                          -->

@@ -179,7 +179,7 @@ namespace Scripts.UI
                     return timeShiftAllEffect.ShiftValue.ToString();
 
                 case BuffEffect buffEffect:
-                    return buffEffect.Value.ToString("F1"); // Buff值保留一位小数
+                    return buffEffect.Value.ToString("0.#"); // 整数不带小数点，非整数保留一位
 
                 default:
                     Debug.LogWarning($"[EnemySkillDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");

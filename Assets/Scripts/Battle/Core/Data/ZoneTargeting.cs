@@ -55,5 +55,63 @@ namespace Ashlight.Battle.Core.Data
             // 空区：strict 下如实返回空（触发 miss / 只打剩余）；否则回退全体（旧行为）
             return strict ? inZone : alive;
         }
+
+        /// <summary>
+        /// 单位当前是否处于指定分区（Any / Conditional 恒为 true，null 单位为 false）。
+        /// 出牌站位限制（CastZone）与单体索敌限制（近战/远程）共用此口径。
+        /// </summary>
+        public static bool IsUnitInZone(UnitState unit, TargetZoneEnum zone)
+        {
+            if (unit == null)
+            {
+                return false;
+            }
+
+            if (zone == TargetZoneEnum.Front)
+            {
+                return unit.RowPosition == BattleRowPosition.FrontRow;
+            }
+
+            if (zone == TargetZoneEnum.Back)
+            {
+                return unit.RowPosition == BattleRowPosition.BackRow;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 【前排/后排】卡牌声明打出排限制（CastZone=Front/Back）时，施法者是否站在对应排。
+        /// 未声明（Any）恒为 true。
+        /// </summary>
+        public static bool CanCastFromCurrentRow(cfg.Character.CardInfo card, UnitState caster)
+        {
+            if (card == null)
+            {
+                return true;
+            }
+
+            return IsUnitInZone(caster, card.CastZone);
+        }
+
+        /// <summary>
+        /// 【近战/远程】单体牌（SingleEnemy/SingleAlly）声明 TargetZone=Front/Back 时，
+        /// 目标必须站在对应排。群体牌的 TargetZone 是 AOE 扩散分区，不在此限制载体目标。
+        /// 目标为 null 时放行（由调用方自行校验目标存在性）。
+        /// </summary>
+        public static bool IsSingleTargetZoneValid(cfg.Character.CardInfo card, UnitState target)
+        {
+            if (card == null || target == null)
+            {
+                return true;
+            }
+
+            if (card.TargetType != TargetTypeEnum.SingleEnemy && card.TargetType != TargetTypeEnum.SingleAlly)
+            {
+                return true;
+            }
+
+            return IsUnitInZone(target, card.TargetZone);
+        }
     }
 }

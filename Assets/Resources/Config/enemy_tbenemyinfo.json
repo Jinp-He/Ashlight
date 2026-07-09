@@ -1,10 +1,10 @@
 [
   {
     "Id": "Enemy001",
-    "Name": "小兵",
+    "Name": "狗骑士",
     "AlternativePath": "DogKnight",
-    "Hp": 30,
-    "Speed": 5,
+    "Hp": 50,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -19,10 +19,10 @@
   },
   {
     "Id": "Enemy002",
-    "Name": "小兵2",
+    "Name": "马匪",
     "AlternativePath": "Mafe",
-    "Hp": 40,
-    "Speed": 5,
+    "Hp": 100,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -40,7 +40,7 @@
     "Name": "重装步兵",
     "AlternativePath": "DogKnight",
     "Hp": 100,
-    "Speed": 4,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -73,10 +73,10 @@
   },
   {
     "Id": "Enemy004",
-    "Name": "冰焰法师",
+    "Name": "汪汪",
     "AlternativePath": "Wangg",
-    "Hp": 10,
-    "Speed": 5,
+    "Hp": 50,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -109,10 +109,10 @@
   },
   {
     "Id": "Enemy005",
-    "Name": "急袭兵",
+    "Name": "雷米",
     "AlternativePath": "Remy",
-    "Hp": 10,
-    "Speed": 7,
+    "Hp": 40,
+    "Speed": 4,
     "IntentionSet": [
       {
         "EnemyIntentionList": [

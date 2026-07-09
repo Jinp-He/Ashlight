@@ -22,6 +22,8 @@ namespace Scripts.UI
         // 当前执行技能（仅敌人进入执行轨时有值）；共享 tooltip 由 TurnOrderView 注入
         private EnemySkillInfo _executingSkill;
         private DescriptionViewController _tooltip;
+        // 天气卡：本卡当前承载的天气（hover 显示天气说明）；与 _executingSkill 互斥
+        private cfg.WeatherInfo _weatherInfo;
 
         #region Unity 生命周期
 
@@ -88,6 +90,65 @@ namespace Scripts.UI
         /// <summary>兼容旧调用：默认按敌人处理（保留以防外部旧引用）。</summary>
         public void Setup(string configId) => Setup(configId, false);
 
+        /// <summary>
+        /// 按天气渲染本卡（天气虚拟单位的行动格）：图标走天气表 IconPath；
+        /// 缺图降级为显示天气名文字（素材确认后再补图，见 docs/天气系统设计_v1.md）。
+        /// </summary>
+        public void SetupWeather(cfg.WeatherInfo weather)
+        {
+            if (UnitsPiece == null || weather == null)
+            {
+                return;
+            }
+
+            foreach (Transform child in UnitsPiece.transform)
+                child.gameObject.SetActive(false);
+
+            Sprite sprite = string.IsNullOrEmpty(weather.IconPath)
+                ? null
+                : Resources.Load<Sprite>(weather.IconPath.Replace('\\', '/'));
+
+            if (sprite != null)
+            {
+                var dyn = EnsureDynamicImage();
+                if (dyn == null) return;
+                dyn.sprite = sprite;
+                dyn.color = Color.white;
+                dyn.gameObject.SetActive(true);
+            }
+            else
+            {
+                var txt = EnsureDynamicText();
+                if (txt == null) return;
+                txt.text = weather.Name;
+                txt.gameObject.SetActive(true);
+            }
+        }
+
+        /// <summary>在 UnitsPiece 下懒创建（或复用）一个铺满容器的动态文字（天气卡缺图降级用）。</summary>
+        private TMPro.TextMeshProUGUI EnsureDynamicText()
+        {
+            var existing = UnitsPiece.transform.Find("Txt_Dynamic");
+            if (existing != null) return existing.GetComponent<TMPro.TextMeshProUGUI>();
+
+            var go = new GameObject("Txt_Dynamic", typeof(RectTransform));
+            go.transform.SetParent(UnitsPiece.transform, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            var txt = go.AddComponent<TMPro.TextMeshProUGUI>();
+            txt.richText = true;
+            txt.raycastTarget = false;
+            txt.alignment = TMPro.TextAlignmentOptions.Center;
+            txt.enableAutoSizing = true;
+            txt.fontSizeMin = 8f;
+            txt.fontSizeMax = 26f;
+            return txt;
+        }
+
         /// <summary>在 UnitsPiece 下懒创建（或复用）一个铺满容器的动态图标 Image。</summary>
         private UnityEngine.UI.Image EnsureDynamicImage()
         {
@@ -151,14 +212,27 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 设置"即将执行技能"与共享 tooltip。skill 为 null 表示清除（退出执行轨），并收起 tooltip。
+        /// 设置"即将执行技能"与共享 tooltip。skill 为 null 表示清除（退出执行轨）。
+        /// 仅在「有 → 无」的转变时收起 tooltip：RefreshOrder 每帧对所有无意图卡传 null，
+        /// 若无条件 Hide 会把正在 hover 的共享 tooltip 每帧打灭（天气/技能说明都会闪没）。
         /// </summary>
         public void SetExecutingSkill(EnemySkillInfo skill, DescriptionViewController tooltip)
         {
+            bool hadSkill = _executingSkill != null;
             _executingSkill = skill;
             _tooltip = tooltip;
-            if (skill == null && _tooltip != null)
+            if (skill == null && hadSkill && _tooltip != null)
                 _tooltip.Hide();
+        }
+
+        /// <summary>
+        /// 设置本卡承载的天气（天气卡 hover 显示天气说明）。weather 为 null 表示清除（卡槽复用回普通单位卡）。
+        /// </summary>
+        public void SetWeatherInfo(cfg.WeatherInfo weather, DescriptionViewController tooltip)
+        {
+            _weatherInfo = weather;
+            if (weather != null)
+                _tooltip = tooltip;
         }
 
         #endregion
@@ -167,7 +241,17 @@ namespace Scripts.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (_executingSkill == null || _tooltip == null) return;
+            if (_tooltip == null) return;
+
+            // 天气卡：hover 显示天气说明（与技能说明互斥，天气优先）。
+            if (_weatherInfo != null)
+            {
+                _tooltip.Show(_weatherInfo);
+                PositionTooltip(eventData);
+                return;
+            }
+
+            if (_executingSkill == null) return;
             _tooltip.Show(_executingSkill);
             PositionTooltip(eventData);
         }

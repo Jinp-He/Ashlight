@@ -921,6 +921,13 @@ namespace Scripts.UI
                 return;
             }
 
+            // 【前排/后排】站位不满足不允许使用
+            if (!IsCastZoneSatisfiedForOwner())
+            {
+                Debug.Log($"[CardViewController] 站位不满足，无法选择目标: {_currentCard?.Name} (CastZone={_currentCard?.CastZone})");
+                return;
+            }
+
             BeginClickTargeting();
         }
 
@@ -1121,7 +1128,7 @@ namespace Scripts.UI
             // 检测目标
             GameObject targetObj = _targetManager?.DetectTargetUnderMouse(ped);
             CharacterEnum ownerCharacterId = GetOwnerCharacterId();
-            bool isValid = _targetManager?.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId) ?? false;
+            bool isValid = _targetManager?.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone) ?? false;
 
             // 更新箭头颜色
             if (_targetArrow != null)
@@ -1235,6 +1242,13 @@ namespace Scripts.UI
             if (_cardDragState != CardDragState.OnTime && !HasEnoughEnergyForCard())
             {
                 Debug.Log($"[CardViewController] 能量不足，无法拖拽: {_currentCard?.Name} (需求={_currentCard?.Energy})");
+                return;
+            }
+
+            // 【前排/后排】站位不满足时禁止从手牌拖出
+            if (_cardDragState != CardDragState.OnTime && !IsCastZoneSatisfiedForOwner())
+            {
+                Debug.Log($"[CardViewController] 站位不满足，无法拖拽: {_currentCard?.Name} (CastZone={_currentCard?.CastZone})");
                 return;
             }
 
@@ -1493,7 +1507,7 @@ namespace Scripts.UI
                 // 检测目标
                 GameObject targetObj = _targetManager?.DetectTargetUnderMouse(eventData);
                 CharacterEnum ownerCharacterId = GetOwnerCharacterId();
-                bool isValid = _targetManager?.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId) ?? false;
+                bool isValid = _targetManager?.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone) ?? false;
 
                 // 更新箭头颜色
                 if (_targetArrow != null)
@@ -1678,7 +1692,7 @@ namespace Scripts.UI
                 if (resolvedTarget != null)
                 {
                     CharacterEnum ownerCharacterId = GetOwnerCharacterId();
-                    bool isValid = _targetManager?.IsValidTarget(resolvedTarget, _currentCard.TargetType, ownerCharacterId) ?? false;
+                    bool isValid = _targetManager?.IsValidTarget(resolvedTarget, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone) ?? false;
                     Debug.Log($"[CardViewController] OnEndDragOnHand 目标选择: target={resolvedTarget.name}, isValid={isValid}, ownerId={ownerCharacterId}, targetType={_currentCard?.TargetType}");
 
                     if (isValid)
@@ -2077,6 +2091,44 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 【前排/后排】卡牌声明打出排限制（CastZone=Front/Back）时，施法者当前站位是否满足。
+        /// 解析失败或战斗数据不可用时返回 true（不误禁使用，交由 BattleManager 出牌校验兜底）。
+        /// </summary>
+        private bool IsCastZoneSatisfiedForOwner()
+        {
+            if (_currentCard == null)
+            {
+                return true;
+            }
+
+            var zone = _currentCard.CastZone;
+            if (zone != cfg.TargetZoneEnum.Front && zone != cfg.TargetZoneEnum.Back)
+            {
+                return true;
+            }
+
+            var state = Ashlight.Battle.BattleManager.Instance?.CurrentState;
+            if (state == null)
+            {
+                return true;
+            }
+
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (string.IsNullOrEmpty(ownerUnitId))
+            {
+                return true;
+            }
+
+            var owner = state.GetUnitById(ownerUnitId);
+            if (owner == null)
+            {
+                return true;
+            }
+
+            return Ashlight.Battle.Core.Data.ZoneTargeting.IsUnitInZone(owner, zone);
+        }
+
+        /// <summary>
         /// 根据玩家能量刷新左上角能量文本颜色
         /// 能量不足：变为 <see cref="insufficientEnergyColor"/>
         /// 能量足够：恢复默认颜色
@@ -2103,6 +2155,34 @@ namespace Scripts.UI
         /// 当前满足条件 → 描边黄、常驻显示；不满足 → 描边白、常驻显示；非条件牌 → 不接管描边（仍由悬停控制）。
         /// 站位/移动会改变判定结果，故在状态刷新（能量刷新循环）与移动换位后都应调用。
         /// </summary>
+        /// <summary>
+        /// 移动触发牌（隧穿/铁蒺藜）的动态计数刷新：有单位移动后重解析描述，
+        /// 更新卡面「本回合已移动 N 次」。非移动触发牌零开销直接返回。
+        /// </summary>
+        public void RefreshDynamicDescription()
+        {
+            if (_currentCard?.Effects == null || Txt_Effect == null)
+            {
+                return;
+            }
+
+            bool hasMoveTrigger = false;
+            foreach (var effect in _currentCard.Effects)
+            {
+                if (effect is cfg.OnMoveAddCardEffect || effect is cfg.OnMoveDamageEffect)
+                {
+                    hasMoveTrigger = true;
+                    break;
+                }
+            }
+            if (!hasMoveTrigger)
+            {
+                return;
+            }
+
+            Txt_Effect.text = CardDescriptionParser.Parse(_currentCard, _displayMode);
+        }
+
         public void RefreshConditionHighlight()
         {
             if (Img_Outline == null || _currentCard == null)
@@ -2111,7 +2191,10 @@ namespace Scripts.UI
             }
 
             string conditionType = GetSelfEvaluableConditionType();
-            if (string.IsNullOrEmpty(conditionType))
+            // 【前排/后排】声明打出排限制的牌也按条件牌处理：描边常驻提示当前站位能否打出
+            bool hasCastZoneLimit = _currentCard.CastZone == cfg.TargetZoneEnum.Front
+                                    || _currentCard.CastZone == cfg.TargetZoneEnum.Back;
+            if (string.IsNullOrEmpty(conditionType) && !hasCastZoneLimit)
             {
                 // 非（自身可判定）条件牌：把描边交回悬停控制——非悬停时收起
                 _isSelfConditionCard = false;
@@ -2123,7 +2206,8 @@ namespace Scripts.UI
             }
 
             _isSelfConditionCard = true;
-            bool met = EvaluateSelfCondition(conditionType);
+            bool met = (string.IsNullOrEmpty(conditionType) || EvaluateSelfCondition(conditionType))
+                       && (!hasCastZoneLimit || IsCastZoneSatisfiedForOwner());
             Img_Outline.gameObject.SetActive(true); // 条件牌描边常驻
             Img_Outline.color = met ? conditionMetOutlineColor : conditionUnmetOutlineColor;
         }
@@ -3241,8 +3325,8 @@ namespace Scripts.UI
                 _originalCharacterColors[character] = originalColor;
 
                 // 判断是否为合法目标
-                bool isValid = _targetManager.IsValidTarget(character.gameObject, _currentCard.TargetType, ownerCharacterId);
-                
+                bool isValid = _targetManager.IsValidTarget(character.gameObject, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone);
+
                 // 设置颜色：非法变黑，合法变暗
                 character.SetColor(isValid ? validTargetDimColor : Color.black);
             }
@@ -3262,8 +3346,8 @@ namespace Scripts.UI
                 _originalEnemyColors[enemy] = originalColor;
 
                 // 判断是否为合法目标
-                bool isValid = _targetManager.IsValidTarget(enemy.gameObject, _currentCard.TargetType, ownerCharacterId);
-                
+                bool isValid = _targetManager.IsValidTarget(enemy.gameObject, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone);
+
                 // 设置颜色：非法变黑，合法变暗
                 enemy.SetColor(isValid ? validTargetDimColor : Color.black);
             }
@@ -3425,7 +3509,7 @@ namespace Scripts.UI
             }
 
             CharacterEnum ownerCharacterId = GetOwnerCharacterId();
-            bool isValid = _targetManager.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId);
+            bool isValid = _targetManager.IsValidTarget(targetObj, _currentCard.TargetType, ownerCharacterId, _currentCard.TargetZone);
 
             var character = targetObj.GetComponent<Character>();
             var enemy = targetObj.GetComponent<Enemy>();
@@ -3547,6 +3631,8 @@ namespace Scripts.UI
             if (!isExecutionCard)
             {
                 battleScene?.RefreshHandFromData();
+                // 【推迟落账】推迟类效果立即反映到 ATB 调度和行动顺序视图
+                battleScene?.ApplyPendingScheduleChanges();
             }
 
             Debug.Log($"[CardViewController] 出牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}, execution={isExecutionCard}");

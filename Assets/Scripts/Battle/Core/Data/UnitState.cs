@@ -110,6 +110,26 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public BattleRowPosition RowPosition { get; set; } = BattleRowPosition.BackRow;
 
+        /// <summary>
+        /// 【公共回合镜像】该单位下一次行动的绝对公共回合（真相在 ATB.AtbIconRuntime.NextRound，
+        /// 由 UI 层在每个原子回合开始时同步进来）。-1 = 尚未同步。
+        /// Core 命令用它判断「当前回合将行动的单位」（NextActionRound == snapshot.CurrentRound）。
+        /// </summary>
+        public int NextActionRound { get; set; } = -1;
+
+        /// <summary>
+        /// 【公共回合镜像】命令结算期间累计的行动推迟回合数（正数 = 延后，负数 = 提前）。
+        /// Core 命令只累加这里；UI 层在结算后调用 ATB.ApplyPendingDelays 把它落到真调度并清零。
+        /// </summary>
+        public int PendingRoundDelay { get; set; }
+
+        /// <summary>
+        /// 上次重排时因过载额外加进 NextRound 的回合数（「过载负债」）。
+        /// UI 层 Reschedule 后写入；该单位行动到来时清零（负债已偿还）。
+        /// ClearOverloadCommand 用它把已落账的过载延迟拉回来（PendingRoundDelay -= 此值）。
+        /// </summary>
+        public int AppliedOverloadRoundDelay { get; set; }
+
         // ========== 敌人意图轴/执行轴字段 ==========
 
         /// <summary>
@@ -164,7 +184,8 @@ namespace Ashlight.Battle.Core.Data
             ActionBar = new ActionBarState();
             Overload = new OverloadState();
             IsDead = false;
-            Speed = 10;
+            // 【公共回合制】Speed = 每隔几个公共回合行动一次（数字越大越慢）。仅当配置缺失时用此兜底默认。
+            Speed = 2;
             BaseEnergy = 3;
             BaseDrawCount = 5;
             CurrentEnergy = 0;
@@ -184,8 +205,9 @@ namespace Ashlight.Battle.Core.Data
         /// 受到伤害
         /// </summary>
         /// <param name="damage">伤害值</param>
+        /// <param name="canBeDodged">false = 环境伤害（如天气落雷）：不消耗闪避层、不能被闪避免除，但仍吃易伤/减伤/护甲</param>
         /// <returns>实际受到的伤害</returns>
-        public int TakeDamage(int damage)
+        public int TakeDamage(int damage, bool canBeDodged = true)
         {
             if (damage <= 0)
             {
@@ -193,8 +215,9 @@ namespace Ashlight.Battle.Core.Data
             }
 
             // 0. 闪避：消耗一层，完全免除这一次攻击（在护甲/易伤之前结算）。
-            //    仅拦截攻击伤害——中毒/燃烧走 TurnResolver 直接扣血、不经此处，天然不被闪避。
-            var dodge = GetBuff("Dodge");
+            //    仅拦截攻击伤害——中毒/燃烧走 TurnResolver 直接扣血、不经此处，天然不被闪避；
+            //    环境伤害（canBeDodged=false，如天气落雷）语义上不是"被瞄准的攻击"，同样不吃闪避。
+            var dodge = canBeDodged ? GetBuff("Dodge") : null;
             if (dodge != null && dodge.Value >= 1f)
             {
                 dodge.Value -= 1f;
@@ -519,6 +542,9 @@ namespace Ashlight.Battle.Core.Data
                 FreeMoveUsedThisTurn = this.FreeMoveUsedThisTurn,
                 HasMovedThisTurn = this.HasMovedThisTurn,
                 RowPosition = this.RowPosition,
+                NextActionRound = this.NextActionRound,
+                PendingRoundDelay = this.PendingRoundDelay,
+                AppliedOverloadRoundDelay = this.AppliedOverloadRoundDelay,
                 // 敌人意图轴/执行轴
                 CurrentPhase = this.CurrentPhase,
                 IntentAxisLength = this.IntentAxisLength,

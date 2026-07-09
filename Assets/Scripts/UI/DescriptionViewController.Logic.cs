@@ -135,6 +135,31 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 显示天气描述：标题=Weather.Name，正文=Weather.Description，
+        /// {V}=Damage、{T}=Period（沿用 BuffInfo 的占位符约定与染色）。
+        /// </summary>
+        public void Show(WeatherInfo weatherInfo)
+        {
+            if (weatherInfo == null)
+            {
+                Hide();
+                return;
+            }
+
+            if (Txt_EntryName != null)
+            {
+                Txt_EntryName.text = weatherInfo.Name;
+            }
+
+            if (Txt_Entry != null)
+            {
+                Txt_Entry.text = FormatWeatherDescription(weatherInfo);
+            }
+
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>
         /// 隐藏名词描述
         /// </summary>
         public void Hide()
@@ -231,6 +256,27 @@ namespace Scripts.UI
                     _ => match.Value
                 };
                 return $"<color=#921303>{value}</color>";
+            });
+        }
+
+        /// <summary>
+        /// 替换天气描述中的占位符：{V}=Damage，{T}=Period。
+        /// colored=true 时与 buff 同款 #921303 染色（tooltip 用）；false 输出纯文本（开场横幅深底上染深红看不清）。
+        /// </summary>
+        public static string FormatWeatherDescription(WeatherInfo info, bool colored = true)
+        {
+            if (info == null || string.IsNullOrEmpty(info.Description)) return string.Empty;
+
+            return Regex.Replace(info.Description, @"\{([A-Z])\}", match =>
+            {
+                string code = match.Groups[1].Value;
+                string value = code switch
+                {
+                    "T" => info.Period.ToString(),
+                    "V" => info.Damage.ToString(),
+                    _ => match.Value
+                };
+                return colored ? $"<color=#921303>{value}</color>" : value;
             });
         }
 

@@ -69,7 +69,7 @@
   },
   {
     "Id": "Root",
-    "Name": "禁锢",
+    "Name": "定身",
     "Description": "无法移动，剩余 {T} 回合",
     "IconPath": "UI/Buff/Icon_Root",
     "Polarity": 1,

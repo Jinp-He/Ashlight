@@ -143,16 +143,16 @@ namespace Ashlight.Battle.Core.Engine
                 return new HealCommand(healEffect.Value);
             }
 
-            // PushCollisionEffect -> ActionBarShiftCommand（单体推迟，ShiftValue 为正数表示延后格数，转为负值）
+            // PushCollisionEffect -> ActionBarShiftCommand（单体推迟；【公共回合制】正数 = 延后 N 回合，与卡牌路径同号）
             if (effect is PushCollisionEffect pushEffect)
             {
-                return new ActionBarShiftCommand(-pushEffect.ShiftValue, isAoe: false);
+                return new ActionBarShiftCommand(pushEffect.ShiftValue, isAoe: false);
             }
 
-            // TimeShiftAllEffect -> ActionBarShiftCommand（全体推迟）
+            // TimeShiftAllEffect -> ActionBarShiftCommand（全体推迟；【公共回合制】正数 = 延后 N 回合，与卡牌路径同号）
             if (effect is TimeShiftAllEffect timeShiftAllEffect)
             {
-                return new ActionBarShiftCommand(-timeShiftAllEffect.ShiftValue, isAoe: true);
+                return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true);
             }
 
             // BuffEffect -> BuffCommand

@@ -56,7 +56,7 @@ namespace Ashlight.Battle.Core.Commands
             }
 
             // 检查目标是否满足条件
-            bool conditionMet = CheckConditions(target);
+            bool conditionMet = CheckConditions(state, target);
             
             // 计算实际伤害
             int actualDamage = conditionMet ? Mathf.RoundToInt(Damage * Multiplier) : Damage;
@@ -87,9 +87,12 @@ namespace Ashlight.Battle.Core.Commands
         }
 
         /// <summary>
-        /// 检查目标是否满足触发条件
+        /// 检查目标是否满足触发条件。
+        /// 【公共回合口径】Channeling/Channel/Recoil 都视为「处于执行中」= 目标本回合将行动；
+        /// 同名 buff 真实存在时也算满足（兼容将来真的贴 引导/僵直 buff 的设计）。
+        /// 旧时间轴阶段检查保留为兜底。
         /// </summary>
-        private bool CheckConditions(UnitState target)
+        private bool CheckConditions(BattleStateSnapshot state, UnitState target)
         {
             if (string.IsNullOrEmpty(Conditions))
             {
@@ -98,29 +101,28 @@ namespace Ashlight.Battle.Core.Commands
 
             // 解析条件（用|分隔）
             string[] conditionList = Conditions.Split('|');
-            
+
             foreach (var condition in conditionList)
             {
                 string trimmedCondition = condition.Trim();
-                
-                // 检查目标是否处于指定状态
-                if (trimmedCondition == "Recoil")
+
+                if (target.HasBuff(trimmedCondition))
                 {
-                    // 检查目标时间轴上是否有Recoil阶段的Block
-                    if (HasPhaseInTimeline(target, PhaseEnum.Recoil))
+                    return true;
+                }
+
+                if (trimmedCondition == "Channeling" || trimmedCondition == "Channel" || trimmedCondition == "Recoil")
+                {
+                    if (AttackConditionalCommand.IsActingThisRound(state, target))
+                    {
+                        return true;
+                    }
+                    var legacyPhase = trimmedCondition == "Recoil" ? PhaseEnum.Recoil : PhaseEnum.Startup;
+                    if (HasPhaseInTimeline(target, legacyPhase))
                     {
                         return true;
                     }
                 }
-                else if (trimmedCondition == "Channel")
-                {
-                    // 检查目标时间轴上是否有Startup阶段的Block
-                    if (HasPhaseInTimeline(target, PhaseEnum.Startup))
-                    {
-                        return true;
-                    }
-                }
-                // 可以扩展更多条件类型
             }
 
             return false;
