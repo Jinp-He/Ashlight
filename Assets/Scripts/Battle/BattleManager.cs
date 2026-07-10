@@ -95,13 +95,48 @@ namespace Ashlight.Battle
         /// <summary>
         /// 敌人规划轨结束、执行轨尚未结算时暂存的技能与目标（按 unitId 索引，支持多敌人同时在执行轨）
         /// </summary>
+        /// <summary>
+        /// 敌人固定循环出招的游标（按 UnitId 索引）：A* 槽按表序循环，取代旧的全池随机。
+        /// 可预测的出招节奏是取舍压迫的地基（docs/敌人压迫感设计_v1.md §2）。
+        /// </summary>
+        private readonly Dictionary<string, int> _enemyRotationIndex = new Dictionary<string, int>();
+
+        /// <summary>
+        /// 已触发过的 S* 条件槽（key = unitId:槽位）。S 槽在 HP&lt;50% 时插队施放，每场每槽一次。
+        /// </summary>
+        private readonly HashSet<string> _firedConditionalSlots = new HashSet<string>();
+
         private readonly Dictionary<string, (EnemySkillInfo Skill, string TargetUnitId)> _pendingEnemyIntents
             = new Dictionary<string, (EnemySkillInfo, string)>();
         /// <summary>
-        /// 玩家挂起的执行牌（按 casterUnitId 分槽，每个角色各自可挂一张执行牌）
+        /// 玩家在轨执行牌（引线）。挂出后作为虚拟单位排进 ATB 时钟，第 ResolveRound 回合结算。
+        /// 允许多发同时在轨（跨回合），但每人每回合限挂 1 张（见 _executionHungThisTurn）。
         /// </summary>
-        private readonly Dictionary<string, (cfg.Character.CardInfo Card, string TargetUnitId)> _pendingPlayerExecutions
-            = new Dictionary<string, (cfg.Character.CardInfo, string)>();
+        public class PendingPlayerCast
+        {
+            public string CastId;
+            public string CasterUnitId;
+            public cfg.Character.CardInfo Card;
+            public string TargetUnitId;
+            /// <summary>结算所在的绝对公共回合（= 挂起回合 + max(1, ExecutingCost)）。</summary>
+            public int ResolveRound;
+        }
+
+        /// <summary>玩家执行牌虚拟单位的 CastId 前缀（ATB/UI 用它区分引线图标与真单位）。</summary>
+        public const string CastIdPrefix = "__cast__";
+
+        /// <summary>在轨引线注册表（castId → cast）。</summary>
+        private readonly Dictionary<string, PendingPlayerCast> _pendingPlayerCasts
+            = new Dictionary<string, PendingPlayerCast>();
+
+        /// <summary>本回合已挂过执行牌的角色（每人每回合限挂 1 张；StartPlayerTurn 时清除自己的标记）。</summary>
+        private readonly HashSet<string> _executionHungThisTurn = new HashSet<string>();
+
+        /// <summary>CastId 自增序号（同一场战斗内唯一）。</summary>
+        private int _castSequence;
+
+        /// <summary>最近一次成功挂起的引线（UI 在 TryQueuePlayerExecutionCard 返回 true 后立刻读取，用于挂 ATB 图标）。</summary>
+        public PendingPlayerCast LastQueuedCast { get; private set; }
 
         // ========== ATB 引擎组件 ==========
 
@@ -191,7 +226,10 @@ namespace Ashlight.Battle
             // 创建新的战斗状态快照
             CurrentState = new BattleStateSnapshot();
             ClearPendingEnemyIntent();
-            ClearPendingPlayerExecution();
+            CancelPendingCasts();
+            _executionHungThisTurn.Clear();
+            _castSequence = 0;
+            LastQueuedCast = null;
             _battleEndEventRaised = false;
 
             // 1. 创建玩家单位
@@ -373,6 +411,10 @@ namespace Ashlight.Battle
                 return;
             }
 
+            // 新战斗：重置出招循环游标与 S 槽触发记录
+            _enemyRotationIndex.Clear();
+            _firedConditionalSlots.Clear();
+
             int enemyIndex = 0;
             foreach (var enemyInfo in encounter.EnemySet_Ref)
             {
@@ -391,13 +433,18 @@ namespace Ashlight.Battle
                     CurrentHp = enemyInfo.Hp,
                     Defense = 0,
                     IsPlayerUnit = false,
+                    IsElite = enemyInfo.IsElite,
                     IsDead = false,
                     Track = null,
                     Speed = Mathf.Max(1, enemyInfo.Speed),
                     BaseEnergy = 2,
                     BaseDrawCount = 0,
                     ActionBar = new ActionBarState(),
-                    Overload = new OverloadState()
+                    Overload = new OverloadState(),
+                    // 开局站位来自表（EnemyInfo.StartRow）：近战前排、法系/射手后排；Any 视为前排
+                    RowPosition = enemyInfo.StartRow == cfg.TargetZoneEnum.Back
+                        ? BattleRowPosition.BackRow
+                        : BattleRowPosition.FrontRow
                 };
 
                 CurrentState.EnemyUnits.Add(unitState);
@@ -757,7 +804,7 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            if (HasPendingPlayerExecutionCard(ownerId))
+            if (_executionHungThisTurn.Contains(ownerId))
             {
                 Debug.LogWarning($"[BattleManager] 该角色本回合已挂起一张执行牌，无法再次挂起: owner={ownerId}");
                 return false;
@@ -825,7 +872,21 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            _pendingPlayerExecutions[ownerId] = (cardInfo, targetId);
+            // 【真延迟】挂轨：结算回合 = 挂起回合 + max(1, ExecutingCost)。
+            // CurrentState.CurrentRound 由 ATB.SyncScheduleToState 在原子回合开始时同步。
+            _castSequence++;
+            var cast = new PendingPlayerCast
+            {
+                CastId = $"{CastIdPrefix}{_castSequence}_{cardInfo.Id}",
+                CasterUnitId = ownerId,
+                Card = cardInfo,
+                TargetUnitId = targetId,
+                ResolveRound = CurrentState.CurrentRound + executingCost
+            };
+            _pendingPlayerCasts[cast.CastId] = cast;
+            _executionHungThisTurn.Add(ownerId);
+            LastQueuedCast = cast;
+            Debug.Log($"[BattleManager] 执行牌挂轨: {cardInfo.Name} ({cast.CastId}) 将于公共回合 {cast.ResolveRound} 结算 (当前 {CurrentState.CurrentRound})");
 
             if (PredictionManager != null)
             {
@@ -835,26 +896,23 @@ namespace Ashlight.Battle
             return true;
         }
 
+        /// <summary>该角色本回合是否已挂起执行牌（每回合限 1 张的判定）；unitId 为空 = 是否有任何在轨引线。</summary>
         public bool HasPendingPlayerExecutionCard(string unitId = null)
         {
             if (string.IsNullOrEmpty(unitId))
             {
-                return _pendingPlayerExecutions.Count > 0;
+                return _pendingPlayerCasts.Count > 0;
             }
 
-            return _pendingPlayerExecutions.ContainsKey(unitId);
+            return _executionHungThisTurn.Contains(unitId);
         }
 
-        public int GetPendingPlayerExecutionCost(string unitId)
+        /// <summary>按 CastId 取在轨引线（不存在返回 null）。</summary>
+        public PendingPlayerCast GetPendingCast(string castId)
         {
-            if (!string.IsNullOrEmpty(unitId)
-                && _pendingPlayerExecutions.TryGetValue(unitId, out var pending)
-                && pending.Card != null)
-            {
-                return Mathf.Max(1, pending.Card.ExecutingCost);
-            }
-
-            return 1;
+            return !string.IsNullOrEmpty(castId) && _pendingPlayerCasts.TryGetValue(castId, out var cast)
+                ? cast
+                : null;
         }
 
         /// <summary>
@@ -896,7 +954,8 @@ namespace Ashlight.Battle
                 return;
             }
 
-            ClearPendingPlayerExecution(unitId);
+            // 新回合重置「每回合限挂 1 张执行牌」标记（在轨引线保留，不受新回合影响）
+            _executionHungThisTurn.Remove(unitId);
 
             // 全场暂停：冻结所有其他单位推进
             CurrentState.IsGlobalPaused = true;
@@ -1023,11 +1082,7 @@ namespace Ashlight.Battle
                 return;
             }
 
-            // 1. 结算执行牌（如果有）
-            if (HasPendingPlayerExecutionCard(unitId))
-            {
-                ExecutePendingPlayerCardAfterExecutionTrack(unitId);
-            }
+            // 1. 执行牌不在此结算——已作为引线挂在 ATB 时钟上，到 ResolveRound 由 ResolvePendingCast 结算。
 
             // 2. 弃掉剩余手牌
             DiscardCurrentHand();
@@ -1202,13 +1257,25 @@ namespace Ashlight.Battle
                 if (effect is BuffEffect buffEffect &&
                     EnemySkillToTimelineConverter.SelfCastBuffIds.Contains(buffEffect.BuffId))
                 {
+                    float value = buffEffect.Value;
+
+                    // [坚毅](Resolve)：每层使打断阈值提高 50%——只放大打断系阈值，不影响其他自施 buff
+                    if (buffEffect.BuffId == "Stagger" || buffEffect.BuffId == "Block")
+                    {
+                        float resolveStacks = enemyUnit.GetBuff("Resolve")?.Value ?? 0f;
+                        if (resolveStacks > 0f)
+                        {
+                            value = Mathf.Ceil(value * (1f + 0.5f * resolveStacks));
+                        }
+                    }
+
                     enemyUnit.AddBuff(new BuffState
                     {
                         BuffId = buffEffect.BuffId,
-                        Value = buffEffect.Value,
+                        Value = value,
                         RemainingDuration = -1 // 持续到被消耗（打断）或施法完成时清除
                     });
-                    Debug.Log($"[BattleManager] {enemyUnit.UnitId} 进入意图轴自施 Buff: {buffEffect.BuffId}={buffEffect.Value}");
+                    Debug.Log($"[BattleManager] {enemyUnit.UnitId} 进入意图轴自施 Buff: {buffEffect.BuffId}={value}");
                 }
             }
         }
@@ -1316,38 +1383,35 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
-        /// 执行轨到达终点时调用：结算玩家挂起的执行牌（效果与动画在此时发生）。
+        /// 引线到点结算：轮到该 castId 的 ATB 虚拟回合时调用。
+        /// 施法者死亡 → 引线作废（规则书：结算前被击倒则取消）；
+        /// 原目标死亡/丢失 → 单体敌方牌改选第一个存活敌人，单体友方牌回落到施法者，其余照常（AOE 自展开）。
         /// </summary>
-        public bool ExecutePendingPlayerCardAfterExecutionTrack(string unitId)
+        /// <returns>true = 效果已结算；false = 引线作废（不存在/施法者死亡/无合法目标）。</returns>
+        public bool ResolvePendingCast(string castId)
         {
-            if (string.IsNullOrEmpty(unitId))
+            if (CurrentState == null || !_pendingPlayerCasts.TryGetValue(castId, out var cast) || cast.Card == null)
             {
+                _pendingPlayerCasts.Remove(castId);
                 return false;
             }
 
-            if (CurrentState == null)
+            _pendingPlayerCasts.Remove(castId);
+
+            var owner = CurrentState.GetUnitById(cast.CasterUnitId);
+            if (owner == null || owner.IsDead)
             {
-                ClearPendingPlayerExecution(unitId);
+                Debug.Log($"[BattleManager] 引线作废（施法者已倒下）: {cast.Card.Name} ({castId})");
                 return false;
             }
 
-            if (!_pendingPlayerExecutions.TryGetValue(unitId, out var pending) || pending.Card == null)
+            var card = cast.Card;
+            string targetId = ResolveCastTargetId(card, owner, cast.TargetUnitId);
+            if (string.IsNullOrEmpty(targetId))
             {
-                ClearPendingPlayerExecution(unitId);
+                Debug.Log($"[BattleManager] 引线落空（无合法目标）: {card.Name} ({castId})");
                 return false;
             }
-
-            var owner = CurrentState.GetUnitById(unitId);
-            var target = CurrentState.GetUnitById(pending.TargetUnitId);
-            if (owner == null || owner.IsDead || target == null || target.IsDead)
-            {
-                ClearPendingPlayerExecution(unitId);
-                return false;
-            }
-
-            var card = pending.Card;
-            string targetId = pending.TargetUnitId;
-            ClearPendingPlayerExecution(unitId);
 
             var commands = CardPlayResolver.GenerateCommands(card, CurrentState?.CardModifiers?.Get(card.Id));
             bool isAttackCard = commands.Any(c => c is DamageCommand);
@@ -1365,7 +1429,7 @@ namespace Ashlight.Battle
             bool success = CardPlayResolver.PlayCard(CurrentState, card, owner.UnitId, targetId);
             if (!success)
             {
-                Debug.LogWarning($"[BattleManager] 执行轨结算玩家执行牌失败: {card.Id}");
+                Debug.LogWarning($"[BattleManager] 引线结算失败: {card.Id} ({castId})");
                 return false;
             }
 
@@ -1373,10 +1437,39 @@ namespace Ashlight.Battle
 
             if (PredictionManager != null)
             {
-                PredictionManager.TriggerPrediction("玩家执行轨结算");
+                PredictionManager.TriggerPrediction("玩家引线结算");
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 引线结算时的目标兜底：原目标仍合法则沿用；否则单体敌方牌改选第一个存活敌人，
+        /// 友方/自身牌回落到施法者（AOE/全体牌的目标由 Command 自行展开，主目标仅作锚点）。
+        /// </summary>
+        private string ResolveCastTargetId(cfg.Character.CardInfo card, UnitState owner, string originalTargetId)
+        {
+            var target = CurrentState.GetUnitById(originalTargetId);
+            if (target != null && !target.IsDead)
+            {
+                return originalTargetId;
+            }
+
+            bool targetsEnemy = card.TargetType == cfg.TargetTypeEnum.SingleEnemy
+                                || card.TargetType == cfg.TargetTypeEnum.AllEnemy;
+            if (targetsEnemy)
+            {
+                var fallback = CurrentState.GetAliveEnemyUnits().FirstOrDefault();
+                if (fallback != null)
+                {
+                    Debug.Log($"[BattleManager] 引线目标已死亡，改选 {fallback.UnitId}: {card.Name}");
+                    return fallback.UnitId;
+                }
+                return null;
+            }
+
+            // 友方/自身牌：目标丢失时回落到施法者
+            return owner.UnitId;
         }
 
         private void ClearPendingEnemyIntent()
@@ -1453,15 +1546,31 @@ namespace Ashlight.Battle
             return changed;
         }
 
-        private void ClearPendingPlayerExecution(string unitId = null)
+        /// <summary>
+        /// 取消在轨引线：casterUnitId 为空 = 全部取消（战斗初始化）；否则只取消该施法者的（施法者死亡时）。
+        /// 返回被取消的 castId 列表，供 UI 同步移除 ATB 图标。
+        /// </summary>
+        public List<string> CancelPendingCasts(string casterUnitId = null)
         {
-            if (string.IsNullOrEmpty(unitId))
+            var removed = new List<string>();
+            foreach (var kv in _pendingPlayerCasts)
             {
-                _pendingPlayerExecutions.Clear();
-                return;
+                if (string.IsNullOrEmpty(casterUnitId) || kv.Value.CasterUnitId == casterUnitId)
+                {
+                    removed.Add(kv.Key);
+                }
             }
 
-            _pendingPlayerExecutions.Remove(unitId);
+            foreach (var id in removed)
+            {
+                _pendingPlayerCasts.Remove(id);
+            }
+
+            if (removed.Count > 0)
+            {
+                Debug.Log($"[BattleManager] 取消引线 {removed.Count} 条 (caster={casterUnitId ?? "ALL"})");
+            }
+            return removed;
         }
 
         private bool TryPickEnemySkillAndTarget(UnitState enemyUnit, out EnemySkillInfo selectedSkill, out UnitState target)
@@ -1481,7 +1590,11 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var candidateSkills = new List<EnemySkillInfo>();
+            // 出招选择（docs/敌人压迫感设计_v1.md §2/§3）：
+            //   A* 槽 = 固定循环，按表序轮转（每单位独立游标）——玩家两次遭遇就能背出节奏，意图是契约；
+            //   S* 槽 = 条件插队，HP<50% 时优先施放，每场每槽只触发一次，之后回到循环。
+            var rotationSkills = new List<EnemySkillInfo>();
+            var conditionalSlots = new List<(string SlotKey, EnemySkillInfo Skill)>();
             foreach (var intentionGroup in enemyInfo.IntentionSet)
             {
                 if (intentionGroup?.EnemyIntentionList == null)
@@ -1491,21 +1604,57 @@ namespace Ashlight.Battle
 
                 foreach (var intention in intentionGroup.EnemyIntentionList)
                 {
-                    if (intention?.EnemySkillIndex_Ref != null)
+                    if (intention?.EnemySkillIndex_Ref == null)
                     {
-                        candidateSkills.Add(intention.EnemySkillIndex_Ref);
+                        continue;
+                    }
+
+                    bool isConditional = intention.EnemyIntentionType == cfg.EnemyIntentionEnum.Skill0
+                                         || intention.EnemyIntentionType == cfg.EnemyIntentionEnum.Skill1;
+                    if (isConditional)
+                    {
+                        conditionalSlots.Add(($"{enemyUnit.UnitId}:{intention.EnemyIntentionType}", intention.EnemySkillIndex_Ref));
+                    }
+                    else
+                    {
+                        rotationSkills.Add(intention.EnemySkillIndex_Ref);
                     }
                 }
             }
 
-            if (candidateSkills.Count == 0)
+            if (rotationSkills.Count == 0 && conditionalSlots.Count == 0)
             {
                 Debug.LogWarning($"[BattleManager] 敌人没有可用技能，跳过行动: {enemyUnit.ConfigId}");
                 return false;
             }
 
-            int selectedIndex = Random.Range(0, candidateSkills.Count);
-            selectedSkill = candidateSkills[selectedIndex];
+            bool belowHalfHp = enemyUnit.CurrentHp * 2 < enemyUnit.MaxHp;
+            if (belowHalfHp)
+            {
+                foreach (var (slotKey, skill) in conditionalSlots)
+                {
+                    if (_firedConditionalSlots.Contains(slotKey))
+                    {
+                        continue;
+                    }
+                    _firedConditionalSlots.Add(slotKey);
+                    selectedSkill = skill;
+                    Debug.Log($"[BattleManager] {enemyUnit.UnitId} HP<50% 触发条件槽插队: {skill.Id}");
+                    break;
+                }
+            }
+
+            if (selectedSkill == null)
+            {
+                // 只配了 S 槽的敌人（异常配置）：未触发条件时退化为循环使用 S 槽技能
+                var pool = rotationSkills.Count > 0
+                    ? rotationSkills
+                    : conditionalSlots.ConvertAll(c => c.Skill);
+                int cursor = _enemyRotationIndex.TryGetValue(enemyUnit.UnitId, out var idx) ? idx : 0;
+                selectedSkill = pool[cursor % pool.Count];
+                _enemyRotationIndex[enemyUnit.UnitId] = cursor + 1;
+            }
+
             if (selectedSkill == null)
             {
                 return false;

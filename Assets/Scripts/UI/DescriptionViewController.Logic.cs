@@ -168,12 +168,49 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 设置位置
+        /// 设置位置（世界坐标），并做画布边缘检测：
+        /// 面板任何一边超出 Canvas 矩形时整体回移，保证 tooltip 完整可见。
+        /// 所有调用方（意图/手牌/buff/天气/行动顺序）共用这一处 clamp。
         /// </summary>
-        /// <param name="position">屏幕坐标</param>
+        /// <param name="position">世界坐标（调用方已从屏幕坐标换算）</param>
         public void SetPosition(Vector3 position)
         {
             transform.position = position;
+            ClampToCanvas();
+        }
+
+        /// <summary>tooltip 边缘检测的留白（Canvas 本地单位，随缩放）。</summary>
+        private const float EdgePadding = 8f;
+
+        /// <summary>
+        /// 把面板整体拉回 Canvas 矩形内。文本刚被 Show() 改写、ContentSizeFitter 尚未重建，
+        /// 先强制重建拿到真实尺寸再算溢出量；面板比画布还大时优先保住左/上边缘（阅读起点）。
+        /// </summary>
+        private void ClampToCanvas()
+        {
+            var rt = transform as RectTransform;
+            var canvas = GetComponentInParent<Canvas>();
+            var canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+            if (rt == null || canvasRect == null) return;
+
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners); // 0=左下 2=右上
+            Vector2 min = canvasRect.InverseTransformPoint(corners[0]);
+            Vector2 max = canvasRect.InverseTransformPoint(corners[2]);
+            Rect cr = canvasRect.rect;
+
+            Vector2 shift = Vector2.zero;
+            if (max.x > cr.xMax - EdgePadding) shift.x = (cr.xMax - EdgePadding) - max.x;
+            if (min.x + shift.x < cr.xMin + EdgePadding) shift.x = (cr.xMin + EdgePadding) - min.x;
+            if (max.y > cr.yMax - EdgePadding) shift.y = (cr.yMax - EdgePadding) - max.y;
+            if (min.y + shift.y < cr.yMin + EdgePadding) shift.y = (cr.yMin + EdgePadding) - min.y;
+
+            if (shift != Vector2.zero)
+            {
+                transform.position += canvasRect.TransformVector(new Vector3(shift.x, shift.y, 0f));
+            }
         }
 
         #endregion

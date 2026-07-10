@@ -33,6 +33,7 @@ public sealed partial class CardInfo : Luban.BeanBase
         { if(!_buf["IsExhaust"].IsBoolean) { throw new SerializationException(); }  IsExhaust = _buf["IsExhaust"]; }
         { if(!_buf["TargetZone"].IsNumber) { throw new SerializationException(); }  TargetZone = (TargetZoneEnum)_buf["TargetZone"].AsInt; }
         { if(!_buf["CastZone"].IsNumber) { throw new SerializationException(); }  CastZone = (TargetZoneEnum)_buf["CastZone"].AsInt; }
+        { if(!_buf["IsInUpgrade"].IsBoolean) { throw new SerializationException(); }  IsInUpgrade = _buf["IsInUpgrade"]; }
     }
 
     public static CardInfo DeserializeCardInfo(JSONNode _buf)
@@ -56,6 +57,7 @@ public sealed partial class CardInfo : Luban.BeanBase
     public readonly bool IsExhaust;
     public readonly TargetZoneEnum TargetZone;
     public readonly TargetZoneEnum CastZone;
+    public readonly bool IsInUpgrade;
    
     public const int __ID__ = 804331843;
     public override int GetTypeId() => __ID__;
@@ -84,6 +86,7 @@ public sealed partial class CardInfo : Luban.BeanBase
         + "IsExhaust:" + IsExhaust + ","
         + "TargetZone:" + TargetZone + ","
         + "CastZone:" + CastZone + ","
+        + "IsInUpgrade:" + IsInUpgrade + ","
         + "}";
     }
 }

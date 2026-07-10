@@ -45,6 +45,7 @@ namespace Scripts.UI
         private readonly List<GameObject> _playerIconInstances = new List<GameObject>();
         private readonly List<GameObject> _enemyIconInstances = new List<GameObject>();
         private readonly List<GameObject> _weatherIconInstances = new List<GameObject>();
+        private readonly List<GameObject> _castIconInstances = new List<GameObject>();
         private readonly List<AtbIconRuntime> _activeIcons = new List<AtbIconRuntime>();
 
         [SerializeField]
@@ -69,6 +70,22 @@ namespace Scripts.UI
 
         /// <summary>正在运行的自动推进协程（连续敌人回合逐个结算）。null = 未运行。</summary>
         private Coroutine _autoStepRoutine;
+
+        /// <summary>
+        /// 战斗演出忙碌判定（由 UI_BattleScene 注入，读 BattleAnimationHandler.IsAnimating）。
+        /// 敌人结算后，推进循环会等它返回 false 再开下一个单位的回合——
+        /// 保证「上一个敌人动画播完，下一个才行动」，行动顺序条的高亮也随之与演出一致。
+        /// </summary>
+        public System.Func<bool> AnimationBusyPredicate;
+
+        /// <summary>演出等待的兜底上限（秒）：动画丢失完成信号时防止战斗永久卡住。</summary>
+        private const float AnimationWaitTimeout = 8f;
+
+        /// <summary>
+        /// 有图标的视觉同步被推迟（演出期间 Reschedule 不动图标条，演出结束统一 SyncAllVisuals）。
+        /// 否则结算瞬间图标就跳去未来回合，比动画早 N 秒，观感是「ATB 先跳了」。
+        /// </summary>
+        private bool _visualSyncDeferred;
 
         /// <summary>
         /// 全局公共回合计数器（真实时钟）。开局为 0，第一次 <see cref="TriggerNextUnit"/> 会推进到第一个有单位行动的回合。
@@ -114,6 +131,8 @@ namespace Scripts.UI
             public bool IsPlayer;
             /// <summary>天气虚拟单位（第三方阵营）：无 UnitState、豁免死亡判定、同回合排最先。</summary>
             public bool IsWeather;
+            /// <summary>玩家引线虚拟单位（在轨执行牌）：无 UnitState、豁免死亡判定、一次性（结算后移除）、同回合排在天气之后、真单位之前。</summary>
+            public bool IsCast;
             /// <summary>速度 = 每隔几个公共回合行动一次（数字越大越慢）。重排时实时同步。</summary>
             public int Speed;
             public RectTransform Rect;
@@ -141,6 +160,7 @@ namespace Scripts.UI
             ClearPlayerIcons();
             ClearEnemyIcons();
             ClearWeatherIcons();
+            ClearCastIcons();
             _activeIcons.Clear();
             AutoAdvanceSuspended = false;
             CurrentRound = 0;
@@ -188,13 +208,53 @@ namespace Scripts.UI
         public void ClearPlayerIcons() => DestroyIconList(_playerIconInstances);
         public void ClearEnemyIcons() => DestroyIconList(_enemyIconInstances);
         public void ClearWeatherIcons() => DestroyIconList(_weatherIconInstances);
+        public void ClearCastIcons() => DestroyIconList(_castIconInstances);
 
         public void ClearAllIcons()
         {
             ClearPlayerIcons();
             ClearEnemyIcons();
             ClearWeatherIcons();
+            ClearCastIcons();
             _activeIcons.Clear();
+        }
+
+        /// <summary>
+        /// 【引线虚拟单位】把玩家挂起的执行牌排进公共回合时钟：到 resolveRound 回合结算（一次性，结算后由上层 RemoveUnitIcon 移除）。
+        /// 第三方标记：无 UnitState、豁免死亡判定；同回合排在天气之后、真单位之前（预告好的引线先落地，再轮到单位行动）。
+        /// </summary>
+        /// <param name="castId">引线唯一 Id（BattleManager.CastIdPrefix 前缀）</param>
+        /// <param name="iconResourcePath">图标 Resources 路径（通常是卡牌 MiniSprite），缺图保留 prefab 默认图</param>
+        /// <param name="resolveRound">结算所在的绝对公共回合</param>
+        public GameObject AddCastIcon(string castId, string iconResourcePath, int resolveRound)
+        {
+            if (string.IsNullOrEmpty(castId)) return null;
+
+            var prefab = PlayerIconPrefab != null ? PlayerIconPrefab : EnemyIconPrefab;
+            // configId 传 null：跳过角色图标解析；isPlayer=false 让 StepOnce 把它当「非玩家步」处理（结算后循环自动继续）。
+            var go = InstantiateIcon(prefab, PlanningATBSlot, null, castId, 1, false, _castIconInstances);
+            if (go == null) return null;
+
+            var icon = FindIcon(castId);
+            if (icon != null)
+            {
+                icon.IsCast = true;
+                icon.NextRound = Mathf.Max(CurrentRound + 1, resolveRound);
+                SyncVisualFromRounds(icon);
+            }
+
+            if (!string.IsNullOrEmpty(iconResourcePath))
+            {
+                var sprite = Resources.Load<Sprite>(iconResourcePath.Replace('\\', '/'));
+                if (sprite != null)
+                {
+                    var img = go.GetComponent<Image>();
+                    if (img != null) img.sprite = sprite;
+                }
+            }
+
+            Debug.Log($"[ATB] AddCastIcon: 引线 {castId} 挂钟 → 回合 {(icon != null ? icon.NextRound : resolveRound)} (当前 {CurrentRound})");
+            return go;
         }
 
         /// <summary>
@@ -232,14 +292,14 @@ namespace Scripts.UI
             return go;
         }
 
-        /// <summary>返回排在指定公共回合行动的所有真单位 Id（不含天气）。落雷结算用。</summary>
+        /// <summary>返回排在指定公共回合行动的所有真单位 Id（不含天气/引线虚拟单位）。落雷结算用。</summary>
         public List<string> GetUnitIdsAtRound(int round)
         {
             var result = new List<string>();
             for (int i = 0; i < _activeIcons.Count; i++)
             {
                 var icon = _activeIcons[i];
-                if (icon == null || icon.IsWeather) continue;
+                if (icon == null || icon.IsWeather || icon.IsCast) continue;
                 if (icon.NextRound == round) result.Add(icon.UnitId);
             }
             return result;
@@ -262,6 +322,7 @@ namespace Scripts.UI
             {
                 _playerIconInstances.Remove(go);
                 _enemyIconInstances.Remove(go);
+                _castIconInstances.Remove(go);
                 Destroy(go);
             }
 
@@ -281,6 +342,8 @@ namespace Scripts.UI
             public bool   IsPlayer;
             /// <summary>天气虚拟单位的条目（TurnOrderView 用天气卡渲染，不查单位登记表）。</summary>
             public bool   IsWeather;
+            /// <summary>玩家引线（在轨执行牌）的条目（TurnOrderView 用卡牌图渲染，不查单位登记表）。</summary>
+            public bool   IsCast;
             /// <summary>该次行动所在的绝对公共回合（分隔条按此标号；相同 = 同组不分隔）。</summary>
             public int    Round;
             /// <summary>分组键 = Round（TurnOrderView 判断是否同组、是否插分隔条）。</summary>
@@ -294,19 +357,36 @@ namespace Scripts.UI
         /// 用协程逐步推进（而非一帧内同步跑完），这样多个敌人在同一公共回合内会被玩家逐个看到。
         /// 玩家结束回合时应再次调用本方法继续推进。回调里 **不要** 再调用 TriggerNextUnit。
         /// </summary>
+        /// <summary>
+        /// 备用协程宿主（由 UI_BattleScene 注入自己）。ATB 节点在场景里可能是隐藏的
+        /// （旧图标条 UI 已弃用），未激活的组件跑不了协程——没有宿主时 TriggerNextUnit
+        /// 会退化成同步一帧跑完：无节奏、无演出闸门，敌人动画全部并发。
+        /// </summary>
+        public MonoBehaviour CoroutineHost;
+
         public void TriggerNextUnit()
         {
             if (_autoStepRoutine != null) return; // 已在推进中
 
-            if (isActiveAndEnabled)
+            var host = ResolveCoroutineHost();
+            if (host != null)
             {
-                _autoStepRoutine = StartCoroutine(AutoStepRoutine());
+                _autoStepRoutine = host.StartCoroutine(AutoStepRoutine());
             }
             else
             {
-                // 兜底：组件未激活无法跑协程时，退化为同步连续推进（无节奏）。
+                // 兜底：找不到任何激活宿主时，退化为同步连续推进（无节奏、无演出闸门）。
+                Debug.LogWarning("[ATB] 无可用协程宿主（ATB 节点未激活且未注入 CoroutineHost），退化为同步推进——敌人演出将并发");
                 while (StepOnce() == AtbStepResult.EnemyResolved) { }
             }
+        }
+
+        /// <summary>优先用自己（激活时），否则用注入的宿主；都不可用返回 null。</summary>
+        private MonoBehaviour ResolveCoroutineHost()
+        {
+            if (isActiveAndEnabled) return this;
+            if (CoroutineHost != null && CoroutineHost.isActiveAndEnabled) return CoroutineHost;
+            return null;
         }
 
         private IEnumerator AutoStepRoutine()
@@ -315,7 +395,33 @@ namespace Scripts.UI
             {
                 var r = StepOnce();
                 if (r != AtbStepResult.EnemyResolved) break; // 轮到玩家 / 无人可动 → 停
-                // 敌人已结算：留出节奏再推进下一个，让玩家逐个看清顺序与动画。
+
+                // 敌人已结算：先等它的战斗演出播完（伤害结算是同步的，演出是异步协程），
+                // 再留出节奏间隔推进下一个——下一个单位的回合绝不在上一个动画结束前开始。
+                if (AnimationBusyPredicate != null && AnimationBusyPredicate())
+                {
+                    float waitStart = Time.time;
+                    float guard = AnimationWaitTimeout;
+                    Debug.Log($"[ATB] 等待战斗演出… (t={waitStart:F2})");
+                    while (AnimationBusyPredicate() && guard > 0f)
+                    {
+                        guard -= Time.deltaTime;
+                        yield return null;
+                    }
+                    if (guard <= 0f)
+                    {
+                        Debug.LogWarning("[ATB] 等待战斗演出超时，强制推进下一个单位");
+                    }
+                    Debug.Log($"[ATB] 演出等待结束，等了 {Time.time - waitStart:F2}s");
+                }
+
+                // 演出结束：把被推迟的图标条视觉一次性同步到最新时刻表。
+                if (_visualSyncDeferred)
+                {
+                    _visualSyncDeferred = false;
+                    SyncAllVisuals();
+                }
+
                 yield return new WaitForSeconds(Mathf.Max(0f, enemyTurnPacing));
             }
             _autoStepRoutine = null;
@@ -336,8 +442,8 @@ namespace Scripts.UI
             {
                 next = SelectNextIcon();
                 if (next == null) return AtbStepResult.None;
-                // 天气虚拟单位没有 UnitState，死亡判定查不到会误判"已不存在"→ 必须豁免。
-                if (!next.IsWeather && IsUnitDeadPredicate != null && IsUnitDeadPredicate(next.UnitId))
+                // 天气/引线虚拟单位没有 UnitState，死亡判定查不到会误判"已不存在"→ 必须豁免。
+                if (!next.IsWeather && !next.IsCast && IsUnitDeadPredicate != null && IsUnitDeadPredicate(next.UnitId))
                 {
                     Debug.Log($"[ATB] StepOnce: 跳过并移除死亡单位图标 {next.UnitId}");
                     RemoveUnitIcon(next.UnitId);
@@ -418,6 +524,7 @@ namespace Scripts.UI
         {
             if (a.NextRound != b.NextRound) return a.NextRound - b.NextRound;
             if (a.IsWeather != b.IsWeather) return a.IsWeather ? -1 : 1; // 天气最先（跨入回合即结算，行动前可能被劈死）
+            if (a.IsCast != b.IsCast) return a.IsCast ? -1 : 1;       // 引线次先（预告好的执行牌先落地，再轮到单位行动）
             if (a.IsPlayer != b.IsPlayer) return a.IsPlayer ? -1 : 1; // 我方先
             if (a.Speed != b.Speed) return a.Speed - b.Speed;         // 快（Speed 小）先
             return aIdx - bIdx;                                       // 注册序
@@ -438,8 +545,22 @@ namespace Scripts.UI
 
             icon.Speed = Mathf.Max(1, speed);
             icon.NextRound = CurrentRound + icon.Speed + Mathf.Max(0, extraDelay);
-            SyncVisualFromRounds(icon);
+            SyncVisualOrDefer(icon);
             Debug.Log($"[ATB] Reschedule {unitId}: speed={icon.Speed}, extra={extraDelay} → 回合 {icon.NextRound} (当前 {CurrentRound})");
+        }
+
+        /// <summary>
+        /// 演出播放期间不动图标条（推迟到演出结束统一同步），否则立即同步。
+        /// 数据（NextRound）始终即时生效，被推迟的只是视觉位置。
+        /// </summary>
+        private void SyncVisualOrDefer(AtbIconRuntime icon)
+        {
+            if (AnimationBusyPredicate != null && AnimationBusyPredicate())
+            {
+                _visualSyncDeferred = true;
+                return;
+            }
+            SyncVisualFromRounds(icon);
         }
 
         /// <summary>
@@ -450,7 +571,7 @@ namespace Scripts.UI
             var icon = FindIcon(unitId);
             if (icon == null) return;
             icon.NextRound = Mathf.Max(CurrentRound, absoluteRound);
-            SyncVisualFromRounds(icon);
+            SyncVisualOrDefer(icon);
         }
 
         /// <summary>
@@ -495,7 +616,7 @@ namespace Scripts.UI
 
                 int before = icon.NextRound;
                 icon.NextRound = Mathf.Max(CurrentRound, icon.NextRound + delay);
-                SyncVisualFromRounds(icon);
+                SyncVisualOrDefer(icon);
                 unit.NextActionRound = icon.NextRound;
                 changed = true;
                 Debug.Log($"[ATB] 推迟落账: {unit.UnitId} 回合 {before} -> {icon.NextRound} (延迟 {delay})");
@@ -523,10 +644,10 @@ namespace Scripts.UI
             {
                 var ic = _activeIcons[i];
                 if (ic?.Rect == null) continue;
-                if (!ic.IsWeather && IsUnitDeadPredicate != null && IsUnitDeadPredicate(ic.UnitId)) continue;
+                if (!ic.IsWeather && !ic.IsCast && IsUnitDeadPredicate != null && IsUnitDeadPredicate(ic.UnitId)) continue;
                 var copy = new AtbIconRuntime
                 {
-                    UnitId = ic.UnitId, IsPlayer = ic.IsPlayer, IsWeather = ic.IsWeather,
+                    UnitId = ic.UnitId, IsPlayer = ic.IsPlayer, IsWeather = ic.IsWeather, IsCast = ic.IsCast,
                     Speed = Mathf.Max(1, ic.Speed), NextRound = ic.NextRound
                 };
                 idxOf[copy] = i;
@@ -553,9 +674,16 @@ namespace Scripts.UI
 
                 result.Add(new TurnOrderEntry
                 {
-                    UnitId = pick.UnitId, IsPlayer = pick.IsPlayer, IsWeather = pick.IsWeather,
+                    UnitId = pick.UnitId, IsPlayer = pick.IsPlayer, IsWeather = pick.IsWeather, IsCast = pick.IsCast,
                     Round = pick.NextRound, GroupKey = pick.NextRound
                 });
+
+                // 引线是一次性的：结算后不再重排，从模拟队列移除（否则预览里会按 Speed 反复出现）。
+                if (pick.IsCast)
+                {
+                    work.Remove(pick);
+                    continue;
+                }
 
                 // 模拟重排：下一次 = 当前回合 + Speed（过载/技能延迟预测时未知，忽略）
                 pick.NextRound = simRound + pick.Speed;

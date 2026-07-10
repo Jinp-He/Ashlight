@@ -17,9 +17,11 @@ namespace Scripts.UI
         public RectTransform CardDeck;
         public RectTransform CardBin;
         public RectTransform PlayerPosition;
-        public RectTransform PlayerFrontRow;
         public RectTransform PlayerBackRow;
+        public RectTransform PlayerFrontRow;
         public RectTransform EnemyPostion;
+        public RectTransform EnemyFrontRow;
+        public RectTransform EnemyBackRow;
         public TextMeshProUGUI Txt_Money;
         public ATB ATB;
         public Button Btn_EndRoundBase;
@@ -64,14 +66,20 @@ namespace Scripts.UI
                     case "PlayerPosition":
                         PlayerPosition = bind.GetComponent<RectTransform>();
                         break;
-                    case "PlayerFrontRow":
-                        PlayerFrontRow = bind.GetComponent<RectTransform>();
-                        break;
                     case "PlayerBackRow":
                         PlayerBackRow = bind.GetComponent<RectTransform>();
                         break;
+                    case "PlayerFrontRow":
+                        PlayerFrontRow = bind.GetComponent<RectTransform>();
+                        break;
                     case "EnemyPostion":
                         EnemyPostion = bind.GetComponent<RectTransform>();
+                        break;
+                    case "EnemyFrontRow":
+                        EnemyFrontRow = bind.GetComponent<RectTransform>();
+                        break;
+                    case "EnemyBackRow":
+                        EnemyBackRow = bind.GetComponent<RectTransform>();
                         break;
                     case "Txt_Money":
                         Txt_Money = bind.GetComponent<TextMeshProUGUI>();

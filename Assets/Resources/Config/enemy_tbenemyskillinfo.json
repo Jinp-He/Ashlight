@@ -252,5 +252,195 @@
     "ExecutingCost": 8,
     "TargetType": 3,
     "TargetZone": 1
+  },
+  {
+    "Id": "ES101",
+    "Name": "疾突",
+    "Description": "突刺前排，造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES102",
+    "Name": "掷石",
+    "Description": "投掷碎石袭击后排，造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ES103",
+    "Name": "猎杀直觉",
+    "Description": "造成{A}点伤害，并施加{B}%易伤",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Vulnerable",
+        "value": 25
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ES104",
+    "Name": "穷追猛打",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 9,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ES105",
+    "Name": "蓄能轰击",
+    "Description": "对前排所有目标造成{A}点伤害；引导期间受到{B}点伤害即被打断",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 15
+      }
+    ],
+    "ExecutingCost": 5,
+    "TargetType": 4,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES106",
+    "Name": "榴散幕",
+    "Description": "对后排所有目标造成{A}点伤害；引导期间受到{B}点伤害即被打断",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 12
+      }
+    ],
+    "ExecutingCost": 4,
+    "TargetType": 4,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ES107",
+    "Name": "处决重锤",
+    "Description": "造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES108",
+    "Name": "震地横扫",
+    "Description": "对前排所有目标造成{A}点伤害",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 7,
+        "is_aoe": true
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 4,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ES109",
+    "Name": "战意咆哮",
+    "Description": "获得{B}层力量与{D}点护甲",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Strength",
+        "value": 2
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 10,
+        "per_hit": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 2,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ES110",
+    "Name": "灭世震击",
+    "Description": "对所有目标造成{A}点伤害；引导期间受到{B}点伤害即被打断",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 14,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 30
+      }
+    ],
+    "ExecutingCost": 7,
+    "TargetType": 4,
+    "TargetZone": 2
   }
 ]

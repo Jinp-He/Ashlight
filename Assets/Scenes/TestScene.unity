@@ -10905,12 +10905,10 @@ MonoBehaviour:
   timelineTrackPrefab: {fileID: 1266222384735868427, guid: 8f3450fa82768d14589ce4cc4b7caf1f, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
   testCardCount: 3
-  testEncounterId: E002
+  testEncounterId: E101
   testEncounterSequence:
-  - E001
-  - E002
-  - E003
-  - E004
+  - E101
+  - E102
   testAutoAdvance: 1
   testAutoAdvanceDelay: 1.5
   testLoopAfterLast: 1

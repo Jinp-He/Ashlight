@@ -46,5 +46,43 @@
         "Weight": 0.3
       }
     ]
+  },
+  {
+    "Id": "E101",
+    "EnemySet": [
+      "Enemy101",
+      "Enemy104",
+      "Enemy102",
+      "Enemy103"
+    ],
+    "StrategySet": [
+      {
+        "EnemyIntentionsScript": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "Weight": 1
+      }
+    ]
+  },
+  {
+    "Id": "E102",
+    "EnemySet": [
+      "Enemy105",
+      "Enemy101",
+      "Enemy101"
+    ],
+    "StrategySet": [
+      {
+        "EnemyIntentionsScript": [
+          0,
+          0,
+          0
+        ],
+        "Weight": 1
+      }
+    ]
   }
 ]

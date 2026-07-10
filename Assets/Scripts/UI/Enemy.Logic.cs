@@ -824,6 +824,14 @@ namespace Scripts.UI
                     ? new Color(1f, 0f, 0f, 0.25f)
                     : new Color(0f, 0f, 0f, 0f);
             }
+
+            // HitArea 置顶后必须把 IntentionView 重新提到它之上：
+            // 高个子敌人的命中区(≤320px)会一路铺到头顶的意图图标，UGUI 射线取最上层图形，
+            // 意图的 hover(tooltip/抛物线)会被透明命中区整个吃掉。
+            if (IntentionView != null)
+            {
+                IntentionView.transform.SetAsLastSibling();
+            }
         }
 
         /// <summary>

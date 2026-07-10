@@ -155,6 +155,15 @@ namespace Scripts.UI
 
         #region 动画播放
 
+        /// <summary>正在播放的战斗演出数量。每个演出协程入口 +1、SignalAnimationComplete -1。</summary>
+        private int _activeAnimations;
+
+        /// <summary>
+        /// 是否有战斗演出正在播放。ATB 的回合推进用它做闸门：
+        /// 上一个单位的演出没播完，不开下一个单位的回合（保证演出顺序 = 行动顺序）。
+        /// </summary>
+        public bool IsAnimating => _activeAnimations > 0;
+
         /// <summary>
         /// 播放战斗演出动画（使用BattleAnimation组件）
         /// </summary>
@@ -162,6 +171,9 @@ namespace Scripts.UI
         /// <returns>协程</returns>
         public IEnumerator PlayBattleAnimation(CardExecutedEvent evt)
         {
+            _activeAnimations++;
+            Debug.Log($"[BattleAnimationHandler] ▶ 演出开始 {evt.CasterId} → {evt.TargetId} (卡/技能={evt.CardId}, 并发数={_activeAnimations}, t={Time.time:F2})");
+
             // 获取BattleAnimation组件
             if (_battleAnimationRect == null)
             {
@@ -265,6 +277,8 @@ namespace Scripts.UI
         /// <returns>协程</returns>
         public IEnumerator PlayAttackAnimationSequence(AttackExecutedEvent evt)
         {
+            _activeAnimations++;
+
             // 1. 找到攻击者和目标UI对象
             GameObject attackerObj = _unitUIManager.FindUnitObject(evt.AttackerId);
             GameObject targetObj = _unitUIManager.FindUnitObject(evt.TargetId);
@@ -512,10 +526,13 @@ namespace Scripts.UI
         /// </summary>
         private void SignalAnimationComplete()
         {
+            // 每条演出协程的所有出口（含各早退分支）恰好各调用一次本方法，计数在此归还
+            _activeAnimations = Mathf.Max(0, _activeAnimations - 1);
+            Debug.Log($"[BattleAnimationHandler] ■ 演出结束 (剩余并发={_activeAnimations}, t={Time.time:F2})");
+
             if (_battleManager != null)
             {
                 _battleManager.SignalAnimationComplete();
-                Debug.Log("[BattleAnimationHandler] 已发送动画完成信号");
             }
         }
 

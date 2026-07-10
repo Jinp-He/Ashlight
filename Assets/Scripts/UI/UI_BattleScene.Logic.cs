@@ -204,7 +204,33 @@ namespace Scripts.UI
             {
                 ATB.OnUnitTurn += HandleAtbUnitTurn;
                 ATB.OnObjectiveRoundAdvanced += HandleObjectiveRoundAdvanced;
+                // 演出闸门：上一个单位的战斗演出没播完，ATB 不开下一个单位的回合
+                ATB.AnimationBusyPredicate = () => _animationHandler != null && _animationHandler.IsAnimating;
+                // ATB 节点在场景里是隐藏的（旧图标条已弃用），协程借本组件跑——
+                // 否则 TriggerNextUnit 退化为同步一帧跑完，节奏/闸门全部失效。
+                ATB.CoroutineHost = this;
             }
+
+            if (TurnOrderView != null)
+            {
+                // hover 行动顺序卡 → 战场上对应敌人亮选中圈
+                TurnOrderView.OnUnitHover = HandleTurnOrderUnitHover;
+            }
+        }
+
+        /// <summary>
+        /// hover 行动顺序卡的联动：点亮/熄灭战场上对应敌人的 Indicator。
+        /// 玩家单位暂不标记（需求只覆盖敌人）；已死亡/找不到的单位静默忽略。
+        /// </summary>
+        private void HandleTurnOrderUnitHover(string unitId, bool hovering)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+
+            var enemy = FindEnemyByUnitId(unitId);
+            if (enemy == null) return;
+
+            if (hovering) enemy.ShowIndicator();
+            else enemy.HideIndicator();
         }
 
         /// <summary>
@@ -690,9 +716,12 @@ namespace Scripts.UI
         /// </summary>
         private void CreateEnemies()
         {
-            if (EnemyPostion == null)
+            // 与玩家侧同构：有前后排容器则按 RowPosition 分区挂载；
+            // 容器未绑定（如 TestScene）时回退到旧的 EnemyPostion 单容器手动排布。
+            bool hasRowContainers = EnemyFrontRow != null && EnemyBackRow != null;
+            if (!hasRowContainers && EnemyPostion == null)
             {
-                Debug.LogError("[UI_BattleScene] EnemyPostion未绑定");
+                Debug.LogError("[UI_BattleScene] EnemyFrontRow/EnemyBackRow 与 EnemyPostion 均未绑定");
                 return;
             }
 
@@ -702,15 +731,21 @@ namespace Scripts.UI
                 return;
             }
 
+            if (hasRowContainers)
+            {
+                EnsureRowLayout(EnemyFrontRow);
+                EnsureRowLayout(EnemyBackRow);
+            }
+
             var enemyUnits = _battleManager.CurrentState.EnemyUnits;
-            Debug.Log($"[UI_BattleScene] 创建 {enemyUnits.Count} 个敌人UI");
+            Debug.Log($"[UI_BattleScene] 创建 {enemyUnits.Count} 个敌人UI（分区容器={hasRowContainers}）");
 
             for (int i = 0; i < enemyUnits.Count; i++)
             {
                 var unitState = enemyUnits[i];
-                
-                // 实例化Enemy预制体
-                GameObject enemyObj = Instantiate(enemyPrefab, EnemyPostion);
+
+                RectTransform parent = hasRowContainers ? ResolveEnemyRowParent(unitState) : EnemyPostion;
+                GameObject enemyObj = Instantiate(enemyPrefab, parent);
                 Enemy enemy = enemyObj.GetComponent<Enemy>();
 
                 if (enemy == null)
@@ -723,20 +758,43 @@ namespace Scripts.UI
                 // 使用UnitState初始化Enemy
                 enemy.Initialize(unitState);
 
-                // 设置位置（如果有多个敌人，可以排列）
-                RectTransform rectTransform = enemyObj.GetComponent<RectTransform>();
-                if (rectTransform != null && enemyUnits.Count > 1)
+                // 回退路径：单容器时手动水平排列多个敌人
+                if (!hasRowContainers)
                 {
-                    // 水平排列多个敌人
-                    float spacing = 200f; // 敌人之间的间距
-                    float totalWidth = (enemyUnits.Count - 1) * spacing;
-                    float startX = -totalWidth / 2f;
-                    rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
+                    RectTransform rectTransform = enemyObj.GetComponent<RectTransform>();
+                    if (rectTransform != null && enemyUnits.Count > 1)
+                    {
+                        float spacing = 200f; // 敌人之间的间距
+                        float totalWidth = (enemyUnits.Count - 1) * spacing;
+                        float startX = -totalWidth / 2f;
+                        rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
+                    }
                 }
 
                 _unitUIManager.RegisterEnemy(enemy);
-                Debug.Log($"[UI_BattleScene] 创建敌人: {unitState.UnitId} ({unitState.ConfigId})");
+                Debug.Log($"[UI_BattleScene] 创建敌人: {unitState.UnitId} ({unitState.ConfigId}) -> {parent.name}");
             }
+
+            if (hasRowContainers)
+            {
+                RebuildEnemyRowLayout();
+            }
+        }
+
+        /// <summary>按敌人当前前后排返回对应容器：前排→EnemyFrontRow，后排→EnemyBackRow；容器缺失时回退 EnemyPostion。</summary>
+        private RectTransform ResolveEnemyRowParent(UnitState unit)
+        {
+            bool front = unit != null && _battleManager.CurrentState.IsFrontRow(unit);
+            RectTransform target = front ? EnemyFrontRow : EnemyBackRow;
+            return target != null ? target : EnemyPostion;
+        }
+
+        /// <summary>强制立即重建敌方前后排容器（及父级 EnemyPostion）的布局——HLG 加入子物体后需手动触发。</summary>
+        private void RebuildEnemyRowLayout()
+        {
+            if (EnemyFrontRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyFrontRow);
+            if (EnemyBackRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyBackRow);
+            if (EnemyPostion != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyPostion);
         }
 
         /// <summary>
@@ -890,6 +948,16 @@ namespace Scripts.UI
                 // 两个方法都对不存在的 unitId 静默无操作，可安全重复调用。
                 ATB?.RemoveUnitIcon(u.UnitId);
                 TurnOrderView?.RemoveUnit(u.UnitId);
+
+                // 施法者倒下 → 其在轨引线全部作废（规则书：结算前被击倒则取消），图标一并移除。
+                if (u.IsPlayerUnit && _battleManager != null)
+                {
+                    foreach (var castId in _battleManager.CancelPendingCasts(u.UnitId))
+                    {
+                        ATB?.RemoveUnitIcon(castId);
+                        TurnOrderView?.RemoveCast(castId);
+                    }
+                }
 
                 // 移除该单位残留在敌人共享时间轴上的时间槽卡牌（仅敌人会有）。
                 _enemyTimeline?.RemoveEnemyTimeSlotsByOwner(u.UnitId);
@@ -1298,7 +1366,8 @@ namespace Scripts.UI
 
         /// <summary>
         /// 玩家打出执行牌：挂起动作 + 压暗其余执行牌（一回合限一张执行牌）。
-        /// 【原子回合】执行牌不再进入执行轨；其效果在玩家结束回合（EndRoundCoroutine）时统一结算。
+        /// 【真延迟】把引线（BattleManager.LastQueuedCast）作为虚拟单位挂进 ATB 时钟，
+        /// 到 ResolveRound 回合由 ResolveCastAtomicTurn 结算；行动顺序轴上可见卡牌图标。
         /// </summary>
         public void OnPlayerPlayedExecutionCard(CardViewController playedCard, string ownerUnitId)
         {
@@ -1309,6 +1378,15 @@ namespace Scripts.UI
 
             _playerPlayedExecutionCardThisAtbTurn = true;
             ApplyHandExecutionSuppressionExcept(playedCard);
+
+            var cast = _battleManager?.LastQueuedCast;
+            if (cast != null && ATB != null)
+            {
+                string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(cast.Card.Id);
+                ATB.AddCastIcon(cast.CastId, iconPath, cast.ResolveRound);
+                TurnOrderView?.SetCast(cast.CastId, cast.Card);
+                TurnOrderView?.RefreshOrder();
+            }
         }
 
         private void ApplyHandExecutionSuppressionExcept(CardViewController playedCard)
@@ -1699,14 +1777,9 @@ namespace Scripts.UI
                         // 过载次数要在 EndCurrentTurn 之前读取（= 下次行动的额外回合延迟）。
                         int overloadDelay = currentTurnUnit.Overload != null ? currentTurnUnit.Overload.OverloadCountThisTurn : 0;
 
-                        // 【原子回合】结算本回合挂起的执行牌（若有），效果立即发生（不再走执行轨）。
-                        if (_battleManager.HasPendingPlayerExecutionCard(currentTurnUnitId))
-                        {
-                            _battleManager.ExecutePendingPlayerCardAfterExecutionTrack(currentTurnUnitId);
-                            UpdateAllUnitsDisplay();
-                        }
+                        // 【真延迟】执行牌不在回合末结算——引线已挂在 ATB 时钟上，到点走 ResolveCastAtomicTurn。
 
-                        // 【推迟落账】本回合所有卡牌积累的行动推迟统一落到 ATB 调度（含执行牌刚结算的）。
+                        // 【推迟落账】本回合所有卡牌积累的行动推迟统一落到 ATB 调度。
                         ApplyPendingScheduleChanges();
 
                         _playerPlayedExecutionCardThisAtbTurn = false;
@@ -1772,6 +1845,9 @@ namespace Scripts.UI
                 return;
             }
 
+            // 新单位的回合到来 = 上一个单位的演出已被 ATB 闸门等完 → 解冻顺序条，恢复实时刷新。
+            TurnOrderView?.UnfreezeOrder();
+
             // 【死亡/结束保护】战斗已结束：不再开启回合。
             if (_battleManager.CurrentState.IsBattleEnded)
             {
@@ -1788,6 +1864,21 @@ namespace Scripts.UI
                 try
                 {
                     ResolveWeatherAtomicTurn();
+                }
+                finally
+                {
+                    _isProcessingAtbTurn = false;
+                }
+                return;
+            }
+
+            // 【引线虚拟单位】轮到玩家在轨执行牌结算（同天气：无 UnitState，必须在死亡保护之前拦截）。
+            if (unitId.StartsWith(Ashlight.Battle.BattleManager.CastIdPrefix, System.StringComparison.Ordinal))
+            {
+                _isProcessingAtbTurn = true;
+                try
+                {
+                    ResolveCastAtomicTurn(unitId);
                 }
                 finally
                 {
@@ -1880,6 +1971,41 @@ namespace Scripts.UI
             ATB.Reschedule(ATB.WeatherUnitId, weather.Period, 0);
         }
 
+        /// <summary>
+        /// 引线的原子回合：玩家在轨执行牌到点结算（真延迟，见规则书 §3 / docs/卡组设计_法师战士主主题.md）。
+        /// 施法者已倒下则引线作废（规则书：结算前被击倒则取消）。结算完移除图标，
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，移除后循环自动继续。
+        /// </summary>
+        private void ResolveCastAtomicTurn(string castId)
+        {
+            // 【条子与演出同步】同敌人回合：结算会立刻移除引线图标/卡片，先冻结快照，
+            // 让引线卡在自己的结算演出期间仍显示在条头；下一回合开头解冻。
+            TurnOrderView?.FreezeOrder();
+
+            // 结算前同步调度镜像：引线卡的效果可能读「当前回合」（如条件伤害）。
+            ATB?.SyncScheduleToState(_battleManager.CurrentState);
+
+            bool resolved = _battleManager.ResolvePendingCast(castId);
+
+            // 图标与行动顺序卡一并移除（引线一次性）。
+            ATB?.RemoveUnitIcon(castId);
+            TurnOrderView?.RemoveCast(castId);
+
+            if (resolved)
+            {
+                UpdateAllUnitsDisplay();
+                // 引线效果可能带推迟/提前（如凝滞领域、冰封领域），立即落账到调度。
+                ApplyPendingScheduleChanges();
+            }
+
+            Debug.Log($"[UI_BattleScene] 引线结算{(resolved ? "完成" : "作废")}: {castId} (公共回合 {ATB?.CurrentRound})");
+
+            if (_battleManager.CurrentState != null && _battleManager.CurrentState.IsBattleEnded)
+            {
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+            }
+        }
+
         /// <summary>本场的天气 HUD（常驻角标 + 开场横幅）。新战斗初始化时销毁重建。</summary>
         private WeatherHud _weatherHud;
 
@@ -1924,6 +2050,15 @@ namespace Scripts.UI
         /// </summary>
         private void ResolveEnemyAtomicTurn(string unitId, UnitState enemyUnit)
         {
+            // 【高亮与演出同步】回合一开始就点亮该敌人（金框），且结算后不清除——
+            // 它的攻击演出还在异步播放，ATB 会等演出结束才开下一个单位的回合，
+            // 届时由下一个单位（玩家/敌人）的回合开头覆盖高亮。
+            TurnOrderView?.SetActiveUnit(unitId);
+
+            // 【条子与演出同步】结算马上会同步 Reschedule（条头瞬间翻页成后续单位）——
+            // 先冻结顺序条快照（此刻该敌人在条头），演出期间条子保持不动；下一回合开头解冻。
+            TurnOrderView?.FreezeOrder();
+
             // 【晕眩】带 Stun buff 的敌人跳过本次行动：扣 1 层、照常重排，预告的意图保留到下次。
             var stun = enemyUnit.GetBuff("Stun");
             if (stun != null)
@@ -1941,7 +2076,6 @@ namespace Scripts.UI
 
                 Debug.Log($"[UI_BattleScene] {unitId} 晕眩中，跳过本次行动 (剩余 {Mathf.Max(0, Mathf.RoundToInt(stun.Value))} 回合)");
 
-                TurnOrderView?.SetActiveUnit(null);
                 UpdateAllUnitsDisplay();
                 if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, 0);
                 if (!_battleManager.HasPendingEnemyIntent(unitId))
@@ -1974,7 +2108,7 @@ namespace Scripts.UI
             // 【推迟落账】敌技若带推迟效果（推玩家），在此落到 ATB 调度。
             ApplyPendingScheduleChanges();
 
-            TurnOrderView?.SetActiveUnit(null);
+            // 注意：不在此清除 SetActiveUnit —— 演出还在播，高亮保持到下一个单位的回合开头被覆盖。
             TurnOrderView?.SetExecuting(unitId, false);
             UpdateAllUnitsDisplay();
             UpdateEnergyBarByUnitId(unitId);

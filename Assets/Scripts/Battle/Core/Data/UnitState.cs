@@ -58,6 +58,12 @@ namespace Ashlight.Battle.Core.Data
         public bool IsPlayerUnit { get; set; }
 
         /// <summary>
+        /// 是否精英/Boss 档敌人（来自 EnemyInfo.IsElite）。
+        /// 仅精英在被打断时叠 [坚毅](Resolve)——杂兵随便断，压迫感长在精英身上。
+        /// </summary>
+        public bool IsElite { get; set; }
+
+        /// <summary>
         /// 角色/敌人配置ID（用于获取基础属性）
         /// </summary>
         public string ConfigId { get; set; }
@@ -323,6 +329,15 @@ namespace Ashlight.Battle.Core.Data
             if (CurrentPhase == EnemyPhase.None) return;
 
             Debug.Log($"[UnitState] {UnitId} 被 [{source}] 打断 (原阶段={CurrentPhase}, 技能={PendingSkillId})");
+
+            // 精英被断 → 永久 +1 层 [坚毅](Resolve)：下次施法的打断阈值提高（结算在挂 Stagger/Block 时）。
+            // 打断本身全额生效（技能作废），坚毅只涨"下一次"的价钱——打断从可再生答案变成消耗品。
+            if (!IsPlayerUnit && IsElite)
+            {
+                AddBuff(new BuffState { BuffId = "Resolve", Value = 1, RemainingDuration = -1 });
+                Debug.Log($"[UnitState] {UnitId} 因被打断叠加坚毅，当前 {GetBuff("Resolve")?.Value ?? 0} 层");
+            }
+
             CurrentPhase = EnemyPhase.None;
             IntentAxisLength = 0;
             IntentAxisProgress = 0;
@@ -530,6 +545,7 @@ namespace Ashlight.Battle.Core.Data
                 Defense = this.Defense,
                 IsDead = this.IsDead,
                 IsPlayerUnit = this.IsPlayerUnit,
+                IsElite = this.IsElite,
                 ConfigId = this.ConfigId,
                 Speed = this.Speed,
                 BaseEnergy = this.BaseEnergy,

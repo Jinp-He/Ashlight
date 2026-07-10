@@ -300,6 +300,9 @@ namespace Scripts.UI
                 case DefenseEffect defenseEffect:
                     return defenseEffect.Value.ToString();
 
+                case DefenseConditionalEffect defenseConditionalEffect:
+                    return defenseConditionalEffect.Value.ToString();
+
                 case InterceptEffect interceptEffect:
                     return interceptEffect.ShieldValue.ToString();
 
@@ -316,6 +319,32 @@ namespace Scripts.UI
                     // 整数显示为整数，非整数保留一位小数
                     float bv = buffEffect.Value;
                     return (bv == Mathf.Floor(bv)) ? ((int)bv).ToString() : bv.ToString("0.#");
+
+                case BuffConditionalEffect buffConditionalEffect:
+                    float bcv = buffConditionalEffect.Value;
+                    return (bcv == Mathf.Floor(bcv)) ? ((int)bcv).ToString() : bcv.ToString("0.#");
+
+                case BuffPerCurrentRoundEnemyEffect buffPerRoundEffect:
+                    float bpv = buffPerRoundEffect.Value;
+                    return (bpv == Mathf.Floor(bpv)) ? ((int)bpv).ToString() : bpv.ToString("0.#");
+
+                case AttackCurrentRoundEffect attackCurrentRoundEffect:
+                    return attackCurrentRoundEffect.Damage.ToString();
+
+                case OnMoveDamageEffect onMoveDamageEffect:
+                    return onMoveDamageEffect.Damage.ToString();
+
+                case OnMoveAddCardEffect onMoveAddCardEffect:
+                    return onMoveAddCardEffect.Count.ToString();
+
+                case AddToHandEffect addToHandEffect:
+                    return addToHandEffect.Count.ToString();
+
+                case StunCurrentRoundEffect stunCurrentRoundEffect:
+                    return stunCurrentRoundEffect.Duration.ToString();
+
+                case EnergyEffect energyEffect:
+                    return energyEffect.Value.ToString();
 
                 case DrawEffect drawEffect:
                     return drawEffect.Count.ToString();

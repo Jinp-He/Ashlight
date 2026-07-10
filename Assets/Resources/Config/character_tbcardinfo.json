@@ -21,7 +21,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket002",
@@ -46,7 +47,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket003",
@@ -76,7 +78,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket004",
@@ -106,7 +109,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket005",
@@ -130,7 +134,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket006",
@@ -159,7 +164,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket007",
@@ -182,7 +188,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket008",
@@ -205,7 +212,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene001",
@@ -229,7 +237,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene002",
@@ -253,7 +262,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 0,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene003",
@@ -277,7 +287,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene004",
@@ -300,7 +311,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene005",
@@ -324,7 +336,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene006",
@@ -353,7 +366,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 0,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene007",
@@ -383,7 +397,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene008",
@@ -412,7 +427,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene009",
@@ -437,7 +453,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene010",
@@ -466,7 +483,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene011",
@@ -496,7 +514,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene012",
@@ -521,7 +540,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene013",
@@ -545,7 +565,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene014",
@@ -569,7 +590,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene015",
@@ -599,7 +621,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene016",
@@ -622,7 +645,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene017",
@@ -655,7 +679,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene018",
@@ -678,7 +703,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene019",
@@ -708,7 +734,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene020",
@@ -732,7 +759,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene021",
@@ -756,7 +784,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene022",
@@ -780,7 +809,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene023",
@@ -805,7 +835,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou002",
@@ -829,7 +860,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou001",
@@ -853,7 +885,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou003",
@@ -884,7 +917,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou004",
@@ -913,7 +947,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou005",
@@ -943,7 +978,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou006",
@@ -972,7 +1008,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou007",
@@ -1007,7 +1044,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou008",
@@ -1036,7 +1074,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou009",
@@ -1077,7 +1116,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou010",
@@ -1101,7 +1141,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 1
+    "CastZone": 1,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou011",
@@ -1128,7 +1169,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou012",
@@ -1151,7 +1193,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou013",
@@ -1174,7 +1217,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou014",
@@ -1198,7 +1242,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou015",
@@ -1220,7 +1265,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou016",
@@ -1244,7 +1290,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou017",
@@ -1273,7 +1320,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 1,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou018",
@@ -1297,7 +1345,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou019",
@@ -1330,7 +1379,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou020",
@@ -1354,7 +1404,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket010",
@@ -1384,7 +1435,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket011",
@@ -1414,7 +1466,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket012",
@@ -1438,7 +1491,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket013",
@@ -1467,7 +1521,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket014",
@@ -1497,7 +1552,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket015",
@@ -1526,7 +1582,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket016",
@@ -1555,7 +1612,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket017",
@@ -1579,7 +1637,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket018",
@@ -1608,7 +1667,8 @@
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Irene000",
@@ -1631,7 +1691,8 @@
     "IsEthereal": true,
     "IsExhaust": true,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Rocket000",
@@ -1654,7 +1715,8 @@
     "IsEthereal": true,
     "IsExhaust": true,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Zhouzhou000",
@@ -1677,7 +1739,8 @@
     "IsEthereal": true,
     "IsExhaust": true,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   },
   {
     "Id": "Extra001",
@@ -1707,6 +1770,7 @@
     "IsEthereal": false,
     "IsExhaust": true,
     "TargetZone": 2,
-    "CastZone": 2
+    "CastZone": 2,
+    "IsInUpgrade": true
   }
 ]

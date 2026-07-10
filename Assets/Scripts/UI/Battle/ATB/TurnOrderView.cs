@@ -78,7 +78,16 @@ namespace Scripts.UI
         /// <summary>本场天气（null = 无天气）。天气条目由 ATB 的虚拟单位提供，这里只负责渲染天气卡 + hover 说明。</summary>
         private cfg.WeatherInfo _weather;
 
+        /// <summary>在轨引线（castId → 卡牌配置）。引线条目由 ATB 的虚拟单位提供，这里只负责渲染卡牌图。</summary>
+        private readonly Dictionary<string, cfg.Character.CardInfo> _casts = new Dictionary<string, cfg.Character.CardInfo>();
+
         private string _activeUnitId;
+
+        /// <summary>冻结期间渲染的顺序快照（null = 未冻结，每帧从 ATB 实时读取）。</summary>
+        private List<ATB.TurnOrderEntry> _frozenOrder;
+
+        /// <summary>hover 行动卡时通知 (unitId, hovering)。由 UI_BattleScene 注入，用于联动战场上的选中标记。</summary>
+        public System.Action<string, bool> OnUnitHover;
 
         /// <summary>共享的技能说明 tooltip（所有卡片共用一个，hover 时显示）。</summary>
         private DescriptionViewController _skillTooltip;
@@ -123,7 +132,9 @@ namespace Scripts.UI
         {
             _unitInfo.Clear();
             _intents.Clear();
+            _casts.Clear();
             _activeUnitId = null;
+            _frozenOrder = null;
             _weather = null; // 新战斗默认无天气，由 SetWeather 重新注入
 
             RegisterUnits(playerUnits, true);
@@ -148,10 +159,42 @@ namespace Scripts.UI
             _activeUnitId = unitId;
         }
 
+        /// <summary>
+        /// 冻结顺序条：立刻快照当前 ATB 顺序，此后 RefreshOrder 一律渲染这份快照。
+        /// 用于原子回合结算：逻辑层同步 Reschedule 会让该单位的条目瞬间跳去未来回合、
+        /// 条头翻页成后续单位——但演出还没播。冻结让条子在演出期间保持
+        /// 「行动者仍在条头 + 金框」的画面；下一个单位回合开始时解冻。
+        /// </summary>
+        public void FreezeOrder()
+        {
+            if (atb == null) return;
+            _frozenOrder = atb.GetTurnOrderWithFuture(Mathf.Max(1, windowSize));
+        }
+
+        /// <summary>解冻顺序条：恢复每帧从 ATB 读取实时顺序。</summary>
+        public void UnfreezeOrder()
+        {
+            _frozenOrder = null;
+        }
+
         /// <summary>注入本场天气（在 ATB.AddWeatherIcon 之后调用）。传 null 清除。</summary>
         public void SetWeather(cfg.WeatherInfo weather)
         {
             _weather = weather;
+        }
+
+        /// <summary>登记一条在轨引线（在 ATB.AddCastIcon 之后调用），其行动格用卡牌图渲染。</summary>
+        public void SetCast(string castId, cfg.Character.CardInfo card)
+        {
+            if (string.IsNullOrEmpty(castId) || card == null) return;
+            _casts[castId] = card;
+        }
+
+        /// <summary>引线结算/作废：移除登记（其卡片在下一次 RefreshOrder 自动消失）。</summary>
+        public void RemoveCast(string castId)
+        {
+            if (string.IsNullOrEmpty(castId)) return;
+            _casts.Remove(castId);
         }
 
         /// <summary>
@@ -183,7 +226,8 @@ namespace Scripts.UI
         {
             if (atb == null || cardsContainer == null) return;
 
-            var order = atb.GetTurnOrderWithFuture(Mathf.Max(1, windowSize));
+            // 冻结期间渲染快照（演出与条子同步）；未冻结时实时读 ATB。
+            var order = _frozenOrder ?? atb.GetTurnOrderWithFuture(Mathf.Max(1, windowSize));
 
             int sibling = 0;   // 当前分配的 sibling index
             int sepUsed = 0;   // 已使用的分隔条数量
@@ -196,12 +240,18 @@ namespace Scripts.UI
             {
                 var entry = order[i];
 
-                // 天气条目（虚拟单位）不查单位登记表，用天气卡渲染；普通条目查不到=已死亡/未登记。
+                // 天气/引线条目（虚拟单位）不查单位登记表，各自用专用渲染；普通条目查不到=已死亡/未登记。
                 bool isWeatherEntry = entry.IsWeather;
+                bool isCastEntry = entry.IsCast;
+                cfg.Character.CardInfo castCard = null;
                 UnitInfo info = default;
                 if (isWeatherEntry)
                 {
                     if (_weather == null) continue;
+                }
+                else if (isCastEntry)
+                {
+                    if (!_casts.TryGetValue(entry.UnitId, out castCard) || castCard == null) continue;
                 }
                 else if (!_unitInfo.TryGetValue(entry.UnitId, out info))
                 {
@@ -228,6 +278,8 @@ namespace Scripts.UI
                 {
                     if (isWeatherEntry)
                         slot.Card.SetupWeather(_weather);
+                    else if (isCastEntry)
+                        slot.Card.SetupCast(castCard);
                     else
                         slot.Card.Setup(info.ConfigId, info.IsPlayer);
                     slot.UnitId = entry.UnitId;
@@ -237,16 +289,20 @@ namespace Scripts.UI
                 if (!go.activeSelf) go.SetActive(true);
                 slot.Card.transform.SetSiblingIndex(sibling++);
 
-                // 金框高亮：当前行动单位的第一张卡（天气卡不高亮）。
-                bool highlight = !isWeatherEntry && !activeShown && entry.UnitId == _activeUnitId;
+                // 金框高亮：当前行动单位的第一张卡（天气/引线卡不高亮）。
+                bool highlight = !isWeatherEntry && !isCastEntry && !activeShown && entry.UnitId == _activeUnitId;
                 slot.Card.SetHighlight(highlight);
                 if (highlight) activeShown = true;
 
                 // 天气卡 hover 显示天气说明；普通卡清除天气引用（卡槽是复用的）。
                 slot.Card.SetWeatherInfo(isWeatherEntry ? _weather : null, _skillTooltip);
 
+                // hover 联动战场选中标记（天气/引线虚拟单位不联动）。
+                slot.Card.SetHoverUnit(isWeatherEntry || isCastEntry ? null : entry.UnitId, OnUnitHover);
+
                 // 敌人意图：标在该敌人最近一张卡上（其余卡不显示）。
                 bool showIntent = !isWeatherEntry
+                                  && !isCastEntry
                                   && !info.IsPlayer
                                   && !intentShownFor.Contains(entry.UnitId)
                                   && _intents.TryGetValue(entry.UnitId, out var skill)

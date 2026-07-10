@@ -236,5 +236,14 @@
     "DefaultDuration": -1,
     "MaxStack": 99,
     "RefreshOnReapply": false
+  },
+  {
+    "Id": "Resolve",
+    "Name": "坚毅",
+    "Description": "被打断后意志愈发坚定：每层使打断阈值提高 50%，当前 {V} 层",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
   }
 ]

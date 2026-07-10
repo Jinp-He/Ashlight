@@ -6,7 +6,7 @@ namespace Ashlight.Systems.Card
 {
     /// <summary>
     /// 胜利后「升级三选一卡牌」的候选筛选服务。
-    /// 从 TbCardInfo 中按「从属角色 / 未锁定」过滤，随机抽取若干张供玩家加入卡组。
+    /// 从 TbCardInfo 中按「从属角色 / 未锁定 / IsInUpgrade」过滤，随机抽取若干张供玩家加入卡组。
     /// 与 <see cref="Ashlight.Systems.Upgrade.UpgradeSelectionService"/> 同构。
     /// </summary>
     public static class CardRewardSelectionService
@@ -35,6 +35,7 @@ namespace Ashlight.Systems.Card
                 if (card == null) continue;
                 if (card.BelongTo != character) continue;
                 if (card.IsLocked) continue;
+                if (!card.IsInUpgrade) continue;   // 仅纳入被标记为可升级三选一的卡牌
                 pool.Add(card);
             }
 

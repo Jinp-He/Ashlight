@@ -24,6 +24,9 @@ namespace Scripts.UI
         private DescriptionViewController _tooltip;
         // 天气卡：本卡当前承载的天气（hover 显示天气说明）；与 _executingSkill 互斥
         private cfg.WeatherInfo _weatherInfo;
+        // hover 联动：本卡承载的单位 + 通知回调（TurnOrderView 注入）——用于点亮战场上对应单位的选中标记
+        private string _hoverUnitId;
+        private System.Action<string, bool> _onHoverUnit;
 
         #region Unity 生命周期
 
@@ -72,19 +75,30 @@ namespace Scripts.UI
 
             // 优先：行动顺序专用图标（Assets/Resources/UI/ActionOrder/Img_{iconId}）
             var sprite = Resources.Load<Sprite>(Ashlight.Common.Utils.AssetPath.GetActionOrderIconPath(iconId));
-            // 回退：旧的角色/敌人通用图标（时间轴文件夹尚未就位时不至于空图）
-            if (sprite == null) sprite = LoadUnitIconSprite(configId, isPlayer);
+            // 回退：角色/敌人通用图标——敌人的资源文件夹按美术名（AlternativePath）组织，先试美术名再试 configId
+            if (sprite == null) sprite = LoadUnitIconSprite(iconId, isPlayer);
+            if (sprite == null && iconId != configId) sprite = LoadUnitIconSprite(configId, isPlayer);
 
             if (sprite != null)
             {
                 dyn.sprite = sprite;
                 dyn.color = Color.white;
+                dyn.gameObject.SetActive(true);
             }
             else
             {
-                Debug.LogWarning($"[UI_行动顺序] 未找到单位图标: UI/ActionOrder/Img_{iconId}（也无回退图，configId={configId}, isPlayer={isPlayer}）");
+                // 找不到任何图：绝不能带着池化复用残留的旧 sprite 激活（会显示成上一个单位），
+                // 降级为显示单位名文字（与天气/引线缺图时的处理一致）。
+                Debug.LogWarning($"[UI_行动顺序] 未找到单位图标: UI/ActionOrder/Img_{iconId}（configId={configId}, isPlayer={isPlayer}），降级为文字");
+                dyn.sprite = null;
+                dyn.gameObject.SetActive(false);
+                var txt = EnsureDynamicText();
+                if (txt != null)
+                {
+                    txt.text = ResolveDisplayName(configId, isPlayer);
+                    txt.gameObject.SetActive(true);
+                }
             }
-            dyn.gameObject.SetActive(true);
         }
 
         /// <summary>兼容旧调用：默认按敌人处理（保留以防外部旧引用）。</summary>
@@ -121,6 +135,40 @@ namespace Scripts.UI
                 var txt = EnsureDynamicText();
                 if (txt == null) return;
                 txt.text = weather.Name;
+                txt.gameObject.SetActive(true);
+            }
+        }
+
+        /// <summary>
+        /// 按在轨引线渲染本卡（玩家执行牌的结算格）：图标用卡牌 MiniSprite；
+        /// 缺图降级为显示卡牌名文字。hover 说明暂无（后续可加卡牌 tooltip）。
+        /// </summary>
+        public void SetupCast(cfg.Character.CardInfo card)
+        {
+            if (UnitsPiece == null || card == null)
+            {
+                return;
+            }
+
+            foreach (Transform child in UnitsPiece.transform)
+                child.gameObject.SetActive(false);
+
+            var sprite = Resources.Load<Sprite>(
+                Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(card.Id).Replace('\\', '/'));
+
+            if (sprite != null)
+            {
+                var dyn = EnsureDynamicImage();
+                if (dyn == null) return;
+                dyn.sprite = sprite;
+                dyn.color = Color.white;
+                dyn.gameObject.SetActive(true);
+            }
+            else
+            {
+                var txt = EnsureDynamicText();
+                if (txt == null) return;
+                txt.text = card.Name;
                 txt.gameObject.SetActive(true);
             }
         }
@@ -183,6 +231,17 @@ namespace Scripts.UI
             return configId;
         }
 
+        /// <summary>缺图降级文字：敌人取表里的 Name，玩家/查不到时用 configId。</summary>
+        private static string ResolveDisplayName(string configId, bool isPlayer)
+        {
+            if (!isPlayer)
+            {
+                var info = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(configId);
+                if (info != null && !string.IsNullOrEmpty(info.Name)) return info.Name;
+            }
+            return configId;
+        }
+
         /// <summary>回退图标：按玩家/敌人取通用 Icon（Resources 路径统一转正斜杠）。</summary>
         private static Sprite LoadUnitIconSprite(string configId, bool isPlayer)
         {
@@ -235,12 +294,26 @@ namespace Scripts.UI
                 _tooltip = tooltip;
         }
 
+        /// <summary>
+        /// 设置本卡承载的单位与 hover 通知回调（天气/引线卡传 null unitId）。
+        /// hover 进入/离开时回调 (unitId, hovering)，由 UI_BattleScene 联动战场选中标记。
+        /// </summary>
+        public void SetHoverUnit(string unitId, System.Action<string, bool> callback)
+        {
+            _hoverUnitId = unitId;
+            _onHoverUnit = callback;
+        }
+
         #endregion
 
         #region Tooltip（悬停显示执行技能说明）
 
         public void OnPointerEnter(PointerEventData eventData)
         {
+            // 战场联动：不管有没有 tooltip 都要点亮对应单位的选中标记
+            if (!string.IsNullOrEmpty(_hoverUnitId))
+                _onHoverUnit?.Invoke(_hoverUnitId, true);
+
             if (_tooltip == null) return;
 
             // 天气卡：hover 显示天气说明（与技能说明互斥，天气优先）。
@@ -258,6 +331,9 @@ namespace Scripts.UI
 
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (!string.IsNullOrEmpty(_hoverUnitId))
+                _onHoverUnit?.Invoke(_hoverUnitId, false);
+
             if (_tooltip != null) _tooltip.Hide();
         }
 
