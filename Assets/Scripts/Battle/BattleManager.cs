@@ -1120,6 +1120,21 @@ namespace Ashlight.Battle
         }
 
         /// <summary>
+        /// 结算指定单位「回合开始」的持续性 Buff（中毒/燃烧/再生）：掉血/回血 + 数值衰减。
+        /// ATB 原子回合起点调用（当前用于敌人回合开始，见 ResolveEnemyAtomicTurn）。
+        /// </summary>
+        /// <returns>该单位是否在结算后死亡（调用方据此中止其本回合后续行动）。</returns>
+        public bool ProcessTurnStartBuffs(string unitId)
+        {
+            var unit = CurrentState?.GetUnitById(unitId);
+            if (unit == null || unit.IsDead) return false;
+
+            TurnResolver.ProcessTurnStartBuffs(CurrentState, unit);
+            CurrentState.CheckBattleEnd();
+            return unit.IsDead;
+        }
+
+        /// <summary>
         /// 敌人ATB到达行动点后：选定技能，进入意图轴
         /// 替代旧的 TryPrepareEnemyIntentAfterPlanning + 等待执行轨 的流程
         /// </summary>

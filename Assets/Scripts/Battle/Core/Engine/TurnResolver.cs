@@ -118,6 +118,17 @@ namespace Ashlight.Battle.Core.Engine
         private void OnTurnStart(BattleStateSnapshot state, UnitState unit)
         {
             Debug.Log($"[TurnResolver] {unit.UnitId} 回合开始效果处理");
+            ProcessTurnStartBuffs(state, unit);
+        }
+
+        /// <summary>
+        /// 结算单个单位「回合开始」的持续性 Buff（中毒/燃烧/再生）：掉血/回血 + 数值衰减。
+        /// ATB 原子回合改造后，回合开始不再统一走 <see cref="ExecuteTurn"/>（该入口现仅供预解算模拟），
+        /// 实战改由各单位在自己回合起点显式调用本方法（当前：敌人的 ResolveEnemyAtomicTurn）。
+        /// </summary>
+        public void ProcessTurnStartBuffs(BattleStateSnapshot state, UnitState unit)
+        {
+            if (state == null || unit == null || unit.IsDead) return;
 
             // 触发回合开始 Buff 效果（如中毒、再生等）
             var buffsToProcess = new List<BuffState>(unit.Buffs);

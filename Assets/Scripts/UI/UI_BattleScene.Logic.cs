@@ -2059,6 +2059,18 @@ namespace Scripts.UI
             // 先冻结顺序条快照（此刻该敌人在条头），演出期间条子保持不动；下一回合开头解冻。
             TurnOrderView?.FreezeOrder();
 
+            // 【回合开始持续伤害】中毒/燃烧等在该敌人自己的原子回合开始结算：掉血 + 数值衰减 1（中毒 V→V-1，归零移除）。
+            // 放在最前（晕眩之前）——持续伤害不因晕眩而停。毒发身亡则中止本回合后续行动：
+            // UpdateAllUnitsDisplay 会播死亡演出并把它从 ATB/顺序条移除，ATB 循环自动继续下一单位（无需重排）。
+            if (_battleManager.ProcessTurnStartBuffs(unitId))
+            {
+                UpdateAllUnitsDisplay();
+                if (_battleManager.CurrentState.IsBattleEnded && ATB != null)
+                    ATB.AutoAdvanceSuspended = true;
+                return;
+            }
+            UpdateAllUnitsDisplay(); // 未死也刷新血条/buff 图标，反映本次掉血与衰减
+
             // 【晕眩】带 Stun buff 的敌人跳过本次行动：扣 1 层、照常重排，预告的意图保留到下次。
             var stun = enemyUnit.GetBuff("Stun");
             if (stun != null)
