@@ -31,6 +31,12 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
+            if (mover.HasBuff("Root"))
+            {
+                Debug.Log($"[MovePositionCommand] {moverId} 处于定身状态，无法移动");
+                return;
+            }
+
             var before = mover.RowPosition;
             var dest = ResolveDestination(Mode, before);
             if (dest == before)
@@ -52,7 +58,7 @@ namespace Ashlight.Battle.Core.Commands
             });
 
             // 回合内移动触发器（铁蒺藜/隧穿效应）：任何单位完成移动都触发一次
-            Engine.MoveTriggerProcessor.OnUnitMoved(state, mover);
+            Engine.MoveTriggerProcessor.OnUnitMoved(state, mover, ownerId);
         }
 
         /// <summary>把 Mode 解析成目标区：FrontRow/BackRow 指定去向；Toggle 或空/未知则相对当前翻转。</summary>

@@ -108,6 +108,13 @@ AI 必须先建立以下字典，再解析业务表单元格：
   - `ChannelEffect`
   - `TauntEffect`
   - `BuffEffect`
+  - `CastShiftEffect` / `CastShiftAllEffect`
+  - `CastDamageBonusEffect`
+  - `CastResolveDrawEffect` / `CastResolveBuffEffect`
+  - `CastImmediateEffect` / `CastEchoEffect`
+  - `WeatherConditionalAttackEffect` / `DelayScaledAttackEffect`
+  - `WeatherSyncEnergyEffect` / `AlignToWeatherEffect`
+  - `WeatherGuardEffect` / `WeatherShiftEffect`
 
 ### 6.2 结构引用（ref）关系
 

@@ -80,6 +80,8 @@ namespace Scripts.UI
 
         /// <summary>在轨引线（castId → 卡牌配置）。引线条目由 ATB 的虚拟单位提供，这里只负责渲染卡牌图。</summary>
         private readonly Dictionary<string, cfg.Character.CardInfo> _casts = new Dictionary<string, cfg.Character.CardInfo>();
+        private readonly HashSet<string> _selectableCastIds = new HashSet<string>();
+        private System.Action<string> _onCastSelected;
 
         private string _activeUnitId;
 
@@ -133,6 +135,7 @@ namespace Scripts.UI
             _unitInfo.Clear();
             _intents.Clear();
             _casts.Clear();
+            EndCastSelection();
             _activeUnitId = null;
             _frozenOrder = null;
             _weather = null; // 新战斗默认无天气，由 SetWeather 重新注入
@@ -195,6 +198,33 @@ namespace Scripts.UI
         {
             if (string.IsNullOrEmpty(castId)) return;
             _casts.Remove(castId);
+        }
+
+        /// <summary>进入执行牌目标选择；只有 allowedCastIds 中的引线会显示金框并响应点击。</summary>
+        public bool BeginCastSelection(IEnumerable<string> allowedCastIds, System.Action<string> onSelected)
+        {
+            _selectableCastIds.Clear();
+            if (allowedCastIds != null)
+            {
+                foreach (string id in allowedCastIds)
+                    if (!string.IsNullOrEmpty(id) && _casts.ContainsKey(id)) _selectableCastIds.Add(id);
+            }
+            _onCastSelected = onSelected;
+            RefreshOrder();
+            return _selectableCastIds.Count > 0;
+        }
+
+        public void EndCastSelection()
+        {
+            _selectableCastIds.Clear();
+            _onCastSelected = null;
+            if (isActiveAndEnabled) RefreshOrder();
+        }
+
+        private void SelectCast(string castId)
+        {
+            if (string.IsNullOrEmpty(castId) || !_selectableCastIds.Contains(castId)) return;
+            _onCastSelected?.Invoke(castId);
         }
 
         /// <summary>
@@ -291,8 +321,10 @@ namespace Scripts.UI
 
                 // 金框高亮：当前行动单位的第一张卡（天气/引线卡不高亮）。
                 bool highlight = !isWeatherEntry && !isCastEntry && !activeShown && entry.UnitId == _activeUnitId;
-                slot.Card.SetHighlight(highlight);
+                bool selectableCast = isCastEntry && _selectableCastIds.Contains(entry.UnitId);
+                slot.Card.SetHighlight(highlight || selectableCast);
                 if (highlight) activeShown = true;
+                slot.Card.SetCastSelection(entry.UnitId, selectableCast, SelectCast);
 
                 // 天气卡 hover 显示天气说明；普通卡清除天气引用（卡槽是复用的）。
                 slot.Card.SetWeatherInfo(isWeatherEntry ? _weather : null, _skillTooltip);
@@ -359,6 +391,7 @@ namespace Scripts.UI
                 var slot = _slots[i];
                 if (slot?.Card == null) continue;
                 if (slot.Card.gameObject.activeSelf) slot.Card.gameObject.SetActive(false);
+                slot.Card.SetCastSelection(null, false, null);
                 slot.UnitId = null; // 复用前清掉承载单位，下次强制 Setup
             }
         }

@@ -33,7 +33,7 @@ namespace Scripts.UI
 
         [Header("下一关配置")]
         [SerializeField, Tooltip("点击继续后加载的遭遇战 ID（在 Excel 的 Encounter 表里先配好）")]
-        private string nextEncounterId = "E002";
+        private string nextEncounterId = "M102";
 
         [SerializeField, Tooltip("战斗场景名，用于 SceneManager.LoadScene")]
         private string battleSceneName = "BattleScene";
@@ -66,6 +66,11 @@ namespace Scripts.UI
         #endregion
 
         #region 公共方法
+
+        public void SetNextEncounterId(string encounterId)
+        {
+            nextEncounterId = encounterId;
+        }
 
         /// <summary>
         /// 打开胜利面板并播放演出：标题从右滑入 + 按钮缓缓淡入。
@@ -159,6 +164,12 @@ namespace Scripts.UI
 
         private void OnNextBattleClicked()
         {
+            if (string.IsNullOrEmpty(nextEncounterId))
+            {
+                Debug.LogWarning("[WinPanel] 未配置下一关 EncounterId，保持在结算界面");
+                return;
+            }
+
             // 记录下一关 EncounterId，新的 BattleScene 启动时会读取并消费
             BattleManager.PendingEncounterId = nextEncounterId;
             Debug.Log($"[WinPanel] 继续：加载下一关 EncounterId={nextEncounterId}, Scene={battleSceneName}");

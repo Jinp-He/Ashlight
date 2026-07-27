@@ -1,4 +1,5 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
 using cfg;
 using UnityEngine;
@@ -35,6 +36,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
         {
+            state.LastDamageHitCount = 0;
             var owner = state.GetUnitById(ownerId);
             if (owner == null || owner.IsDead)
             {
@@ -71,7 +73,9 @@ namespace Ashlight.Battle.Core.Commands
 
             var attacker = state.GetUnitById(ownerId);
             int adjustedDamage = ApplyAttackerModifiers(attacker, Damage);
+            state.LastDamageHitCount = 1;
             int actualDamage = target.TakeDamage(adjustedDamage);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
             Debug.Log($"[DamageCommand] {targetId} 受到 {actualDamage} 点伤害 (基础: {Damage}, 攻方修正后: {adjustedDamage})");
 
             // 发布攻击执行事件，用于触发动画
@@ -98,12 +102,14 @@ namespace Ashlight.Battle.Core.Commands
             // 分区过滤：AllEnemy+Front 只扫前区，+Back 只扫后区；Any 不过滤。
             // strict：目标区空排时只打区内剩余单位、不回退全体（与「空排 miss」口径一致）。
             targets = ZoneTargeting.FilterByZone(state, targets, TargetZone, strict: true);
+            state.LastDamageHitCount = targets.Count;
 
             int adjustedDamage = ApplyAttackerModifiers(owner, Damage);
 
             foreach (var target in targets)
             {
                 int actualDamage = target.TakeDamage(adjustedDamage);
+                ArmorBreakMoveProcessor.ResolvePending(state, target);
                 Debug.Log($"[DamageCommand] AOE: {target.UnitId} 受到 {actualDamage} 点伤害");
 
                 // 发布攻击执行事件（每个目标单独发布）
@@ -124,7 +130,7 @@ namespace Ashlight.Battle.Core.Commands
         /// <summary>
         /// 攻方 buff 修正：Strength +V 加值，Weak -V% 衰减
         /// </summary>
-        private static int ApplyAttackerModifiers(UnitState attacker, int baseDamage)
+        internal static int ApplyAttackerModifiers(UnitState attacker, int baseDamage)
         {
             if (attacker == null || baseDamage <= 0) return baseDamage;
 

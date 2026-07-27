@@ -106,6 +106,11 @@ namespace Ashlight.Battle.Core.Data
         public bool FreeMoveUsedThisTurn { get; set; }
 
         /// <summary>
+        /// 本回合是否已用掉战士百相「首张推迟牌免费」。每回合开始时重置。
+        /// </summary>
+        public bool FreePushUsedThisTurn { get; set; }
+
+        /// <summary>
         /// 本回合是否移动过（换过区）。供条件效果读取（如影袭「本回合移动过则叠毒」）。每回合开始时重置。
         /// </summary>
         public bool HasMovedThisTurn { get; set; }
@@ -135,6 +140,14 @@ namespace Ashlight.Battle.Core.Data
         /// ClearOverloadCommand 用它把已落账的过载延迟拉回来（PendingRoundDelay -= 此值）。
         /// </summary>
         public int AppliedOverloadRoundDelay { get; set; }
+
+        /// <summary>
+        /// 护甲首次耗尽时要执行的移动。由 MoveOnArmorBreakEffect 注册；空表示没有监听。
+        /// TakeDamage 只把触发标记置起，实际移动由伤害命令在持有 BattleStateSnapshot 时结算。
+        /// </summary>
+        public string ArmorBreakMoveMode { get; set; }
+
+        public bool ArmorBreakMovePending { get; set; }
 
         // ========== 敌人意图轴/执行轴字段 ==========
 
@@ -260,12 +273,14 @@ namespace Ashlight.Battle.Core.Data
                 if (Defense >= adjusted)
                 {
                     Defense -= adjusted;
+                    MarkArmorBreakMoveIfNeeded();
                     return 0; // 完全被护甲吸收
                 }
                 else
                 {
                     actualDamage = adjusted - Defense;
                     Defense = 0;
+                    MarkArmorBreakMoveIfNeeded();
                 }
             }
 
@@ -285,6 +300,33 @@ namespace Ashlight.Battle.Core.Data
             }
 
             return actualDamage;
+        }
+
+        public void RegisterArmorBreakMove(string mode)
+        {
+            ArmorBreakMoveMode = string.IsNullOrWhiteSpace(mode) ? "Toggle" : mode.Trim();
+            ArmorBreakMovePending = false;
+        }
+
+        public string ConsumePendingArmorBreakMove()
+        {
+            if (!ArmorBreakMovePending || string.IsNullOrEmpty(ArmorBreakMoveMode))
+            {
+                return null;
+            }
+
+            string mode = ArmorBreakMoveMode;
+            ArmorBreakMoveMode = null;
+            ArmorBreakMovePending = false;
+            return mode;
+        }
+
+        private void MarkArmorBreakMoveIfNeeded()
+        {
+            if (Defense == 0 && !string.IsNullOrEmpty(ArmorBreakMoveMode))
+            {
+                ArmorBreakMovePending = true;
+            }
         }
 
         /// <summary>
@@ -556,11 +598,14 @@ namespace Ashlight.Battle.Core.Data
                 ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
                 Overload = this.Overload?.Clone() ?? new OverloadState(),
                 FreeMoveUsedThisTurn = this.FreeMoveUsedThisTurn,
+                FreePushUsedThisTurn = this.FreePushUsedThisTurn,
                 HasMovedThisTurn = this.HasMovedThisTurn,
                 RowPosition = this.RowPosition,
                 NextActionRound = this.NextActionRound,
                 PendingRoundDelay = this.PendingRoundDelay,
                 AppliedOverloadRoundDelay = this.AppliedOverloadRoundDelay,
+                ArmorBreakMoveMode = this.ArmorBreakMoveMode,
+                ArmorBreakMovePending = this.ArmorBreakMovePending,
                 // 敌人意图轴/执行轴
                 CurrentPhase = this.CurrentPhase,
                 IntentAxisLength = this.IntentAxisLength,

@@ -18,10 +18,10 @@ public partial class Tables
     public TbBuffInfo TbBuffInfo {get; }
     public TbNounDictionary TbNounDictionary {get; }
     public TbWeatherInfo TbWeatherInfo {get; }
-    public Character.TbCharaterInfo TbCharaterInfo {get; }
     public Character.TbUpgradeOptions TbUpgradeOptions {get; }
     public Character.TbCharacterExp TbCharacterExp {get; }
     public Character.TbCardInfo_backup TbCardInfoBackup {get; }
+    public Character.TbCharaterInfo TbCharaterInfo {get; }
     public Character.TbCardInfo TbCardInfo {get; }
     public Enemy.TbEnemySkillInfo TbEnemySkillInfo {get; }
     public Enemy.TbEncounter TbEncounter {get; }
@@ -33,10 +33,10 @@ public partial class Tables
         TbBuffInfo = new TbBuffInfo(loader("tbbuffinfo"));
         TbNounDictionary = new TbNounDictionary(loader("tbnoundictionary"));
         TbWeatherInfo = new TbWeatherInfo(loader("tbweatherinfo"));
-        TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
         TbUpgradeOptions = new Character.TbUpgradeOptions(loader("character_tbupgradeoptions"));
         TbCharacterExp = new Character.TbCharacterExp(loader("character_tbcharacterexp"));
         TbCardInfoBackup = new Character.TbCardInfo_backup(loader("character_tbcardinfo_backup"));
+        TbCharaterInfo = new Character.TbCharaterInfo(loader("character_tbcharaterinfo"));
         TbCardInfo = new Character.TbCardInfo(loader("character_tbcardinfo"));
         TbEnemySkillInfo = new Enemy.TbEnemySkillInfo(loader("enemy_tbenemyskillinfo"));
         TbEncounter = new Enemy.TbEncounter(loader("enemy_tbencounter"));
@@ -50,10 +50,10 @@ public partial class Tables
         TbBuffInfo.ResolveRef(this);
         TbNounDictionary.ResolveRef(this);
         TbWeatherInfo.ResolveRef(this);
-        TbCharaterInfo.ResolveRef(this);
         TbUpgradeOptions.ResolveRef(this);
         TbCharacterExp.ResolveRef(this);
         TbCardInfoBackup.ResolveRef(this);
+        TbCharaterInfo.ResolveRef(this);
         TbCardInfo.ResolveRef(this);
         TbEnemySkillInfo.ResolveRef(this);
         TbEncounter.ResolveRef(this);

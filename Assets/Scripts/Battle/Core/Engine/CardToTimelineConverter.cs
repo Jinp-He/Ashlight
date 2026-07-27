@@ -30,7 +30,7 @@ namespace Ashlight.Battle.Core.Engine
 
             var blocks = new List<TimelineBlock>();
 
-            var commands = ConvertEffectsToCommands(card.Effects);
+            var commands = ConvertEffectsToCommands(card.Effects, card.TargetZone);
             blocks.Add(CreateBlock(PhaseEnum.Active, ownerId, targetId, card.Id, commands));
             blocks[0].IsLastBlock = true;
 
@@ -86,7 +86,7 @@ namespace Ashlight.Battle.Core.Engine
         /// <summary>
         /// 将Effect列表转换为Command列表
         /// </summary>
-        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects)
+        private List<ICommand> ConvertEffectsToCommands(List<Effect> effects, TargetZoneEnum targetZone)
         {
             var commands = new List<ICommand>();
 
@@ -97,7 +97,7 @@ namespace Ashlight.Battle.Core.Engine
 
             foreach (var effect in effects)
             {
-                var command = ConvertEffectToCommand(effect);
+                var command = ConvertEffectToCommand(effect, targetZone);
                 if (command != null)
                 {
                     commands.Add(command);
@@ -110,7 +110,7 @@ namespace Ashlight.Battle.Core.Engine
         /// <summary>
         /// 将单个Effect转换为Command
         /// </summary>
-        private ICommand ConvertEffectToCommand(Effect effect)
+        private ICommand ConvertEffectToCommand(Effect effect, TargetZoneEnum targetZone)
         {
             if (effect == null)
             {
@@ -120,7 +120,7 @@ namespace Ashlight.Battle.Core.Engine
             // AttackEffect -> DamageCommand
             if (effect is AttackEffect attackEffect)
             {
-                return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe);
+                return new DamageCommand(attackEffect.Damage, attackEffect.IsAoe) { TargetZone = targetZone };
             }
 
             if (effect is AttackConditionalEffect attackConditionalEffect)
@@ -148,13 +148,16 @@ namespace Ashlight.Battle.Core.Engine
             // PushCollisionEffect -> ActionBarShiftCommand（单体推迟；【公共回合制】正数 = 延后 N 回合，与 CardPlayResolver 同号）
             if (effect is PushCollisionEffect pushEffect)
             {
-                return new ActionBarShiftCommand(pushEffect.ShiftValue, isAoe: false);
+                return new ActionBarShiftCommand(pushEffect.ShiftValue, isAoe: false, collisionResult: pushEffect.CollisionResult);
             }
 
             // TimeShiftAllEffect -> ActionBarShiftCommand（全体推迟；【公共回合制】正数 = 延后 N 回合，与 CardPlayResolver 同号）
             if (effect is TimeShiftAllEffect timeShiftAllEffect)
             {
-                return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true);
+                return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true)
+                {
+                    TargetZone = targetZone
+                };
             }
 
             // BuffEffect -> BuffCommand
@@ -183,6 +186,25 @@ namespace Ashlight.Battle.Core.Engine
             if (effect is AddToHandEffect addToHandEffect)
             {
                 return new AddToHandCommand(addToHandEffect.CardId, addToHandEffect.Count);
+            }
+
+            if (effect is AddRandomToHandEffect addRandomToHandEffect)
+            {
+                return new AddRandomToHandCommand(
+                    addRandomToHandEffect.CardIds,
+                    addRandomToHandEffect.Count,
+                    addRandomToHandEffect.ConditionType,
+                    addRandomToHandEffect.ConditionMultiplier);
+            }
+
+            if (effect is MoveOnArmorBreakEffect moveOnArmorBreakEffect)
+            {
+                return new MoveOnArmorBreakCommand(moveOnArmorBreakEffect.Mode);
+            }
+
+            if (effect is ChargedAttackEffect chargedAttackEffect)
+            {
+                return new DamageCommand(chargedAttackEffect.DamagePerCharge, chargedAttackEffect.IsAoe);
             }
 
             // 其他Effect暂不处理

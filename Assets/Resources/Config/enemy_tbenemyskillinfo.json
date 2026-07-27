@@ -442,5 +442,299 @@
     "ExecutingCost": 7,
     "TargetType": 4,
     "TargetZone": 2
+  },
+  {
+    "Id": "ESM01",
+    "Name": "杖击",
+    "Description": "对前排一名角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ESM02",
+    "Name": "塞签",
+    "Description": "将1张[解签]加入目标角色的手牌。",
+    "Effects": [
+      {
+        "$type": "AddToHandEffect",
+        "EffectType": 4,
+        "card_id": "Extra006",
+        "count": 1
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESM03",
+    "Name": "摸索祷词",
+    "Description": "对后排一名角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ESM04",
+    "Name": "盲签训诫",
+    "Description": "对后排一名角色造成{A}点伤害，将1张[解签]加入其手牌。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "AddToHandEffect",
+        "EffectType": 4,
+        "card_id": "Extra006",
+        "count": 1
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ESM05",
+    "Name": "戒尺横扫",
+    "Description": "对前排所有角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 7,
+        "is_aoe": true
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 4,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ESM06",
+    "Name": "钟下裁定",
+    "Description": "对目标角色造成{A}点伤害，将1张[解签]加入其手牌；引导期间受到{B}点伤害即被打断。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 8,
+        "is_aoe": false
+      },
+      {
+        "$type": "AddToHandEffect",
+        "EffectType": 4,
+        "card_id": "Extra006",
+        "count": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 14
+      }
+    ],
+    "ExecutingCost": 5,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESM07",
+    "Name": "封口裁决",
+    "Description": "对目标角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESM08",
+    "Name": "戒律护身",
+    "Description": "获得{D}点护甲和{B}层力量。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 8,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Strength",
+        "value": 1
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 2,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESM09",
+    "Name": "大斋戒",
+    "Description": "对目标角色造成{A}点伤害，将1张[解签]加入其手牌；引导期间受到{B}点伤害即被打断。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": false
+      },
+      {
+        "$type": "AddToHandEffect",
+        "EffectType": 4,
+        "card_id": "Extra006",
+        "count": 1
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 18
+      }
+    ],
+    "ExecutingCost": 5,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESW01",
+    "Name": "弹指",
+    "Description": "对前排一名角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ESW02",
+    "Name": "掷骨",
+    "Description": "对后排一名角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 4,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "ESW03",
+    "Name": "嗅血",
+    "Description": "对目标角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESW04",
+    "Name": "扑食",
+    "Description": "对目标角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 3,
+    "TargetZone": 2
+  },
+  {
+    "Id": "ESW05",
+    "Name": "轮臂",
+    "Description": "对前排一名角色造成3次{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "ESW06",
+    "Name": "献臂冲锋",
+    "Description": "对后排所有角色造成{A}点伤害；引导期间受到{B}点伤害即被打断。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 12,
+        "is_aoe": true
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 5,
+        "buff_id": "Stagger",
+        "value": 16
+      }
+    ],
+    "ExecutingCost": 5,
+    "TargetType": 4,
+    "TargetZone": 1
   }
 ]

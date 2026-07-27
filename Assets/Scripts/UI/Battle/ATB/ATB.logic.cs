@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Common.Utils;
 using System;
+using System.Linq;
 
 namespace Scripts.UI
 {
@@ -330,6 +331,15 @@ namespace Scripts.UI
             OnIconRemoved?.Invoke(unitId);
         }
 
+        /// <summary>当前已挂入 ATB 的全部执行牌虚拟单位 Id。</summary>
+        public List<string> GetCastIds()
+        {
+            return _activeIcons
+                .Where(icon => icon != null && icon.IsCast)
+                .Select(icon => icon.UnitId)
+                .ToList();
+        }
+
         // ────────────────────────────────────────────────────────────────
         #region 回合制驱动 API
 
@@ -584,6 +594,8 @@ namespace Scripts.UI
             if (state == null) return;
 
             state.CurrentRound = CurrentRound;
+            var weather = FindIcon(WeatherUnitId);
+            state.NextWeatherRound = weather != null ? weather.NextRound : -1;
             foreach (var unit in state.GetAllUnits())
             {
                 if (unit == null) continue;
@@ -620,6 +632,24 @@ namespace Scripts.UI
                 unit.NextActionRound = icon.NextRound;
                 changed = true;
                 Debug.Log($"[ATB] 推迟落账: {unit.UnitId} 回合 {before} -> {icon.NextRound} (延迟 {delay})");
+            }
+
+            if (state.PendingWeatherDelay != 0)
+            {
+                int shift = state.PendingWeatherDelay;
+                state.PendingWeatherDelay = 0;
+                var weather = FindIcon(WeatherUnitId);
+                if (weather != null)
+                {
+                    int before = weather.NextRound;
+                    weather.NextRound = Mathf.Max(CurrentRound, weather.NextRound + shift);
+                    if (state.WeatherGuardRound == before)
+                        state.WeatherGuardRound = weather.NextRound;
+                    SyncVisualOrDefer(weather);
+                    state.NextWeatherRound = weather.NextRound;
+                    changed = true;
+                    Debug.Log($"[ATB] 天气顺延落账: 回合 {before} -> {weather.NextRound} ({shift:+#;-#;0})");
+                }
             }
 
             if (changed)

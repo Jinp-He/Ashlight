@@ -7,11 +7,13 @@ namespace Ashlight.Battle.Core.Commands
     {
         public string CardId { get; set; }
         public int Count { get; set; }
+        public bool UseTargetOwner { get; set; }
 
-        public AddToHandCommand(string cardId, int count)
+        public AddToHandCommand(string cardId, int count, bool useTargetOwner = false)
         {
             CardId = cardId;
             Count = count;
+            UseTargetOwner = useTargetOwner;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -22,11 +24,12 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            // 动态归属：token（如飞刀）按「生成者」写入 owner，使其可被生成者打出（而非卡牌静态 BelongTo）
-            var owner = state.GetUnitById(ownerId);
-            var ownerCharacterId = owner?.GetCharacterId();
+            // 玩家生成的 token 归生成者；敌人塞入的牌归技能目标。
+            // 动态 owner 会覆盖 CardInfo 的静态 BelongTo，使同一张诅咒牌可塞给任意角色。
+            var cardOwner = state.GetUnitById(UseTargetOwner ? targetId : ownerId);
+            var ownerCharacterId = cardOwner?.GetCharacterId();
             int added = state.DeckSystem.AddCardToHand(CardId, Count, ownerCharacterId);
-            Debug.Log($"[AddToHandCommand] added {added}/{Count} card(s): {CardId}, owner={ownerCharacterId}");
+            Debug.Log($"[AddToHandCommand] added {added}/{Count} card(s): {CardId}, owner={ownerCharacterId}, fromTarget={UseTargetOwner}");
         }
 
         public int GetPriority()
@@ -41,7 +44,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new AddToHandCommand(CardId, Count);
+            return new AddToHandCommand(CardId, Count, UseTargetOwner);
         }
     }
 }

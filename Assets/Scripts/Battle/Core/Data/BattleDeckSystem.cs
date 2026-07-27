@@ -418,6 +418,7 @@ namespace Ashlight.Battle.Core.Data
         private bool IsEtherealCard(CardRuntimeState card)
         {
             if (card == null) return false;
+            if (card.IsFlashback) return true;
             var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(card.CardId);
             return info != null && info.IsEthereal;
         }
@@ -492,6 +493,19 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public int AddCardToHand(string cardId, int count, cfg.CharacterEnum? ownerCharacterId)
         {
+            return AddCardToHand(cardId, count, ownerCharacterId, isFlashback: false, energyOverride: -1);
+        }
+
+        /// <summary>
+        /// 往手牌加入运行时衍生牌。闪回牌不改动原始 CardInfo，而是以实例标记获得[虚无]与费用覆盖。
+        /// </summary>
+        public int AddCardToHand(
+            string cardId,
+            int count,
+            cfg.CharacterEnum? ownerCharacterId,
+            bool isFlashback,
+            int energyOverride)
+        {
             if (string.IsNullOrEmpty(cardId) || count <= 0)
             {
                 return 0;
@@ -507,10 +521,12 @@ namespace Ashlight.Battle.Core.Data
             {
                 var card = CardRuntimeState.CreateDefault(cardId);
                 card.OwnerCharacterId = ownerCharacterId;
+                card.IsFlashback = isFlashback;
+                card.EnergyOverride = energyOverride;
                 Hand.Add(card);
             }
 
-            Debug.Log($"[BattleDeckSystem] AddCardToHand: {cardId} x{count} owner={ownerCharacterId}, hand={Hand.Count}");
+            Debug.Log($"[BattleDeckSystem] AddCardToHand: {cardId} x{count} owner={ownerCharacterId}, flashback={isFlashback}, cost={energyOverride}, hand={Hand.Count}");
             return count;
         }
 

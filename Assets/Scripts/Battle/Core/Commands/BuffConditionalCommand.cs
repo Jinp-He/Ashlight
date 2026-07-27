@@ -54,6 +54,9 @@ namespace Ashlight.Battle.Core.Commands
                 case "MovedThisTurn":
                     return owner.HasMovedThisTurn;
 
+                case "HasMorale":
+                    return owner.GetBuff("Morale") != null && owner.GetBuff("Morale").Value > 0f;
+
                 default:
                     Debug.LogWarning($"[BuffConditionalCommand] 未知的条件类型: {ConditionType}");
                     return false;

@@ -33,6 +33,8 @@ namespace Ashlight.Battle
     /// </summary>
     public class BattleManager : MonoBehaviour
     {
+        private const string DivinationCurseCardId = "Extra006";
+
         public static BattleManager Instance { get; private set; }
 
         /// <summary>
@@ -110,16 +112,28 @@ namespace Ashlight.Battle
             = new Dictionary<string, (EnemySkillInfo, string)>();
         /// <summary>
         /// 玩家在轨执行牌（引线）。挂出后作为虚拟单位排进 ATB 时钟，第 ResolveRound 回合结算。
-        /// 允许多发同时在轨（跨回合），但每人每回合限挂 1 张（见 _executionHungThisTurn）。
+        /// 允许多发同时在轨（跨回合）；普通角色每回合限挂 1 张，法师百相可提升到 2 张。
         /// </summary>
         public class PendingPlayerCast
         {
             public string CastId;
+            public int Sequence;
             public string CasterUnitId;
             public cfg.Character.CardInfo Card;
             public string TargetUnitId;
             /// <summary>结算所在的绝对公共回合（= 挂起回合 + max(1, ExecutingCost)）。</summary>
             public int ResolveRound;
+            /// <summary>被己方卡牌顺延的累计格数；终焉倒数读取该值。</summary>
+            public int AddedDelay;
+            public int DamageBonus;
+            public int ResolveDrawCount;
+            public string ResolveBuffId;
+            public float ResolveBuffValue;
+            public int EchoDelay;
+            public float EchoMultiplier;
+            public bool NumericOnly;
+            public float NumericScale = 1f;
+            public int ImmediateSourceRound = -1;
         }
 
         /// <summary>玩家执行牌虚拟单位的 CastId 前缀（ATB/UI 用它区分引线图标与真单位）。</summary>
@@ -129,8 +143,25 @@ namespace Ashlight.Battle
         private readonly Dictionary<string, PendingPlayerCast> _pendingPlayerCasts
             = new Dictionary<string, PendingPlayerCast>();
 
-        /// <summary>本回合已挂过执行牌的角色（每人每回合限挂 1 张；StartPlayerTurn 时清除自己的标记）。</summary>
-        private readonly HashSet<string> _executionHungThisTurn = new HashSet<string>();
+        /// <summary>被提前到当前公共回合、等待当前卡牌完整结算后立即兑现的引线。</summary>
+        private readonly List<string> _queuedImmediateCastIds = new List<string>();
+        private bool _isResolvingImmediateCasts;
+
+        /// <summary>本回合各角色已挂起的执行牌数量；StartPlayerTurn 时清除该角色计数。</summary>
+        private readonly Dictionary<string, int> _executionHungCountThisTurn = new Dictionary<string, int>();
+
+        public class PendingPlayerCharge
+        {
+            public string CasterUnitId;
+            public cfg.Character.CardInfo Card;
+            public string TargetUnitId;
+            public int StartRound;
+            public readonly Dictionary<string, BuffState> PreviousWhileBuffs = new Dictionary<string, BuffState>();
+        }
+
+        private readonly Dictionary<string, PendingPlayerCharge> _pendingPlayerCharges
+            = new Dictionary<string, PendingPlayerCharge>();
+        private readonly HashSet<string> _chargeStartedThisTurn = new HashSet<string>();
 
         /// <summary>CastId 自增序号（同一场战斗内唯一）。</summary>
         private int _castSequence;
@@ -227,7 +258,9 @@ namespace Ashlight.Battle
             CurrentState = new BattleStateSnapshot();
             ClearPendingEnemyIntent();
             CancelPendingCasts();
-            _executionHungThisTurn.Clear();
+            CancelPendingCharges();
+            _executionHungCountThisTurn.Clear();
+            _chargeStartedThisTurn.Clear();
             _castSequence = 0;
             LastQueuedCast = null;
             _battleEndEventRaised = false;
@@ -320,12 +353,21 @@ namespace Ashlight.Battle
                 return results;
             }
 
+            bool guardActive = CurrentState.WeatherGuardArmor > 0
+                               && CurrentState.WeatherGuardRound == CurrentState.CurrentRound;
             foreach (var id in unitIds)
             {
                 var unit = CurrentState.GetUnitById(id);
                 if (unit == null || unit.IsDead) continue;
 
+                if (guardActive && unit.IsPlayerUnit)
+                {
+                    unit.Defense += CurrentState.WeatherGuardArmor;
+                    Debug.Log($"[BattleManager] [风暴眼] {id} 在天气伤害前获得 {CurrentState.WeatherGuardArmor} 点护甲");
+                }
+
                 int dealt = unit.TakeDamage(CurrentWeather.Damage, canBeDodged: false);
+                ArmorBreakMoveProcessor.ResolvePending(CurrentState, unit);
                 results[id] = dealt;
                 Debug.Log($"[BattleManager] [{CurrentWeather.Name}] 劈中 {id}：{dealt} 伤害 (剩余 HP: {unit.CurrentHp}{(unit.IsDead ? "，死亡" : "")})");
             }
@@ -335,6 +377,12 @@ namespace Ashlight.Battle
                 Debug.Log($"[BattleManager] [{CurrentWeather.Name}] 本次结算无人在场（空劈），节拍照常推进");
             }
 
+            CurrentState.LastWeatherResolvedRound = CurrentState.CurrentRound;
+            if (CurrentState.WeatherGuardRound <= CurrentState.CurrentRound)
+            {
+                CurrentState.WeatherGuardRound = -1;
+                CurrentState.WeatherGuardArmor = 0;
+            }
             CurrentState.CheckBattleEnd();
             return results;
         }
@@ -575,6 +623,10 @@ namespace Ashlight.Battle
             }
 
             CurrentState = InitialSnapshot.Clone();
+            CancelPendingCasts();
+            CancelPendingCharges();
+            _executionHungCountThisTurn.Clear();
+            _chargeStartedThisTurn.Clear();
         }
 
         /// <summary>
@@ -646,9 +698,9 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            if (cardInfo.CardType == CardTypeEnum.Execution)
+            if (cardInfo.CardType == CardTypeEnum.Execution || cardInfo.CardType == CardTypeEnum.Charge)
             {
-                Debug.LogWarning($"[BattleManager] 执行牌不能走立即结算入口: {cardInfo.Id}");
+                Debug.LogWarning($"[BattleManager] 延时牌不能走立即结算入口: {cardInfo.Id}");
                 return false;
             }
 
@@ -678,26 +730,48 @@ namespace Ashlight.Battle
                 return false;
             }
 
+            // TimeSlot 的 targetId 是在轨执行牌的 CastId，而非 UnitId；
+            // 必须走专用校验，不能把它当作战场单位再做分区/单位目标检查。
+            bool targetsPendingCast = cardInfo.TargetType == TargetTypeEnum.TimeSlot;
+            if (targetsPendingCast && !IsFriendlyPendingCast(
+                    targetId,
+                    ownerId,
+                    requireDamage: CastHasDamage(cardInfo),
+                    requireNumeric: cardInfo.Effects != null && cardInfo.Effects.Any(e => e is CastEchoEffect)))
+            {
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：在轨执行牌目标无效 card={cardInfo.Id}, castId={targetId}");
+                return false;
+            }
+
             // 【近战/远程】单体牌索敌分区限制：目标必须站在卡牌声明的排
-            var zoneTarget = string.IsNullOrEmpty(targetId) ? null : CurrentState.GetUnitById(targetId);
-            if (!ZoneTargeting.IsSingleTargetZoneValid(cardInfo, zoneTarget))
+            bool isMultiAllyTarget = cardInfo.Id == "Zhouzhou023";
+            var zoneTarget = string.IsNullOrEmpty(targetId) ? null : CurrentState.GetUnitById(targetId.Split('|')[0]);
+            if (!targetsPendingCast && isMultiAllyTarget && !AreMultiAllyTargetsValid(owner, targetId, 3))
+            {
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：多目标不合法 card={cardInfo.Id}, target={targetId}");
+                return false;
+            }
+            if (!targetsPendingCast && !ZoneTargeting.IsSingleTargetZoneValid(cardInfo, zoneTarget))
             {
                 Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：目标不在限制分区 TargetZone={cardInfo.TargetZone}, target={targetId}");
                 return false;
             }
 
-            int energyCost = GetCardEnergyCost(cardInfo);
-            // 游侠百相 FirstMoveFree：本回合第一张「带移动」的牌费用为 0
-            bool isFreeMove = IsFreeMoveForOwner(owner, cardInfo);
-            if (isFreeMove)
+            if (!targetsPendingCast && !IsCardSpecificTargetValid(cardInfo, owner, zoneTarget))
             {
-                energyCost = 0;
+                Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：目标不满足卡牌专属限制 card={cardInfo.Id}, owner={ownerId}, target={targetId}");
+                return false;
             }
+
+            int energyCost = GetEffectiveEnergyCost(cardInfo, ownerId, instanceId);
+            // 百相减费已在 GetEffectiveEnergyCost 内处理；解签诅咒会在减费后追加费用。
+            bool isFreeMove = IsFreeMoveForOwner(owner, cardInfo);
+            bool isFreePush = IsFreePushForOwner(owner, cardInfo);
             // 能量不足时尝试过载（每人每回合限 1 次；代价 = 结束回合重排额外 +1 格）
             bool willOverload = false;
             if (owner.CurrentEnergy < energyCost)
             {
-                bool canOverload = !isFreeMove && owner.Overload != null && !owner.Overload.EnergyOverdraftUsedThisTurn;
+                bool canOverload = owner.Overload != null && !owner.Overload.EnergyOverdraftUsedThisTurn;
                 if (!canOverload)
                 {
                     Debug.LogWarning($"[BattleManager] 无法立即执行卡牌：能量不足且不可过载 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
@@ -708,9 +782,10 @@ namespace Ashlight.Battle
 
             // 发布卡牌执行事件（用于 UI 动画触发）
             var commands = CardPlayResolver.GenerateCommands(cardInfo, CurrentState?.CardModifiers?.Get(cardInfo.Id));
-            bool isAttackCard = commands.Any(c => c is DamageCommand);
+            bool isAttackCard = commands.Any(IsAttackCommand);
             // 执行牌：仅打出时尚未进入“执行动作”阶段，不播放战斗演出（与 Timeline 解算时的演出区分）
-            bool skipBattleAnimation = cardInfo.CardType == CardTypeEnum.Execution;
+            bool skipBattleAnimation = cardInfo.CardType == CardTypeEnum.Execution
+                                       || cardInfo.TargetType == TargetTypeEnum.TimeSlot;
             GameEvent.Publish(new CardExecutedEvent
             {
                 CasterId = ownerId,
@@ -722,7 +797,8 @@ namespace Ashlight.Battle
             });
 
             // 通过 CardPlayResolver 直接结算卡牌效果
-            bool success = CardPlayResolver.PlayCard(CurrentState, cardInfo, ownerId, targetId);
+            bool success = CardPlayResolver.PlayCard(
+                CurrentState, cardInfo, ownerId, targetId, BuildCardResolutionContext(instanceId));
 
             if (!success)
             {
@@ -745,6 +821,10 @@ namespace Ashlight.Battle
                 {
                     owner.FreeMoveUsedThisTurn = true; // 用掉本回合的免费移动额度
                 }
+                if (isFreePush)
+                {
+                    owner.FreePushUsedThisTurn = true; // 用掉本回合的免费推迟额度
+                }
             }
 
             // 从手牌消费这张卡
@@ -764,6 +844,8 @@ namespace Ashlight.Battle
                 Debug.LogWarning($"[BattleManager] 卡牌执行成功但手牌消费失败: cardId={cardInfo.Id}, instanceId={instanceId}");
             }
 
+            // 提前至当前回合的引线必须等当前卡牌的全部效果（含过载等）完成后再依原顺序结算。
+            ResolveQueuedImmediateCasts();
             CurrentState.CheckBattleEnd();
 
             if (PredictionManager != null)
@@ -804,17 +886,19 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            if (_executionHungThisTurn.Contains(ownerId))
-            {
-                Debug.LogWarning($"[BattleManager] 该角色本回合已挂起一张执行牌，无法再次挂起: owner={ownerId}");
-                return false;
-            }
-
             var owner = CurrentState.GetUnitById(ownerId);
             var target = CurrentState.GetUnitById(targetId);
             if (owner == null || owner.IsDead || !owner.IsPlayerUnit)
             {
                 Debug.LogWarning($"[BattleManager] 无法挂起执行牌：施法者无效 ownerId={ownerId}");
+                return false;
+            }
+
+            int hungCount = _executionHungCountThisTurn.TryGetValue(ownerId, out int count) ? count : 0;
+            int executionLimit = GetExecutionLimitForOwner(owner);
+            if (hungCount >= executionLimit)
+            {
+                Debug.LogWarning($"[BattleManager] 该角色本回合执行牌已达上限 {executionLimit}: owner={ownerId}");
                 return false;
             }
 
@@ -844,7 +928,8 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            int energyCost = GetCardEnergyCost(cardInfo);
+            int energyCost = GetEffectiveEnergyCost(cardInfo, ownerId, instanceId);
+            bool isFreePush = IsFreePushForOwner(owner, cardInfo);
             if (owner.CurrentEnergy < energyCost)
             {
                 Debug.LogWarning($"[BattleManager] 无法挂起执行牌：能量不足 owner={ownerId}, 当前={owner.CurrentEnergy}, 需求={energyCost}");
@@ -878,13 +963,18 @@ namespace Ashlight.Battle
             var cast = new PendingPlayerCast
             {
                 CastId = $"{CastIdPrefix}{_castSequence}_{cardInfo.Id}",
+                Sequence = _castSequence,
                 CasterUnitId = ownerId,
                 Card = cardInfo,
                 TargetUnitId = targetId,
                 ResolveRound = CurrentState.CurrentRound + executingCost
             };
             _pendingPlayerCasts[cast.CastId] = cast;
-            _executionHungThisTurn.Add(ownerId);
+            _executionHungCountThisTurn[ownerId] = hungCount + 1;
+            if (isFreePush)
+            {
+                owner.FreePushUsedThisTurn = true;
+            }
             LastQueuedCast = cast;
             Debug.Log($"[BattleManager] 执行牌挂轨: {cardInfo.Name} ({cast.CastId}) 将于公共回合 {cast.ResolveRound} 结算 (当前 {CurrentState.CurrentRound})");
 
@@ -896,6 +986,85 @@ namespace Ashlight.Battle
             return true;
         }
 
+        /// <summary>
+        /// 开始蓄力：本次行动只可打出一张；0 费，立即结算开始/期间效果，完成效果在该角色下次行动开始时结算。
+        /// 每经过一个公共回合获得一层蓄力，因此行动被推迟会自然提高层数。
+        /// </summary>
+        public bool TryStartPlayerChargeCard(
+            cfg.Character.CardInfo cardInfo,
+            string ownerId,
+            string targetId,
+            string instanceId)
+        {
+            if (CurrentState == null || cardInfo == null || cardInfo.CardType != CardTypeEnum.Charge)
+            {
+                Debug.LogWarning("[BattleManager] 无法开始蓄力：状态无效或不是蓄力牌");
+                return false;
+            }
+
+            var owner = CurrentState.GetUnitById(ownerId);
+            var target = CurrentState.GetUnitById(targetId);
+            if (owner == null || owner.IsDead || !owner.IsPlayerUnit || target == null || target.IsDead)
+            {
+                Debug.LogWarning($"[BattleManager] 无法开始蓄力：施法者或目标无效 owner={ownerId}, target={targetId}");
+                return false;
+            }
+
+            if ((!string.IsNullOrEmpty(CurrentState.CurrentTurnUnitId) && CurrentState.CurrentTurnUnitId != ownerId)
+                || _chargeStartedThisTurn.Contains(ownerId)
+                || _pendingPlayerCharges.ContainsKey(ownerId))
+            {
+                Debug.LogWarning($"[BattleManager] 本次行动已使用蓄力牌或仍在蓄力: {ownerId}");
+                return false;
+            }
+
+            if (!ZoneTargeting.CanCastFromCurrentRow(cardInfo, owner)
+                || !ZoneTargeting.IsSingleTargetZoneValid(cardInfo, target))
+            {
+                Debug.LogWarning($"[BattleManager] 蓄力牌站位或目标分区不合法: {cardInfo.Id}");
+                return false;
+            }
+
+            bool consumed = !string.IsNullOrEmpty(instanceId)
+                && CurrentState.DeckSystem.UseCardByInstanceId(instanceId);
+            if (!consumed)
+            {
+                consumed = CurrentState.DeckSystem.UseCardByCardId(cardInfo.Id);
+            }
+            if (!consumed)
+            {
+                Debug.LogWarning($"[BattleManager] 蓄力牌消费失败: {cardInfo.Id}");
+                return false;
+            }
+
+            var charge = new PendingPlayerCharge
+            {
+                CasterUnitId = ownerId,
+                Card = cardInfo,
+                TargetUnitId = targetId,
+                StartRound = CurrentState.CurrentRound
+            };
+            _pendingPlayerCharges[ownerId] = charge;
+            _chargeStartedThisTurn.Add(ownerId);
+
+            CaptureChargeWhileBuffs(charge, owner);
+            CardPlayResolver.PlayEffects(CurrentState, cardInfo, cardInfo.ChargeStartEffects, ownerId, targetId);
+            CardPlayResolver.PlayEffects(CurrentState, cardInfo, cardInfo.ChargeWhileEffects, ownerId, ownerId);
+
+            GameEvent.Publish(new CardExecutedEvent
+            {
+                CasterId = ownerId,
+                TargetId = targetId,
+                CardId = cardInfo.Id,
+                IsAttackCard = false,
+                IsPrediction = false,
+                SkipBattleAnimation = true
+            });
+
+            PredictionManager?.TriggerPrediction("开始蓄力");
+            return true;
+        }
+
         /// <summary>该角色本回合是否已挂起执行牌（每回合限 1 张的判定）；unitId 为空 = 是否有任何在轨引线。</summary>
         public bool HasPendingPlayerExecutionCard(string unitId = null)
         {
@@ -904,7 +1073,20 @@ namespace Ashlight.Battle
                 return _pendingPlayerCasts.Count > 0;
             }
 
-            return _executionHungThisTurn.Contains(unitId);
+            return _executionHungCountThisTurn.TryGetValue(unitId, out int count) && count > 0;
+        }
+
+        /// <summary>返回指定角色本回合还可以挂起的执行牌数量。</summary>
+        public int GetRemainingExecutionSlots(string unitId)
+        {
+            var owner = CurrentState?.GetUnitById(unitId);
+            if (owner == null || owner.IsDead || !owner.IsPlayerUnit)
+            {
+                return 0;
+            }
+
+            int hungCount = _executionHungCountThisTurn.TryGetValue(unitId, out int count) ? count : 0;
+            return Mathf.Max(0, GetExecutionLimitForOwner(owner) - hungCount);
         }
 
         /// <summary>按 CastId 取在轨引线（不存在返回 null）。</summary>
@@ -913,6 +1095,151 @@ namespace Ashlight.Battle
             return !string.IsNullOrEmpty(castId) && _pendingPlayerCasts.TryGetValue(castId, out var cast)
                 ? cast
                 : null;
+        }
+
+        /// <summary>返回在轨引线的稳定快照，供行动顺序 UI 同步图标与回合。</summary>
+        public List<PendingPlayerCast> GetPendingCasts()
+        {
+            return _pendingPlayerCasts.Values
+                .Where(c => c != null)
+                .OrderBy(c => c.ResolveRound)
+                .ThenBy(c => c.Sequence)
+                .ToList();
+        }
+
+        public bool IsFriendlyPendingCast(string castId, string ownerId, bool requireDamage = false, bool requireNumeric = false)
+        {
+            if (!_pendingPlayerCasts.TryGetValue(castId ?? string.Empty, out var cast) || cast?.Card == null)
+                return false;
+            var owner = CurrentState?.GetUnitById(ownerId);
+            var caster = CurrentState?.GetUnitById(cast.CasterUnitId);
+            if (owner == null || caster == null || owner.IsDead || caster.IsDead || owner.IsPlayerUnit != caster.IsPlayerUnit)
+                return false;
+            if (requireDamage && !CastHasDamage(cast.Card)) return false;
+            if (requireNumeric && !CastHasNumericPayload(cast.Card)) return false;
+            return true;
+        }
+
+        public bool ShiftPendingCast(string castId, string ownerId, int shiftValue)
+        {
+            if (shiftValue == 0 || !IsFriendlyPendingCast(castId, ownerId)) return false;
+            var cast = _pendingPlayerCasts[castId];
+            int before = cast.ResolveRound;
+            cast.ResolveRound = Mathf.Max(CurrentState.CurrentRound, before + shiftValue);
+            if (shiftValue > 0) cast.AddedDelay += shiftValue;
+            if (cast.ResolveRound <= CurrentState.CurrentRound) QueueImmediateCast(cast, before);
+            Debug.Log($"[BattleManager] 引线位移: {castId} {before} -> {cast.ResolveRound} ({shiftValue:+#;-#;0})");
+            return true;
+        }
+
+        public bool AddPendingCastDamageBonus(string castId, string ownerId, int value)
+        {
+            if (value == 0 || !IsFriendlyPendingCast(castId, ownerId, requireDamage: true)) return false;
+            _pendingPlayerCasts[castId].DamageBonus += value;
+            return true;
+        }
+
+        public bool AddPendingCastResolveDraw(string castId, string ownerId, int count)
+        {
+            if (count <= 0 || !IsFriendlyPendingCast(castId, ownerId)) return false;
+            _pendingPlayerCasts[castId].ResolveDrawCount += count;
+            return true;
+        }
+
+        public bool AddPendingCastResolveBuff(string castId, string ownerId, string buffId, float value)
+        {
+            if (string.IsNullOrEmpty(buffId) || value <= 0f || !IsFriendlyPendingCast(castId, ownerId)) return false;
+            var cast = _pendingPlayerCasts[castId];
+            cast.ResolveBuffId = buffId;
+            cast.ResolveBuffValue += value;
+            return true;
+        }
+
+        public bool AddPendingCastEcho(string castId, string ownerId, int delay, float multiplier)
+        {
+            if (delay <= 0 || multiplier <= 0f || !IsFriendlyPendingCast(castId, ownerId, requireNumeric: true)) return false;
+            var cast = _pendingPlayerCasts[castId];
+            cast.EchoDelay = delay;
+            cast.EchoMultiplier = multiplier;
+            return true;
+        }
+
+        public bool MarkPendingCastImmediate(string castId, string ownerId)
+        {
+            if (!IsFriendlyPendingCast(castId, ownerId)) return false;
+            var cast = _pendingPlayerCasts[castId];
+            int before = cast.ResolveRound;
+            cast.ResolveRound = CurrentState.CurrentRound;
+            QueueImmediateCast(cast, before);
+            return true;
+        }
+
+        public int ShiftAllPendingCasts(string ownerId, int shiftValue)
+        {
+            if (shiftValue == 0) return 0;
+            var ids = GetPendingCasts()
+                .Where(c => IsFriendlyPendingCast(c.CastId, ownerId))
+                .Select(c => c.CastId)
+                .ToList();
+            int changed = 0;
+            foreach (string id in ids)
+                if (ShiftPendingCast(id, ownerId, shiftValue)) changed++;
+            return changed;
+        }
+
+        public bool HasFriendlyPendingCastAtRound(string ownerId, int round)
+        {
+            return _pendingPlayerCasts.Values.Any(c => c != null
+                && c.ResolveRound == round
+                && IsFriendlyPendingCast(c.CastId, ownerId));
+        }
+
+        private void QueueImmediateCast(PendingPlayerCast cast, int sourceRound)
+        {
+            if (cast == null || _queuedImmediateCastIds.Contains(cast.CastId)) return;
+            cast.ImmediateSourceRound = sourceRound;
+            _queuedImmediateCastIds.Add(cast.CastId);
+            _queuedImmediateCastIds.Sort((a, b) =>
+            {
+                bool hasA = _pendingPlayerCasts.TryGetValue(a, out var ca);
+                bool hasB = _pendingPlayerCasts.TryGetValue(b, out var cb);
+                if (!hasA || !hasB) return hasA ? -1 : hasB ? 1 : 0;
+                int byRound = ca.ImmediateSourceRound.CompareTo(cb.ImmediateSourceRound);
+                return byRound != 0 ? byRound : ca.Sequence.CompareTo(cb.Sequence);
+            });
+        }
+
+        private void ResolveQueuedImmediateCasts()
+        {
+            if (_isResolvingImmediateCasts || _queuedImmediateCastIds.Count == 0) return;
+            _isResolvingImmediateCasts = true;
+            try
+            {
+                while (_queuedImmediateCastIds.Count > 0 && CurrentState != null && !CurrentState.IsBattleEnded)
+                {
+                    string castId = _queuedImmediateCastIds[0];
+                    _queuedImmediateCastIds.RemoveAt(0);
+                    if (_pendingPlayerCasts.ContainsKey(castId))
+                        ResolvePendingCast(castId);
+                }
+            }
+            finally
+            {
+                _isResolvingImmediateCasts = false;
+            }
+        }
+
+        private static bool CastHasDamage(cfg.Character.CardInfo card)
+        {
+            return card?.Effects != null && card.Effects.Any(e => e is AttackEffect
+                || e is WeatherConditionalAttackEffect || e is DelayScaledAttackEffect);
+        }
+
+        private static bool CastHasNumericPayload(cfg.Character.CardInfo card)
+        {
+            return card?.Effects != null && card.Effects.Any(e => e is AttackEffect
+                || e is WeatherConditionalAttackEffect || e is DelayScaledAttackEffect
+                || e is DefenseEffect || e is HealEffect);
         }
 
         /// <summary>
@@ -955,7 +1282,9 @@ namespace Ashlight.Battle
             }
 
             // 新回合重置「每回合限挂 1 张执行牌」标记（在轨引线保留，不受新回合影响）
-            _executionHungThisTurn.Remove(unitId);
+            _executionHungCountThisTurn.Remove(unitId);
+            _chargeStartedThisTurn.Remove(unitId);
+            CleanupInvalidPendingCharges();
 
             // 全场暂停：冻结所有其他单位推进
             CurrentState.IsGlobalPaused = true;
@@ -964,7 +1293,16 @@ namespace Ashlight.Battle
             CurrentState.CurrentTurnUnitId = unitId;
 
             playerUnit.CurrentEnergy = Mathf.Max(0, playerUnit.BaseEnergy);
+            var energized = playerUnit.GetBuff("Energized");
+            if (energized != null)
+            {
+                int bonusEnergy = Mathf.Max(0, Mathf.RoundToInt(energized.Value));
+                playerUnit.CurrentEnergy += bonusEnergy;
+                playerUnit.RemoveBuff("Energized");
+                Debug.Log($"[BattleManager] {unitId} 消耗充能，获得 {bonusEnergy} 点额外能量");
+            }
             playerUnit.FreeMoveUsedThisTurn = false; // 每回合重置「首张移动免费」
+            playerUnit.FreePushUsedThisTurn = false; // 每回合重置「首张推迟牌免费」
             playerUnit.HasMovedThisTurn = false;     // 每回合重置「本回合移动过」标记
             if (playerUnit.Overload != null)
             {
@@ -978,8 +1316,10 @@ namespace Ashlight.Battle
                 DiscardCurrentHand();
                 DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
                 // 回合开始注入本角色的基础移动牌（虚无+消耗：打出/未用都自动清除，不污染牌库）
-                InjectBasicMoveCard(playerUnit);
             }
+
+            // 新行动的资源/标记与手牌准备完成后再结算蓄力：过载、能量、抽牌等完成效果会保留在本次行动中。
+            ResolvePendingCharge(unitId);
 
             if (generateEnemyIntentions)
             {
@@ -1027,7 +1367,23 @@ namespace Ashlight.Battle
         /// <summary>卡牌是否「带移动」（Effects 含 MovePositionEffect）。</summary>
         private static bool CardHasMoveEffect(cfg.Character.CardInfo card)
         {
-            return card?.Effects != null && card.Effects.Any(e => e is MovePositionEffect);
+            if (card?.Effects != null && card.Effects.Any(e => e is MovePositionEffect || e is MoveSelfEffect || e is MoveRowEffect))
+            {
+                return true;
+            }
+
+            switch (card?.Id)
+            {
+                case "Zhouzhou013":
+                case "Zhouzhou014":
+                case "Zhouzhou015":
+                case "Zhouzhou018":
+                case "Zhouzhou023":
+                case "Extra005":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         /// <summary>
@@ -1045,11 +1401,67 @@ namespace Ashlight.Battle
             return info != null && info.Trait == "FirstMoveFree";
         }
 
+        private static bool IsCardSpecificTargetValid(cfg.Character.CardInfo card, UnitState owner, UnitState target)
+        {
+            switch (card?.Id)
+            {
+                case "Zhouzhou004": // 踏歌
+                case "Zhouzhou005": // 挽袖同行
+                case "Zhouzhou015": // 雁双飞
+                    return target != null && !target.IsDead
+                           && target.UnitId != owner?.UnitId
+                           && owner.IsPlayerUnit == target.IsPlayerUnit;
+                default:
+                    return true;
+            }
+        }
+
+        private bool AreMultiAllyTargetsValid(UnitState owner, string rawTargetIds, int maxCount)
+        {
+            if (owner == null || string.IsNullOrEmpty(rawTargetIds)) return false;
+            var ids = rawTargetIds.Split('|').Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+            if (ids.Count == 0 || ids.Count > maxCount) return false;
+            return ids.All(id =>
+            {
+                var target = CurrentState.GetUnitById(id);
+                return target != null && !target.IsDead && target.IsPlayerUnit == owner.IsPlayerUnit;
+            });
+        }
+
+        private static bool CardHasPushEffect(cfg.Character.CardInfo card)
+        {
+            return card?.Effects != null && card.Effects.Any(e => e is PushCollisionEffect);
+        }
+
+        /// <summary>战士百相 FirstPushFree：本回合第一张单体推迟牌费用为 0。</summary>
+        private bool IsFreePushForOwner(UnitState owner, cfg.Character.CardInfo card)
+        {
+            if (owner == null || owner.FreePushUsedThisTurn || !CardHasPushEffect(card))
+            {
+                return false;
+            }
+
+            var info = owner.GetCharacterInfo();
+            return info != null && info.Trait == "FirstPushFree";
+        }
+
+        /// <summary>法师百相 DoubleExecution：每回合可挂 2 张执行牌；其他角色保持 1 张。</summary>
+        private static int GetExecutionLimitForOwner(UnitState owner)
+        {
+            var info = owner?.GetCharacterInfo();
+            return info != null && info.Trait == "DoubleExecution" ? 2 : 1;
+        }
+
         /// <summary>
         /// 卡牌对指定施法者的「有效能量费用」：命中游侠百相 FirstMoveFree（本回合首张移动牌）时为 0，否则为基础费用。
         /// 供 UI 显示卡面费用 / 判定是否打得起时调用，保证显示与实际扣费一致。
         /// </summary>
         public int GetEffectiveEnergyCost(cfg.Character.CardInfo card, string ownerUnitId)
+        {
+            return GetEffectiveEnergyCost(card, ownerUnitId, null);
+        }
+
+        public int GetEffectiveEnergyCost(cfg.Character.CardInfo card, string ownerUnitId, string instanceId)
         {
             if (card == null)
             {
@@ -1057,13 +1469,47 @@ namespace Ashlight.Battle
             }
 
             int baseCost = GetCardEnergyCost(card);
-            var owner = CurrentState?.GetUnitById(ownerUnitId);
-            if (owner != null && IsFreeMoveForOwner(owner, card))
+            var instance = FindHandCardInstance(instanceId);
+            if (instance != null && instance.EnergyOverride >= 0)
             {
-                return 0;
+                baseCost = instance.EnergyOverride;
+            }
+            var owner = CurrentState?.GetUnitById(ownerUnitId);
+            if (owner != null && CardHasMoveEffect(card)
+                && CurrentState?.MoveCardCostOverrideByOwner != null
+                && CurrentState.MoveCardCostOverrideByOwner.TryGetValue(ownerUnitId, out int overrideCost))
+            {
+                baseCost = Mathf.Max(0, overrideCost);
+            }
+            if (owner != null && (IsFreeMoveForOwner(owner, card) || IsFreePushForOwner(owner, card)))
+            {
+                baseCost = 0;
             }
 
-            return baseCost;
+            // 解签本身固定为 1 费，不受自身影响。只要手牌中存在至少一张解签，
+            // 其余所有卡牌在各类覆盖/百相减费结算后统一 +1；多张解签不叠加。
+            bool hasDivinationCurse = CurrentState?.DeckSystem?.Hand?.Any(
+                handCard => handCard != null && handCard.CardId == DivinationCurseCardId) == true;
+            if (hasDivinationCurse && card.Id != DivinationCurseCardId)
+            {
+                baseCost += 1;
+            }
+
+            return Mathf.Max(0, baseCost);
+        }
+
+        private CardRuntimeState FindHandCardInstance(string instanceId)
+        {
+            if (string.IsNullOrEmpty(instanceId)) return null;
+            return CurrentState?.DeckSystem?.Hand?.FirstOrDefault(card => card != null && card.InstanceId == instanceId);
+        }
+
+        private CardResolutionContext BuildCardResolutionContext(string instanceId)
+        {
+            var instance = FindHandCardInstance(instanceId);
+            return instance != null && instance.IsFlashback
+                ? new CardResolutionContext { SuppressMoveHistory = true }
+                : null;
         }
 
         /// <summary>
@@ -1114,6 +1560,7 @@ namespace Ashlight.Battle
                 return;
             }
 
+            CleanupInvalidPendingCharges();
             CurrentState.CurrentTurnUnitId = unitId;
             enemyUnit.CurrentEnergy = Mathf.Max(0, enemyUnit.BaseEnergy);
             Debug.Log($"[BattleManager] 敌人回合开始（能量已刷新，伤害等在执行轨结束时结算）: {unitId}, 能量={enemyUnit.CurrentEnergy}");
@@ -1428,8 +1875,16 @@ namespace Ashlight.Battle
                 return false;
             }
 
-            var commands = CardPlayResolver.GenerateCommands(card, CurrentState?.CardModifiers?.Get(card.Id));
-            bool isAttackCard = commands.Any(c => c is DamageCommand);
+            var context = new CardResolutionContext
+            {
+                AddedDelay = cast.AddedDelay,
+                DamageBonus = cast.DamageBonus,
+                NumericOnly = cast.NumericOnly,
+                NumericScale = cast.NumericScale <= 0f ? 1f : cast.NumericScale
+            };
+            var commands = CardPlayResolver.GenerateCommands(
+                card, CurrentState?.CardModifiers?.Get(card.Id), 1, context);
+            bool isAttackCard = commands.Any(IsAttackCommand);
             GameEvent.Publish(new CardExecutedEvent
             {
                 CasterId = owner.UnitId,
@@ -1441,14 +1896,40 @@ namespace Ashlight.Battle
                 UseCenterStage = true // 玩家执行牌结算：中央舞台演出
             });
 
-            bool success = CardPlayResolver.PlayCard(CurrentState, card, owner.UnitId, targetId);
+            bool success = CardPlayResolver.PlayCard(CurrentState, card, owner.UnitId, targetId, context);
             if (!success)
             {
                 Debug.LogWarning($"[BattleManager] 引线结算失败: {card.Id} ({castId})");
                 return false;
             }
 
+            if (cast.ResolveDrawCount > 0)
+                new DrawCommand(cast.ResolveDrawCount).Execute(CurrentState, owner.UnitId, owner.UnitId);
+            if (!string.IsNullOrEmpty(cast.ResolveBuffId) && cast.ResolveBuffValue > 0f)
+                new BuffCommand(cast.ResolveBuffId, cast.ResolveBuffValue).Execute(CurrentState, owner.UnitId, owner.UnitId);
+
+            if (!cast.NumericOnly && cast.EchoDelay > 0 && cast.EchoMultiplier > 0f)
+            {
+                _castSequence++;
+                var echo = new PendingPlayerCast
+                {
+                    CastId = $"{CastIdPrefix}{_castSequence}_{card.Id}_echo",
+                    Sequence = _castSequence,
+                    CasterUnitId = cast.CasterUnitId,
+                    Card = card,
+                    TargetUnitId = cast.TargetUnitId,
+                    ResolveRound = CurrentState.CurrentRound + cast.EchoDelay,
+                    AddedDelay = cast.AddedDelay,
+                    DamageBonus = cast.DamageBonus,
+                    NumericOnly = true,
+                    NumericScale = cast.EchoMultiplier
+                };
+                _pendingPlayerCasts[echo.CastId] = echo;
+                Debug.Log($"[BattleManager] 回声挂轨: {echo.CastId} 将于公共回合 {echo.ResolveRound} 结算");
+            }
+
             CurrentState.CheckBattleEnd();
+            ResolveQueuedImmediateCasts();
 
             if (PredictionManager != null)
             {
@@ -1456,6 +1937,132 @@ namespace Ashlight.Battle
             }
 
             return true;
+        }
+
+        private bool ResolvePendingCharge(string ownerId)
+        {
+            if (!_pendingPlayerCharges.TryGetValue(ownerId, out var charge) || charge?.Card == null)
+            {
+                return false;
+            }
+
+            _pendingPlayerCharges.Remove(ownerId);
+            var owner = CurrentState?.GetUnitById(ownerId);
+            RemoveChargeWhileBuffs(charge, owner);
+            if (owner == null || owner.IsDead)
+            {
+                return false;
+            }
+
+            string targetId = ResolveCastTargetId(charge.Card, owner, charge.TargetUnitId);
+            if (string.IsNullOrEmpty(targetId))
+            {
+                Debug.Log($"[BattleManager] 蓄力完成但没有合法目标: {charge.Card.Id}");
+                return false;
+            }
+
+            int chargeLevel = Mathf.Max(1, CurrentState.CurrentRound - charge.StartRound);
+            var commands = CardPlayResolver.GenerateCommands(
+                charge.Card, CurrentState.CardModifiers?.Get(charge.Card.Id), chargeLevel);
+            GameEvent.Publish(new CardExecutedEvent
+            {
+                CasterId = ownerId,
+                TargetId = targetId,
+                CardId = charge.Card.Id,
+                IsAttackCard = commands.Any(IsAttackCommand),
+                IsPrediction = false,
+                SkipBattleAnimation = false,
+                UseCenterStage = true
+            });
+
+            bool success = CardPlayResolver.PlayEffects(
+                CurrentState, charge.Card, charge.Card.Effects, ownerId, targetId, chargeLevel);
+            CurrentState.CheckBattleEnd();
+            PredictionManager?.TriggerPrediction("蓄力完成");
+            Debug.Log($"[BattleManager] 蓄力完成: {charge.Card.Id}, 层数={chargeLevel}");
+            return success;
+        }
+
+        private static IEnumerable<string> GetChargeWhileBuffIds(cfg.Character.CardInfo card)
+        {
+            if (card?.ChargeWhileEffects == null)
+            {
+                yield break;
+            }
+
+            foreach (var effect in card.ChargeWhileEffects)
+            {
+                if (effect is TauntEffect)
+                {
+                    yield return "Taunt";
+                }
+                else if (effect is BuffEffect buffEffect && !string.IsNullOrEmpty(buffEffect.BuffId))
+                {
+                    yield return buffEffect.BuffId;
+                }
+            }
+        }
+
+        private static void CaptureChargeWhileBuffs(PendingPlayerCharge charge, UnitState owner)
+        {
+            if (charge == null || owner == null)
+            {
+                return;
+            }
+
+            foreach (string buffId in GetChargeWhileBuffIds(charge.Card).Distinct())
+            {
+                charge.PreviousWhileBuffs[buffId] = owner.GetBuff(buffId)?.Clone();
+            }
+        }
+
+        private static void RemoveChargeWhileBuffs(PendingPlayerCharge charge, UnitState owner)
+        {
+            if (charge == null || owner == null)
+            {
+                return;
+            }
+
+            foreach (string buffId in GetChargeWhileBuffIds(charge.Card).Distinct())
+            {
+                owner.RemoveBuff(buffId);
+                if (charge.PreviousWhileBuffs.TryGetValue(buffId, out var previous) && previous != null)
+                {
+                    owner.AddBuff(previous.Clone());
+                }
+            }
+        }
+
+        private void CleanupInvalidPendingCharges()
+        {
+            if (CurrentState == null || _pendingPlayerCharges.Count == 0)
+            {
+                return;
+            }
+
+            var invalid = _pendingPlayerCharges
+                .Where(kv => CurrentState.GetUnitById(kv.Key) == null || CurrentState.GetUnitById(kv.Key).IsDead)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (string ownerId in invalid)
+            {
+                var owner = CurrentState.GetUnitById(ownerId);
+                RemoveChargeWhileBuffs(_pendingPlayerCharges[ownerId], owner);
+                _pendingPlayerCharges.Remove(ownerId);
+            }
+        }
+
+        public void CancelPendingCharges(string casterUnitId = null)
+        {
+            var targets = _pendingPlayerCharges
+                .Where(kv => string.IsNullOrEmpty(casterUnitId) || kv.Key == casterUnitId)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (string ownerId in targets)
+            {
+                RemoveChargeWhileBuffs(_pendingPlayerCharges[ownerId], CurrentState?.GetUnitById(ownerId));
+                _pendingPlayerCharges.Remove(ownerId);
+            }
         }
 
         /// <summary>
@@ -1579,7 +2186,11 @@ namespace Ashlight.Battle
             foreach (var id in removed)
             {
                 _pendingPlayerCasts.Remove(id);
+                _queuedImmediateCastIds.Remove(id);
             }
+
+            if (string.IsNullOrEmpty(casterUnitId))
+                _queuedImmediateCastIds.Clear();
 
             if (removed.Count > 0)
             {
@@ -1882,6 +2493,9 @@ namespace Ashlight.Battle
                 CurrentState.MoveTriggers.Clear();
             }
             CurrentState.MovesThisTurn = 0;
+            CurrentState.MovesByUnitThisTurn?.Clear();
+            CurrentState.LastMoveMainCardByOwner?.Clear();
+            CurrentState.MoveCardCostOverrideByOwner?.Clear();
 
             // 安全兜底：确保全场暂停被解除（兼容旧 UI 调用路径）
             if (CurrentState.IsGlobalPaused)
@@ -1921,6 +2535,16 @@ namespace Ashlight.Battle
         private int GetCardEnergyCost(cfg.Character.CardInfo card)
         {
             return card == null ? 0 : card.Energy;
+        }
+
+        private static bool IsAttackCommand(ICommand command)
+        {
+            return command is DamageCommand
+                   || command is AttackExtraCommand
+                   || command is AttackConditionalCommand
+                   || command is AttackCurrentRoundCommand
+                   || command is WeatherConditionalDamageCommand
+                   || command is RepeatAttackByOwnMoveCommand;
         }
 
         private void GenerateEnemyIntentionsForCurrentRound()

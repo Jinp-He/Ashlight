@@ -1,4 +1,5 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
 using UnityEngine;
 
@@ -37,6 +38,7 @@ namespace Ashlight.Battle.Core.Commands
             foreach (var target in targets)
             {
                 int dealt = target.TakeDamage(adjustedDamage);
+                ArmorBreakMoveProcessor.ResolvePending(state, target);
                 Debug.Log($"[AttackCurrentRound] {target.UnitId} (本回合行动者) 受到 {dealt} 点伤害");
 
                 GameEvent.Publish(new AttackExecutedEvent

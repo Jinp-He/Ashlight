@@ -30,7 +30,7 @@ namespace Ashlight.Battle.Core.Commands
             var movers = new List<UnitState>();
             foreach (var ally in allies)
             {
-                if (ally != null && !ally.IsDead && ally.RowPosition == sourceRow)
+                if (ally != null && !ally.IsDead && !ally.HasBuff("Root") && ally.RowPosition == sourceRow)
                 {
                     movers.Add(ally);
                 }
@@ -50,7 +50,7 @@ namespace Ashlight.Battle.Core.Commands
                     IsPrediction = state.IsPrediction
                 });
 
-                MoveTriggerProcessor.OnUnitMoved(state, mover);
+                MoveTriggerProcessor.OnUnitMoved(state, mover, ownerId);
                 if (state.IsBattleEnded) return;
             }
         }

@@ -34,26 +34,57 @@ namespace Ashlight.Systems.Card
             {
                 if (card == null) continue;
                 if (card.BelongTo != character) continue;
+                if (card.Rarity == cfg.RarityEnum.Temporary ||
+                    card.Rarity == cfg.RarityEnum.Basic) continue;
                 if (card.IsLocked) continue;
                 if (!card.IsInUpgrade) continue;   // 仅纳入被标记为可升级三选一的卡牌
                 pool.Add(card);
             }
 
-            // 2. 洗牌后取前 count 个（Fisher–Yates）
-            for (int i = pool.Count - 1; i > 0; i--)
+            // 2. 按稀有度加权、无放回抽取。普通/稀有/史诗权重为 60/30/10，
+            // 避免所有稀有度实际等概率，也不会在同一次三选一里重复同一张牌。
+            while (pool.Count > 0 && result.Count < count)
             {
-                int j = _rng.Next(0, i + 1);
-                var tmp = pool[i];
-                pool[i] = pool[j];
-                pool[j] = tmp;
-            }
+                int totalWeight = 0;
+                foreach (var card in pool)
+                {
+                    totalWeight += GetRarityWeight(card.Rarity);
+                }
 
-            for (int i = 0; i < pool.Count && result.Count < count; i++)
-            {
-                result.Add(pool[i]);
+                int roll = _rng.Next(0, totalWeight);
+                int accumulated = 0;
+                int pickedIndex = 0;
+                for (int i = 0; i < pool.Count; i++)
+                {
+                    accumulated += GetRarityWeight(pool[i].Rarity);
+                    if (roll < accumulated)
+                    {
+                        pickedIndex = i;
+                        break;
+                    }
+                }
+
+                result.Add(pool[pickedIndex]);
+                pool.RemoveAt(pickedIndex);
             }
 
             return result;
+        }
+
+        private static int GetRarityWeight(cfg.RarityEnum rarity)
+        {
+            switch (rarity)
+            {
+                case cfg.RarityEnum.Temporary:
+                case cfg.RarityEnum.Basic:
+                    return 0;
+                case cfg.RarityEnum.Epic:
+                    return 10;
+                case cfg.RarityEnum.Rare:
+                    return 30;
+                default:
+                    return 60;
+            }
         }
     }
 }

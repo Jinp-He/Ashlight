@@ -9,6 +9,11 @@ namespace Ashlight.Battle.Core.Data
     {
         public const string TypeDamage = "Damage";   // 铁蒺藜：每次移动随机对一名敌人造成 Amount 伤害
         public const string TypeAddCard = "AddCard"; // 隧穿效应：每次移动把 CardId 加入手牌 Amount 张
+        public const string TypeDraw = "Draw";       // 飒沓流星：满足移动条件时抽牌
+
+        public const string ScopeAny = "Any";
+        public const string ScopeFriendly = "Friendly";
+        public const string ScopeOwner = "Owner";
 
         /// <summary>登记者（效果来源单位）Id。</summary>
         public string OwnerId { get; set; }
@@ -25,6 +30,12 @@ namespace Ashlight.Battle.Core.Data
         /// <summary>已触发次数（也用作确定性伪随机的序号，保证预测与实战一致）。</summary>
         public int FireCount { get; set; }
 
+        /// <summary>可触发的最大次数；0 表示不设上限。</summary>
+        public int MaxFireCount { get; set; }
+
+        /// <summary>移动者筛选：Any / Friendly（与登记者同阵营）/ Owner（仅登记者自身）。</summary>
+        public string MoverScope { get; set; } = ScopeAny;
+
         public MoveTriggerState Clone()
         {
             return new MoveTriggerState
@@ -33,7 +44,9 @@ namespace Ashlight.Battle.Core.Data
                 TriggerType = TriggerType,
                 Amount = Amount,
                 CardId = CardId,
-                FireCount = FireCount
+                FireCount = FireCount,
+                MaxFireCount = MaxFireCount,
+                MoverScope = MoverScope
             };
         }
     }

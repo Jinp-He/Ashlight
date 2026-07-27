@@ -2,7 +2,7 @@
   {
     "Id": "Rocket001",
     "Name": "挥砍",
-    "Description": "造成{A}点伤害",
+    "Description": "造成{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -14,6 +14,186 @@
     "CardType": 0,
     "BelongTo": 1,
     "TargetType": 3,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket002",
+    "Name": "重型护板",
+    "Description": "获得{D}点护甲。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 9,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket003",
+    "Name": "炮击",
+    "Description": "对所有敌人造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 6,
+        "is_aoe": true
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket004",
+    "Name": "超载火炮",
+    "Description": "[过载]{V}。对[前排]所有敌人造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 1
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 10,
+        "is_aoe": true
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 4,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 0,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket005",
+    "Name": "举盾",
+    "Description": "获得{D}点护甲并移动至[前排]。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 6,
+        "per_hit": false
+      },
+      {
+        "$type": "MoveSelfEffect",
+        "EffectType": 4,
+        "mode": "FrontRow"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket006",
+    "Name": "挺身而出",
+    "Description": "[蓄力]：立即获得{D}点护甲；蓄力期间获得[嘲讽]。",
+    "Effects": [],
+    "CardType": 2,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 10,
+        "per_hit": false
+      }
+    ],
+    "ChargeWhileEffects": [
+      {
+        "$type": "TauntEffect",
+        "EffectType": 4,
+        "target": "All"
+      }
+    ]
+  },
+  {
+    "Id": "Rocket007",
+    "Name": "奇思妙想",
+    "Description": "随机获得{N}张[小发明]；若自身位于[后排]，获得数量翻倍。",
+    "Effects": [
+      {
+        "$type": "AddRandomToHandEffect",
+        "EffectType": 4,
+        "card_ids": "Extra002|Extra003|Extra004",
+        "count": 1,
+        "condition_type": "SelfInBackRow",
+        "condition_multiplier": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
@@ -22,19 +202,53 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Rocket002",
-    "Name": "迅猛打击",
-    "Description": "造成{A}点伤害。若目标处于[执行]中，伤害翻倍。",
+    "Id": "Rocket008",
+    "Name": "护甲包",
+    "Description": "使一名友方角色获得{D}点护甲。",
     "Effects": [
       {
-        "$type": "AttackExtraEffect",
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 8,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 0,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket009",
+    "Name": "交错打击",
+    "Description": "造成{A}点伤害；若有友方角色在本轮行动，额外造成{A:1}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
         "EffectType": 0,
         "damage": 9,
-        "conditions": "Channeling|Recoil",
-        "multiplier": 2
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackConditionalEffect",
+        "EffectType": 0,
+        "bonus_damage": 9,
+        "condition_type": "AllyActingThisRound"
       }
     ],
     "CardType": 0,
@@ -42,54 +256,256 @@
     "TargetType": 3,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 1,
+    "Energy": 2,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Rocket003",
-    "Name": "旋风斩",
-    "Description": "对所有敌人造成{A}点伤害，每造成一次伤害，获得{D}点护甲",
+    "Id": "Rocket010",
+    "Name": "重炮",
+    "Description": "[过载]{V}。[蓄力]：造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 1
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 20,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 2,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 1,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket011",
+    "Name": "装甲齐射",
+    "Description": "对[前排]所有敌人造成{A}点伤害；每击中一名敌人，获得{D}点护甲。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 13,
+        "damage": 5,
         "is_aoe": true
       },
       {
         "$type": "DefenseEffect",
         "EffectType": 1,
-        "value": 3,
+        "value": 2,
         "per_hit": true
       }
     ],
     "CardType": 0,
     "BelongTo": 1,
     "TargetType": 4,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 0,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket012",
+    "Name": "阵线加固",
+    "Description": "使[前排]所有友方角色获得{D}点护甲。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 6,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 1,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 0,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket013",
+    "Name": "超频供能",
+    "Description": "[过载]{V}。获得{V:1}点能量，抽{V:2}张牌。",
+    "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 2
+      },
+      {
+        "$type": "EnergyEffect",
+        "EffectType": 6,
+        "value": 2
+      },
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Rocket004",
-    "Name": "巨龙撞击",
-    "Description": "造成 {A} 点伤害并 [推迟] {T} 格。",
+    "Id": "Rocket014",
+    "Name": "极限超频",
+    "Description": "[过载]{V}。获得{V:1}点能量，抽{V:2}张牌。",
     "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 3
+      },
+      {
+        "$type": "EnergyEffect",
+        "EffectType": 6,
+        "value": 3
+      },
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket015",
+    "Name": "冷却循环",
+    "Description": "清除自身所有[过载]，抽{V}张牌。",
+    "Effects": [
+      {
+        "$type": "ClearOverloadEffect",
+        "EffectType": 4
+      },
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket016",
+    "Name": "应急装甲",
+    "Description": "[蓄力]：获得{D}点护甲；护甲耗尽时移动至[后排]。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 12,
+        "per_hit": false
+      },
+      {
+        "$type": "MoveOnArmorBreakEffect",
+        "EffectType": 4,
+        "mode": "BackRow"
+      }
+    ],
+    "CardType": 2,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket017",
+    "Name": "震荡冲击",
+    "Description": "[过载]{V}。造成{A}点伤害并[推迟]{T}回合；若发生[碰撞]，碰撞双方[晕眩]。",
+    "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 1
+      },
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 16,
+        "damage": 12,
         "is_aoe": false
       },
       {
@@ -102,148 +518,135 @@
     "CardType": 0,
     "BelongTo": 1,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
+    "Energy": 2,
+    "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Rocket005",
-    "Name": "举盾",
-    "Description": "获得{D}点护甲",
+    "Id": "Rocket018",
+    "Name": "战术打击",
+    "Description": "[蓄力]：造成{A}×蓄力层数点伤害。",
+    "Effects": [
+      {
+        "$type": "ChargedAttackEffect",
+        "EffectType": 0,
+        "damage_per_charge": 5,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 2,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Rocket019",
+    "Name": "区域装甲",
+    "Description": "使与自己同排的所有友方角色获得{D}点护甲。",
     "Effects": [
       {
         "$type": "DefenseEffect",
         "EffectType": 1,
-        "value": 6,
+        "value": 7,
         "per_hit": false
       }
     ],
     "CardType": 0,
     "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
+    "TargetType": 1,
+    "Rarity": 1,
     "IsLocked": false,
-    "Energy": 1,
+    "Energy": 2,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
-    "TargetZone": 2,
+    "TargetZone": 3,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Rocket006",
-    "Name": "挺身而出",
-    "Description": "[执行] 3。执行期间无法攻击，但 [嘲讽] 全体并大幅减伤。",
+    "Id": "Rocket020",
+    "Name": "推进阵线",
+    "Description": "移动至[前排]，自己与前排所有队友各获得{D}点护甲。",
     "Effects": [
       {
-        "$type": "TauntEffect",
+        "$type": "MoveSelfEffect",
         "EffectType": 4,
-        "target": "All"
+        "mode": "FrontRow"
       },
       {
-        "$type": "BuffEffect",
-        "EffectType": 5,
-        "buff_id": "ReduceDmg",
-        "value": 50
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 5,
+        "per_hit": false
       }
     ],
     "CardType": 0,
     "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
+    "TargetType": 1,
+    "Rarity": 1,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket007",
-    "Name": "吞噬痛苦",
-    "Description": "回复{H}点生命。",
-    "Effects": [
-      {
-        "$type": "HealEffect",
-        "EffectType": 3,
-        "value": 9
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
+    "Energy": 2,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
-    "TargetZone": 2,
+    "TargetZone": 0,
     "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket008",
-    "Name": "挫志怒吼",
-    "Description": "使所有敌人意图 [推迟] {T} 格。",
-    "Effects": [
-      {
-        "$type": "TimeShiftAllEffect",
-        "EffectType": 2,
-        "shift_value": 1
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene001",
     "Name": "火球术",
-    "Description": "造成{A}点伤害",
+    "Description": "造成{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 24,
+        "damage": 18,
         "is_aoe": false
       }
     ],
     "CardType": 1,
     "BelongTo": 0,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
-    "Energy": 3,
+    "Energy": 2,
     "ExecutingCost": 3,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene002",
     "Name": "奥术护罩",
-    "Description": "使[前排]所有友方单位获得{D}点护甲",
+    "Description": "使[前排]所有友方角色获得{D}点护甲。",
     "Effects": [
       {
         "$type": "DefenseEffect",
@@ -255,7 +658,7 @@
     "CardType": 1,
     "BelongTo": 0,
     "TargetType": 1,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 3,
     "ExecutingCost": 2,
@@ -263,24 +666,38 @@
     "IsExhaust": false,
     "TargetZone": 0,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene003",
     "Name": "秘法飞弹",
-    "Description": "造成3次{A}点伤害",
+    "Description": "连续造成3次{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 6,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
+        "is_aoe": false
+      },
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 3,
         "is_aoe": false
       }
     ],
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -288,12 +705,14 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene004",
     "Name": "引导",
-    "Description": "抽{V}张牌",
+    "Description": "抽{V}张牌。",
     "Effects": [
       {
         "$type": "DrawEffect",
@@ -304,7 +723,7 @@
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 0,
     "ExecutingCost": 0,
@@ -312,17 +731,19 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene005",
     "Name": "炎爆术",
-    "Description": "造成 {A} 点伤害。",
+    "Description": "造成{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 16,
+        "damage": 28,
         "is_aoe": false
       }
     ],
@@ -331,18 +752,20 @@
     "TargetType": 3,
     "Rarity": 0,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 5,
+    "Energy": 3,
+    "ExecutingCost": 4,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene006",
     "Name": "寒霜新星",
-    "Description": "对[前排]所有敌人造成{A}点伤害并[推迟]{T}格",
+    "Description": "对[前排]所有敌人造成{A}点伤害，并使其行动[推迟]{T}格。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -359,7 +782,7 @@
     "CardType": 1,
     "BelongTo": 0,
     "TargetType": 4,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 4,
     "ExecutingCost": 4,
@@ -367,12 +790,14 @@
     "IsExhaust": false,
     "TargetZone": 0,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene007",
     "Name": "静滞",
-    "Description": "造成{A}点伤害，[定身]{V}回合",
+    "Description": "造成{A}点伤害，并使目标[定身]。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -390,7 +815,7 @@
     "CardType": 1,
     "BelongTo": 0,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 2,
     "ExecutingCost": 2,
@@ -398,12 +823,14 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene008",
     "Name": "闪现",
-    "Description": "移动一名友军，使其获得{D}点护甲",
+    "Description": "移动一名友方角色，使其获得{D}点护甲。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -420,7 +847,7 @@
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 0,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -428,25 +855,26 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene009",
     "Name": "连锁闪电",
-    "Description": "对所有敌人造成 {A} 点伤害。",
+    "Description": "对所有敌人造成{A}点伤害；若这个公共回合结算过天气，伤害翻倍。",
     "Effects": [
       {
-        "$type": "AttackExtraEffect",
+        "$type": "WeatherConditionalAttackEffect",
         "EffectType": 0,
-        "damage": 18,
-        "conditions": "Channeling|Recoil",
+        "damage": 10,
         "multiplier": 2
       }
     ],
     "CardType": 1,
     "BelongTo": 0,
     "TargetType": 4,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 2,
     "ExecutingCost": 3,
@@ -454,105 +882,181 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene010",
-    "Name": "冰封领域",
-    "Description": "对所有敌人造成{A}点伤害并[推迟]{T}格。",
+    "Name": "余烬增压",
+    "Description": "选择一张会造成伤害的己方在轨执行牌，使其[顺延]{T}格；该牌造成的伤害增加{A}点。",
     "Effects": [
       {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 14,
-        "is_aoe": true
-      },
-      {
-        "$type": "TimeShiftAllEffect",
+        "$type": "CastShiftEffect",
         "EffectType": 2,
         "shift_value": 2
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 0,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 3,
-    "ExecutingCost": 5,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene011",
-    "Name": "魔力脉冲",
-    "Description": "造成{A}点伤害；若目标处于[执行]中，额外造成{A:1}点伤害。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 5,
-        "is_aoe": false
       },
       {
-        "$type": "AttackConditionalEffect",
+        "$type": "CastDamageBonusEffect",
         "EffectType": 0,
-        "bonus_damage": 7,
-        "condition_type": "InExecution"
+        "damage_bonus": 8
       }
     ],
     "CardType": 0,
     "BelongTo": 0,
-    "TargetType": 3,
-    "Rarity": 0,
+    "TargetType": 5,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene011",
+    "Name": "时间复利",
+    "Description": "选择一张己方在轨执行牌，使其[顺延]{T}格；该牌结算时，抽{V}张牌，并使其施法者获得{V:1}点[充能]。",
+    "Effects": [
+      {
+        "$type": "CastShiftEffect",
+        "EffectType": 2,
+        "shift_value": 2
+      },
+      {
+        "$type": "CastResolveDrawEffect",
+        "EffectType": 6,
+        "count": 2
+      },
+      {
+        "$type": "CastResolveBuffEffect",
+        "EffectType": 6,
+        "buff_id": "Energized",
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 5,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false,
+    "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene012",
-    "Name": "元素爆发",
-    "Description": "造成{A}点伤害；若目标处于[执行]中，伤害翻倍。",
+    "Name": "抢拍",
+    "Description": "选择一张己方在轨执行牌，使其[提前]{T}格；[过载]{V}。",
     "Effects": [
       {
-        "$type": "AttackExtraEffect",
-        "EffectType": 0,
-        "damage": 12,
-        "conditions": "Channeling|Recoil",
-        "multiplier": 2
+        "$type": "CastShiftEffect",
+        "EffectType": 2,
+        "shift_value": -1
+      },
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 1
       }
     ],
     "CardType": 0,
     "BelongTo": 0,
-    "TargetType": 3,
-    "Rarity": 0,
+    "TargetType": 5,
+    "Rarity": -1,
     "IsLocked": false,
-    "Energy": 2,
+    "Energy": 0,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false,
+    "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene013",
+    "Name": "提前兑现",
+    "Description": "选择一张己方在轨执行牌，使其在当前公共回合立刻结算；[过载]{V}。",
+    "Effects": [
+      {
+        "$type": "CastImmediateEffect",
+        "EffectType": 4
+      },
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 5,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene014",
+    "Name": "回声咏唱",
+    "Description": "选择一张含有伤害、护甲或治疗效果的己方在轨执行牌，使其[顺延]{T}格；该牌首次结算后，在{V}个公共回合后以一半数值再次结算这些效果。",
+    "Effects": [
+      {
+        "$type": "CastShiftEffect",
+        "EffectType": 2,
+        "shift_value": 3
+      },
+      {
+        "$type": "CastEchoEffect",
+        "EffectType": 6,
+        "delay": 2,
+        "multiplier": 0.5
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 5,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene015",
     "Name": "时缝",
-    "Description": "使目标[推迟]{T}格。",
+    "Description": "使一名敌人的行动[推迟]{T}格。",
     "Effects": [
       {
         "$type": "PushCollisionEffect",
         "EffectType": 2,
         "shift_value": 2,
-        "collision_result": "Stun"
+        "collision_result": "None"
       }
     ],
     "CardType": 0,
@@ -566,18 +1070,20 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Irene014",
+    "Id": "Irene016",
     "Name": "拽引",
-    "Description": "使目标的行动[提前]2格。",
+    "Description": "使一名敌人的行动[提前]{T}格。",
     "Effects": [
       {
         "$type": "PushCollisionEffect",
         "EffectType": 2,
         "shift_value": -2,
-        "collision_result": "Stun"
+        "collision_result": "None"
       }
     ],
     "CardType": 0,
@@ -591,18 +1097,20 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Irene015",
+    "Id": "Irene017",
     "Name": "时间馈赠",
-    "Description": "使一名友军的行动[提前]1格，并获得[充能]{V}。",
+    "Description": "使一名友方角色的行动[提前]{T}格，并使其获得{V}点[充能]。",
     "Effects": [
       {
         "$type": "PushCollisionEffect",
         "EffectType": 2,
         "shift_value": -1,
-        "collision_result": "Stun"
+        "collision_result": "None"
       },
       {
         "$type": "BuffEffect",
@@ -614,31 +1122,7 @@
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 0,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene016",
-    "Name": "回溯",
-    "Description": "回溯一名友军的伤势，回复{H}点生命。",
-    "Effects": [
-      {
-        "$type": "HealEffect",
-        "EffectType": 3,
-        "value": 14
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 0,
-    "TargetType": 0,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 2,
     "ExecutingCost": 0,
@@ -646,12 +1130,126 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Irene017",
+    "Id": "Irene018",
+    "Name": "观测天象",
+    "Description": "抽{V}张牌；若有己方在轨执行牌将在下一次天气所在的公共回合结算，获得{V:1}点能量。",
+    "Effects": [
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 1
+      },
+      {
+        "$type": "WeatherSyncEnergyEffect",
+        "EffectType": 6,
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene019",
+    "Name": "引雷",
+    "Description": "使一名敌人的下一次行动向下一次天气所在的公共回合移动至多{T}格，但不会越过该公共回合。",
+    "Effects": [
+      {
+        "$type": "AlignToWeatherEffect",
+        "EffectType": 2,
+        "max_shift": 2
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene020",
+    "Name": "终焉倒数",
+    "Description": "造成{A}点伤害；此牌每被己方卡牌[顺延]，伤害便提高，最多翻倍。",
+    "Effects": [
+      {
+        "$type": "DelayScaledAttackEffect",
+        "EffectType": 0,
+        "base_damage": 24,
+        "damage_per_delay": 6,
+        "max_bonus": 24,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 1,
+    "BelongTo": 0,
+    "TargetType": 3,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 4,
+    "ExecutingCost": 6,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene021",
+    "Name": "风暴眼",
+    "Description": "直到下一次天气结算，安排在该公共回合行动的所有友方角色在天气结算前获得{D}点护甲。",
+    "Effects": [
+      {
+        "$type": "WeatherGuardEffect",
+        "EffectType": 1,
+        "value": 8
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Irene022",
     "Name": "时间透支",
-    "Description": "获得{V:1}点能量，抽{V:2}张牌。",
+    "Description": "[过载]{V}。获得{V:1}点能量，抽{V:2}张牌。",
     "Effects": [
       {
         "$type": "OverloadEffect",
@@ -672,7 +1270,7 @@
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 0,
     "ExecutingCost": 0,
@@ -680,250 +1278,45 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Irene018",
-    "Name": "凝滞领域",
-    "Description": "使所有敌人[推迟]{T}格。",
+    "Id": "Irene023",
+    "Name": "改天换日",
+    "Description": "使下一次天气[顺延]{T}格；使所有己方在轨执行牌[提前]{T:1}格。",
     "Effects": [
       {
-        "$type": "TimeShiftAllEffect",
+        "$type": "WeatherShiftEffect",
         "EffectType": 2,
-        "shift_value": 2
+        "shift_value": 3
+      },
+      {
+        "$type": "CastShiftAllEffect",
+        "EffectType": 2,
+        "shift_value": -1
       }
     ],
     "CardType": 0,
     "BelongTo": 0,
-    "TargetType": 4,
-    "Rarity": 0,
+    "TargetType": 2,
+    "Rarity": 2,
     "IsLocked": false,
     "Energy": 2,
     "ExecutingCost": 0,
     "IsEthereal": false,
-    "IsExhaust": false,
+    "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene019",
-    "Name": "凝神蓄势",
-    "Description": "获得{D}点护甲与[充能]{V}。",
-    "Effects": [
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 5,
-        "per_hit": false
-      },
-      {
-        "$type": "BuffEffect",
-        "EffectType": 6,
-        "buff_id": "Energized",
-        "value": 2
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 0,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene020",
-    "Name": "终焉倒数",
-    "Description": "造成{A}点伤害。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 40,
-        "is_aoe": false
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 0,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 4,
-    "ExecutingCost": 6,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene021",
-    "Name": "奥术洪流",
-    "Description": "对所有敌人造成{A}点伤害。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 16,
-        "is_aoe": true
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 0,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 4,
-    "ExecutingCost": 4,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene022",
-    "Name": "时间壁垒",
-    "Description": "我方全体获得{D}点护甲。",
-    "Effects": [
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 7,
-        "per_hit": false
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 0,
-    "TargetType": 1,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 3,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Irene023",
-    "Name": "湮灭射线",
-    "Description": "造成{A}点伤害；若目标处于[执行]中，伤害翻倍。",
-    "Effects": [
-      {
-        "$type": "AttackExtraEffect",
-        "EffectType": 0,
-        "damage": 16,
-        "conditions": "Channeling|Recoil",
-        "multiplier": 2
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 0,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 3,
-    "ExecutingCost": 3,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Zhouzhou002",
-    "Name": "闪避姿态",
-    "Description": "获得 [闪避] {F}。",
-    "Effects": [
-      {
-        "$type": "BuffEffect",
-        "EffectType": 6,
-        "buff_id": "Dodge",
-        "value": 1
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou001",
-    "Name": "快速射击",
-    "Description": "造成 {A} 点伤害",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 6,
-        "is_aoe": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou003",
-    "Name": "影袭",
-    "Description": "造成{A}点伤害；若本回合移动过，叠加{F}层[中毒]",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 4,
-        "is_aoe": false
-      },
-      {
-        "$type": "BuffConditionalEffect",
-        "EffectType": 6,
-        "buff_id": "Poison",
-        "value": 2,
-        "condition_type": "MovedThisTurn"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou004",
     "Name": "翻滚",
-    "Description": "[移动]，获得[闪避]{V}",
+    "Description": "[移动]；获得[闪避]{F}。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -934,13 +1327,13 @@
         "$type": "BuffEffect",
         "EffectType": 6,
         "buff_id": "Dodge",
-        "value": 2
+        "value": 1
       }
     ],
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -948,43 +1341,41 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou005",
-    "Name": "破空拳",
-    "Description": "造成 {A} 点伤害。如果你在[前排]，获得{D}点护甲",
+    "Id": "Zhouzhou001",
+    "Name": "飞羽",
+    "Description": "造成{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
-        "damage": 29,
+        "damage": 4,
         "is_aoe": false
-      },
-      {
-        "$type": "DefenseConditionalEffect",
-        "EffectType": 1,
-        "value": 8,
-        "condition_type": "SelfInFrontRow"
       }
     ],
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 4,
+    "Energy": 0,
+    "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou006",
+    "Id": "Zhouzhou003",
     "Name": "疾步",
-    "Description": "[移动]，获得1张小刀",
+    "Description": "[移动]；将1张[飞刀]加入手牌。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -1001,7 +1392,7 @@
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1009,160 +1400,25 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou007",
-    "Name": "掩护射击",
-    "Description": "造成{A}点伤害；若你在[前排]，移动到[后排]；若你在[后排]，额外造成{A:1}点伤害",
+    "Id": "Zhouzhou004",
+    "Name": "踏歌",
+    "Description": "[移动]一名其他友方角色。",
     "Effects": [
       {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 14,
-        "is_aoe": false
-      },
-      {
-        "$type": "AttackConditionalEffect",
-        "EffectType": 0,
-        "bonus_damage": 6,
-        "condition_type": "SelfInBackRow"
-      },
-      {
-        "$type": "MoveSelfEffect",
+        "$type": "MovePositionEffect",
         "EffectType": 4,
-        "mode": "BackRow"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou008",
-    "Name": "推手",
-    "Description": "使目标[推迟]{T}格",
-    "Effects": [
-      {
-        "$type": "OverloadEffect",
-        "EffectType": 6,
-        "value": 1
-      },
-      {
-        "$type": "PushCollisionEffect",
-        "EffectType": 2,
-        "shift_value": 1,
-        "collision_result": "Stun"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou009",
-    "Name": "全力攻势",
-    "Description": "对所有敌人造成 3 次 {A} 点伤害。",
-    "Effects": [
-      {
-        "$type": "OverloadEffect",
-        "EffectType": 6,
-        "value": 2
-      },
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 12,
-        "is_aoe": true
-      },
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 12,
-        "is_aoe": true
-      },
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 12,
-        "is_aoe": true
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 5,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou010",
-    "Name": "猎人标记",
-    "Description": "使目标[易伤]{V}%",
-    "Effects": [
-      {
-        "$type": "BuffEffect",
-        "EffectType": 6,
-        "buff_id": "Vulnerable",
-        "value": 50
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 0,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 1,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou011",
-    "Name": "肾上腺素",
-    "Description": "立刻清除一名角色所有 [过载]，并抽{V}张牌。",
-    "Effects": [
-      {
-        "$type": "ClearOverloadEffect",
-        "EffectType": 4
-      },
-      {
-        "$type": "DrawEffect",
-        "EffectType": 6,
-        "count": 1
+        "mode": "Toggle"
       }
     ],
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 0,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1170,85 +1426,133 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou012",
-    "Name": "铁蒺藜",
-    "Description": "这回合结束前，每次移动，会随机对敌人造成{A}点伤害",
+    "Id": "Zhouzhou005",
+    "Name": "挽袖同行",
+    "Description": "[移动]一名其他友方角色；使其获得{D}点护甲。",
     "Effects": [
       {
-        "$type": "OnMoveDamageEffect",
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      },
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 5,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 0,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou006",
+    "Name": "喝彩",
+    "Description": "获得[士气]{F}。",
+    "Effects": [
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Morale",
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou007",
+    "Name": "游身",
+    "Description": "获得{D}点护甲；若拥有[士气]，再获得[闪避]{F}。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 5,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffConditionalEffect",
+        "EffectType": 6,
+        "buff_id": "Dodge",
+        "value": 1,
+        "condition_type": "HasMorale"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": -1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou008",
+    "Name": "预知一击",
+    "Description": "对当前公共回合的所有敌方角色造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackCurrentRoundEffect",
         "EffectType": 0,
         "damage": 4
       }
     ],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou013",
-    "Name": "预知一击",
-    "Description": "对当前回合的所有敌人造成{A}点伤害",
-    "Effects": [
-      {
-        "$type": "AttackCurrentRoundEffect",
-        "EffectType": 0,
-        "damage": 8
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
     "TargetType": 4,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
-    "Energy": 1,
+    "Energy": 0,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou014",
-    "Name": "示现",
-    "Description": "[晕眩]当前回合的敌人",
-    "Effects": [
-      {
-        "$type": "StunCurrentRoundEffect",
-        "EffectType": 4,
-        "duration": 1,
-        "random_one": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Zhouzhou015",
+    "Id": "Zhouzhou009",
     "Name": "紧急避险",
-    "Description": "移动所在排的所有友方角色",
+    "Description": "[移动]周周所在排的所有友方角色。",
     "Effects": [
       {
         "$type": "MoveRowEffect",
@@ -1258,7 +1562,7 @@
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1266,23 +1570,18 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou016",
-    "Name": "隧穿效应",
-    "Description": "这回合每有一名角色移动一次，获得一张[小刀]",
-    "Effects": [
-      {
-        "$type": "OnMoveAddCardEffect",
-        "EffectType": 4,
-        "card_id": "Extra001",
-        "count": 1
-      }
-    ],
+    "Id": "Zhouzhou010",
+    "Name": "稳住阵脚",
+    "Description": "所有友方角色获得3点护甲；自身获得1层[士气]。",
+    "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 2,
+    "TargetType": 1,
     "Rarity": 0,
     "IsLocked": false,
     "Energy": 1,
@@ -1291,12 +1590,14 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
-    "Id": "Zhouzhou017",
+    "Id": "Zhouzhou011",
     "Name": "钩锁",
-    "Description": "移动一名敌方角色，造成{A}点伤害",
+    "Description": "[移动]一名敌方角色；对其造成{A}点伤害。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -1319,26 +1620,148 @@
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
-    "TargetZone": 1,
+    "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou012",
+    "Name": "回锋",
+    "Description": "造成{A}点伤害；若这张牌消耗了[士气]，随后[移动]。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou013",
+    "Name": "行云",
+    "Description": "[移动]；若移动后拥有3层[士气]，抽1张牌。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 0,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou014",
+    "Name": "折返",
+    "Description": "连续[移动]2次；第二次移动成功后，获得1层[闪避]。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou015",
+    "Name": "雁双飞",
+    "Description": "依次[移动]自己和一名其他友方角色；两者各获得4点护甲。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 0,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou016",
+    "Name": "隧穿效应",
+    "Description": "这个回合中，每当一名友方角色成功移动，将1张[飞刀]加入手牌，最多触发3次。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou017",
+    "Name": "铁蒺藜",
+    "Description": "这个回合中，每当任意角色成功移动，随机对一名敌方角色造成4点伤害，最多触发3次。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 1,
+    "IsLocked": false,
+    "Energy": 1,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Zhouzhou018",
-    "Name": "全知全闪",
-    "Description": "当前回合每有一个敌人，获得[闪避]1",
-    "Effects": [
-      {
-        "$type": "BuffPerCurrentRoundEnemyEffect",
-        "EffectType": 6,
-        "buff_id": "Dodge",
-        "value": 1
-      }
-    ],
+    "Name": "飒沓流星",
+    "Description": "这个回合中，接下来每当你成功移动，抽1张牌，最多触发2次；随后[移动]，并将1张[飞刀]加入手牌。",
+    "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1346,120 +1769,39 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Zhouzhou019",
-    "Name": "杀戮时刻",
-    "Description": "获得{V:1}点能量，抽{V:2}张牌。",
-    "Effects": [
-      {
-        "$type": "OverloadEffect",
-        "EffectType": 6,
-        "value": 3
-      },
-      {
-        "$type": "EnergyEffect",
-        "EffectType": 6,
-        "value": 2
-      },
-      {
-        "$type": "DrawEffect",
-        "EffectType": 6,
-        "count": 2
-      }
-    ],
+    "Name": "一鼓作气",
+    "Description": "消耗自身所有[士气]；所有友方角色获得5点护甲，每消耗1层，额外获得2点护甲。",
+    "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 2,
-    "Rarity": 0,
+    "TargetType": 1,
+    "Rarity": 1,
     "IsLocked": false,
-    "Energy": 0,
+    "Energy": 2,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Zhouzhou020",
-    "Name": "眩晕飞镖",
-    "Description": "[吟唱]1，晕眩一个当前回合的随机敌人",
-    "Effects": [
-      {
-        "$type": "StunCurrentRoundEffect",
-        "EffectType": 4,
-        "duration": 1,
-        "random_one": true
-      }
-    ],
-    "CardType": 1,
+    "Name": "旧步重寻",
+    "Description": "获得这个回合中最近打出的一张移动主卡的0费[闪回]副本。",
+    "Effects": [],
+    "CardType": 0,
     "BelongTo": 2,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 1,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket010",
-    "Name": "盾击",
-    "Description": "造成{A}点伤害，施加[破韧]{V}",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 8,
-        "is_aoe": false
-      },
-      {
-        "$type": "BuffEffect",
-        "EffectType": 6,
-        "buff_id": "Stagger",
-        "value": 12
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket011",
-    "Name": "战吼",
-    "Description": "[嘲讽]敌人，获得{D}点护甲",
-    "Effects": [
-      {
-        "$type": "BuffEffect",
-        "EffectType": 5,
-        "buff_id": "Taunt",
-        "value": 1
-      },
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 4,
-        "per_hit": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": 1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1467,213 +1809,14 @@
     "IsExhaust": false,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket012",
-    "Name": "坚壁",
-    "Description": "获得{D}点护甲",
-    "Effects": [
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 11,
-        "per_hit": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket013",
-    "Name": "重整",
-    "Description": "获得{D}点护甲，抽{V}张牌",
-    "Effects": [
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 4,
-        "per_hit": false
-      },
-      {
-        "$type": "DrawEffect",
-        "EffectType": 6,
-        "count": 1
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket014",
-    "Name": "撞城锤",
-    "Description": "造成{A}点伤害并[推迟]{T}格。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 8,
-        "is_aoe": false
-      },
-      {
-        "$type": "PushCollisionEffect",
-        "EffectType": 2,
-        "shift_value": 2,
-        "collision_result": "Stun"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket015",
-    "Name": "千斤坠",
-    "Description": "获得{D}点护甲。",
-    "Effects": [
-      {
-        "$type": "OverloadEffect",
-        "EffectType": 6,
-        "value": 1
-      },
-      {
-        "$type": "DefenseEffect",
-        "EffectType": 1,
-        "value": 10,
-        "per_hit": false
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 2,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 0,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket016",
-    "Name": "押送",
-    "Description": "[移动]目标，并使其[推迟]{T}格。",
-    "Effects": [
-      {
-        "$type": "MovePositionEffect",
-        "EffectType": 4,
-        "mode": "Toggle"
-      },
-      {
-        "$type": "PushCollisionEffect",
-        "EffectType": 2,
-        "shift_value": 1,
-        "collision_result": "Stun"
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 1,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket017",
-    "Name": "蓄力重击",
-    "Description": "造成{A}点伤害。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 20,
-        "is_aoe": false
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 1,
-    "TargetType": 3,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 3,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
-  },
-  {
-    "Id": "Rocket018",
-    "Name": "地裂斩",
-    "Description": "对所有敌人造成{A}点伤害并[推迟]{T}格。",
-    "Effects": [
-      {
-        "$type": "AttackEffect",
-        "EffectType": 0,
-        "damage": 8,
-        "is_aoe": true
-      },
-      {
-        "$type": "TimeShiftAllEffect",
-        "EffectType": 2,
-        "shift_value": 1
-      }
-    ],
-    "CardType": 1,
-    "BelongTo": 1,
-    "TargetType": 4,
-    "Rarity": 0,
-    "IsLocked": false,
-    "Energy": 2,
-    "ExecutingCost": 2,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Irene000",
     "Name": "移动",
-    "Description": "[移动]",
+    "Description": "[移动]。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -1684,7 +1827,7 @@
     "CardType": 0,
     "BelongTo": 0,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1692,12 +1835,14 @@
     "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Rocket000",
     "Name": "移动",
-    "Description": "[移动]",
+    "Description": "[移动]。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -1708,7 +1853,7 @@
     "CardType": 0,
     "BelongTo": 1,
     "TargetType": 2,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1716,12 +1861,14 @@
     "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Zhouzhou000",
     "Name": "移动",
-    "Description": "[移动],可以对友方角色使用",
+    "Description": "[移动]一名友方角色。",
     "Effects": [
       {
         "$type": "MovePositionEffect",
@@ -1732,7 +1879,7 @@
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 0,
-    "Rarity": 0,
+    "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
     "ExecutingCost": 0,
@@ -1740,37 +1887,227 @@
     "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou021",
+    "Name": "千里不留行",
+    "Description": "这个回合中，你的移动牌费用变为0；将3张[移步]加入手牌。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou022",
+    "Name": "十步杀一人",
+    "Description": "造成8点伤害；这个回合中，你每成功移动过1次，重复1次，最多重复2次。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 3,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Zhouzhou023",
+    "Name": "满场飞花",
+    "Description": "[过载]1。依次[移动]至多3名不同的友方角色；被移动的角色各获得1层[闪避]。",
+    "Effects": [
+      {
+        "$type": "OverloadEffect",
+        "EffectType": 6,
+        "value": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 1,
+    "Rarity": 2,
+    "IsLocked": false,
+    "Energy": 2,
+    "ExecutingCost": 0,
+    "IsEthereal": false,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": true,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   },
   {
     "Id": "Extra001",
-    "Name": "小刀",
-    "Description": "造成{A}点伤害，叠加{V}层[中毒]",
+    "Name": "飞刀",
+    "Description": "[闪回]。对一名敌方角色造成{A}点伤害。",
     "Effects": [
       {
         "$type": "AttackEffect",
         "EffectType": 0,
         "damage": 3,
         "is_aoe": false
-      },
-      {
-        "$type": "BuffEffect",
-        "EffectType": 6,
-        "buff_id": "Poison",
-        "value": 1
       }
     ],
     "CardType": 0,
-    "BelongTo": 0,
+    "BelongTo": 2,
     "TargetType": 3,
-    "Rarity": 0,
+    "Rarity": -2,
     "IsLocked": false,
     "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": false,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Extra002",
+    "Name": "折叠护板",
+    "Description": "获得{D}点护甲。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 4,
+        "per_hit": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": -2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Extra003",
+    "Name": "袖珍火箭",
+    "Description": "造成{A}点伤害。",
+    "Effects": [
+      {
+        "$type": "AttackEffect",
+        "EffectType": 0,
+        "damage": 5,
+        "is_aoe": false
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 3,
+    "Rarity": -2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Extra004",
+    "Name": "快速装填",
+    "Description": "抽{V}张牌。",
+    "Effects": [
+      {
+        "$type": "DrawEffect",
+        "EffectType": 6,
+        "count": 1
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 1,
+    "TargetType": 2,
+    "Rarity": -2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Extra005",
+    "Name": "移步",
+    "Description": "[移动]。",
+    "Effects": [
+      {
+        "$type": "MovePositionEffect",
+        "EffectType": 4,
+        "mode": "Toggle"
+      }
+    ],
+    "CardType": 0,
+    "BelongTo": 2,
+    "TargetType": 2,
+    "Rarity": -2,
+    "IsLocked": false,
+    "Energy": 0,
+    "ExecutingCost": 0,
+    "IsEthereal": true,
+    "IsExhaust": true,
+    "TargetZone": 2,
+    "CastZone": 2,
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
+  },
+  {
+    "Id": "Extra006",
+    "Name": "解签",
+    "Description": "[诅咒]。此牌在手牌中时，其他卡牌费用+1。",
+    "Effects": [],
+    "CardType": 0,
+    "BelongTo": 0,
+    "TargetType": 2,
+    "Rarity": -2,
+    "IsLocked": false,
+    "Energy": 1,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": true,
     "TargetZone": 2,
     "CastZone": 2,
-    "IsInUpgrade": true
+    "IsInUpgrade": false,
+    "ChargeStartEffects": [],
+    "ChargeWhileEffects": []
   }
 ]

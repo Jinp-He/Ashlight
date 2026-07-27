@@ -15,9 +15,10 @@
       "Rocket012",
       "Rocket013"
     ],
-    "Speed": 3,
-    "Draw": 5,
-    "Energy": 3
+    "Speed": 4,
+    "Draw": 4,
+    "Energy": 4,
+    "Trait": "FirstPushFree"
   },
   {
     "Character": 0,
@@ -26,38 +27,39 @@
     "BaseDeck": [
       "Irene001",
       "Irene001",
-      "Irene006",
       "Irene002",
+      "Irene006",
       "Irene007",
-      "Irene008",
-      "Irene004",
-      "Irene004",
       "Irene003",
-      "Irene003"
+      "Irene004",
+      "Irene008",
+      "Irene010",
+      "Irene012"
     ],
-    "Speed": 4,
+    "Speed": 5,
     "Draw": 5,
-    "Energy": 4
+    "Energy": 5,
+    "Trait": "DoubleExecution"
   },
   {
     "Character": 2,
     "Name": "游侠",
     "BaseHp": 100,
     "BaseDeck": [
-      "Zhouzhou006",
-      "Zhouzhou006",
-      "Zhouzhou006",
-      "Zhouzhou013",
-      "Zhouzhou013",
-      "Zhouzhou004",
+      "Zhouzhou001",
+      "Zhouzhou001",
+      "Zhouzhou002",
+      "Zhouzhou002",
       "Zhouzhou003",
-      "Zhouzhou010",
-      "Zhouzhou015",
-      "Zhouzhou015"
+      "Zhouzhou004",
+      "Zhouzhou005",
+      "Zhouzhou006",
+      "Zhouzhou007",
+      "Zhouzhou008"
     ],
-    "Speed": 2,
-    "Draw": 5,
-    "Energy": 2,
-    "Trait": "FirstMoveFree"
+    "Speed": 3,
+    "Draw": 3,
+    "Energy": 3,
+    "Trait": "MoveAllyGrantMorale"
   }
 ]

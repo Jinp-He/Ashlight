@@ -9,6 +9,7 @@ using Ashlight.Common.Events;
 using Ashlight.Common.Utils;
 using Ashlight.State.Runtime;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine.UI;
 namespace Scripts.UI
 {
@@ -140,6 +141,7 @@ namespace Scripts.UI
         // 使用本牌时被下移让位的其他手牌（记录其原始 anchoredPosition.y 以便恢复）
         private readonly System.Collections.Generic.List<RectTransform> _pushedSiblings = new System.Collections.Generic.List<RectTransform>();
         private readonly System.Collections.Generic.List<float> _pushedSiblingOriginalY = new System.Collections.Generic.List<float>();
+        private readonly System.Collections.Generic.List<GameObject> _selectedMultiTargetObjects = new System.Collections.Generic.List<GameObject>();
         
         // Card 拖拽状态
         private CardDragState _cardDragState = CardDragState.OnHand;
@@ -201,6 +203,8 @@ namespace Scripts.UI
 
         // 点击进入的目标选择模式（无需按住拖拽）：点击卡牌进入，移动鼠标选目标，再次左键确认，右键/Esc取消
         private bool _isClickTargeting = false;
+        private bool _isCastTargeting = false;
+        private TurnOrderView _castTargetView;
 
         // 目标颜色管理
         private Dictionary<Character, Color> _originalCharacterColors = new Dictionary<Character, Color>();
@@ -304,6 +308,10 @@ namespace Scripts.UI
             if (_isClickTargeting)
             {
                 UpdateClickTargeting();
+            }
+            if (_isCastTargeting && (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape)))
+            {
+                CancelCastTargeting();
             }
 
             // 检测鼠标是否悬停在link上
@@ -409,6 +417,10 @@ namespace Scripts.UI
             {
                 ExitClickTargetingVisuals();
             }
+            if (_isCastTargeting)
+            {
+                ExitCastTargetingVisuals();
+            }
 
             // 重置拖拽状态为 OnHand
             SetCardDragState(CardDragState.OnHand);
@@ -435,6 +447,8 @@ namespace Scripts.UI
             // 重置视觉状态
             if (Card != null)
             {
+                // CardTimeSlot / 预览等路径可能关闭完整卡面子节点；回到 OnHand 时必须一起恢复。
+                Card.gameObject.SetActive(true);
                 Card.alpha = 1f;
             }
             if (CardTimeSlot != null)
@@ -662,6 +676,11 @@ namespace Scripts.UI
 
             // 使用CardDescriptionParser解析描述和效果
             string parsedDescription = CardDescriptionParser.Parse(_currentCard, _displayMode);
+            // 闪回是运行时实例属性（原卡仍保留自己的配置），因此在此补充标签。
+            if (FindRuntimeState()?.IsFlashback == true && !parsedDescription.Contains("闪回"))
+            {
+                parsedDescription += "\n[闪回] [虚无]";
+            }
 
             // 设置卡牌效果文本（解析后的完整描述）
             if (Txt_Effect != null)
@@ -697,9 +716,10 @@ namespace Scripts.UI
 
             // 设置右侧消耗（卡牌类型）
             bool isExecution = _currentCard.CardType == cfg.CardTypeEnum.Execution;
+            bool isCharge = _currentCard.CardType == cfg.CardTypeEnum.Charge;
             if (Txt_RightCost != null)
             {
-                Txt_RightCost.text = isExecution ? "执" : "迅";
+                Txt_RightCost.text = isExecution ? "执" : isCharge ? "蓄" : "迅";
             }
 
             // 执行（延时）卡牌左上角能量底图变橙色
@@ -710,7 +730,7 @@ namespace Scripts.UI
                     _defaultLeftCostImageColor = Img_CostLeft.color;
                     _defaultLeftCostImageColorCaptured = true;
                 }
-                Img_CostLeft.color = isExecution ? executionCostTint : _defaultLeftCostImageColor;
+                Img_CostLeft.color = (isExecution || isCharge) ? executionCostTint : _defaultLeftCostImageColor;
                 Debug.Log($"[CardViewController] {_currentCard.Name} CardType={_currentCard.CardType} isExecution={isExecution} Img_CostLeft.color={Img_CostLeft.color}");
             }
             else
@@ -760,7 +780,7 @@ namespace Scripts.UI
             if (Img_Rarity03 != null) Img_Rarity03.gameObject.SetActive(false);
 
             // 根据稀有度显示对应的星级
-            int rarityLevel = (int)_currentCard.Rarity + 1; // 0=普通(1星), 1=稀有(2星), 2=史诗(3星)
+            int rarityLevel = (int)_currentCard.Rarity + 1; // -2=临时(0星), -1=基础(0星), 0=普通(1星), 1=稀有(2星), 2=史诗(3星)
 
             if (rarityLevel >= 1 && Img_Rarity01 != null)
             {
@@ -902,16 +922,17 @@ namespace Scripts.UI
                 CancelClickTargeting();
                 return;
             }
+            if (_isCastTargeting)
+            {
+                CancelCastTargeting();
+                return;
+            }
 
             if (_isLocked || _executionSuppressed)
                 return;
 
             // 仅手牌中的卡牌可点选
             if (_cardDragState != CardDragState.OnHand)
-                return;
-
-            // 仅目标选择型卡牌支持点击选目标；TimeSlot型仍需拖拽到时间轴
-            if (!UsesTargetSelection())
                 return;
 
             // 能量不足不允许使用
@@ -927,6 +948,15 @@ namespace Scripts.UI
                 Debug.Log($"[CardViewController] 站位不满足，无法选择目标: {_currentCard?.Name} (CastZone={_currentCard?.CastZone})");
                 return;
             }
+
+            if (_currentCard != null && _currentCard.TargetType == cfg.TargetTypeEnum.TimeSlot)
+            {
+                BeginCastTargeting();
+                return;
+            }
+
+            if (!UsesTargetSelection())
+                return;
 
             BeginClickTargeting();
         }
@@ -1061,6 +1091,7 @@ namespace Scripts.UI
             _isTargeting = true;
             _currentTargetObject = null;
             _lastValidTargetObject = null;
+            _selectedMultiTargetObjects.Clear();
 
             // 其余手牌让位
             PushDownOtherHandCards();
@@ -1113,10 +1144,22 @@ namespace Scripts.UI
                 return;
             }
 
-            // 取消：右键 或 Esc
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            // 多目标牌：右键确认已选择的目标；Esc 始终取消。
+            if (Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelClickTargeting();
+                return;
+            }
+            if (Input.GetMouseButtonDown(1))
+            {
+                if (UsesMultiAllySelection() && _selectedMultiTargetObjects.Count > 0)
+                {
+                    ConfirmMultiTargeting(GetOwnerCharacterId());
+                }
+                else
+                {
+                    CancelClickTargeting();
+                }
                 return;
             }
 
@@ -1146,8 +1189,53 @@ namespace Scripts.UI
             // 确认：左键命中合法目标才出牌；点空白/非法目标不退出，继续选择（退出只用右键）
             if (Input.GetMouseButtonDown(0) && isValid)
             {
-                ConfirmClickTargeting(targetObj, ownerCharacterId);
+                if (UsesMultiAllySelection())
+                {
+                    ToggleMultiTarget(targetObj);
+                    if (_selectedMultiTargetObjects.Count >= 3)
+                    {
+                        ConfirmMultiTargeting(ownerCharacterId);
+                    }
+                }
+                else
+                {
+                    ConfirmClickTargeting(targetObj, ownerCharacterId);
+                }
             }
+        }
+
+        private bool UsesMultiAllySelection() => _currentCard?.Id == "Zhouzhou023";
+
+        private void ToggleMultiTarget(GameObject target)
+        {
+            if (target == null) return;
+            if (_selectedMultiTargetObjects.Contains(target))
+            {
+                _selectedMultiTargetObjects.Remove(target);
+                return;
+            }
+            if (_selectedMultiTargetObjects.Count < 3)
+            {
+                _selectedMultiTargetObjects.Add(target);
+            }
+        }
+
+        private void ConfirmMultiTargeting(CharacterEnum ownerCharacterId)
+        {
+            string targetIds = string.Join("|", _selectedMultiTargetObjects
+                .Select(GetTargetId)
+                .Where(id => !string.IsNullOrEmpty(id)));
+            if (string.IsNullOrEmpty(targetIds))
+            {
+                CancelClickTargeting();
+                return;
+            }
+
+            ExitClickTargetingVisuals();
+            PlaceCardOnTargetIds(targetIds, ownerCharacterId.ToString());
+            _currentTargetObject = null;
+            _lastValidTargetObject = null;
+            _selectedMultiTargetObjects.Clear();
         }
 
         /// <summary>
@@ -1163,6 +1251,7 @@ namespace Scripts.UI
 
             _currentTargetObject = null;
             _lastValidTargetObject = null;
+            _selectedMultiTargetObjects.Clear();
         }
 
         /// <summary>
@@ -1200,6 +1289,88 @@ namespace Scripts.UI
             ClearAllTargetHighlighting();
             RestoreAllTargetsColor();
             _previousHoveredTarget = null;
+            _selectedMultiTargetObjects.Clear();
+        }
+
+        /// <summary>选择一张己方在轨执行牌。TimeSlot 在当前 ATB 架构中专用于这一目标类型。</summary>
+        private void BeginCastTargeting()
+        {
+            var manager = Ashlight.Battle.BattleManager.Instance;
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            if (manager == null || string.IsNullOrEmpty(ownerUnitId) || _currentCard == null)
+                return;
+
+            bool requireDamage = _currentCard.Effects != null
+                                 && _currentCard.Effects.Any(e => e is CastDamageBonusEffect);
+            bool requireNumeric = _currentCard.Effects != null
+                                  && _currentCard.Effects.Any(e => e is CastEchoEffect);
+            var allowed = manager.GetPendingCasts()
+                .Where(c => manager.IsFriendlyPendingCast(c.CastId, ownerUnitId, requireDamage, requireNumeric))
+                .Select(c => c.CastId)
+                .ToList();
+
+            _castTargetView = FindObjectOfType<TurnOrderView>();
+            if (_castTargetView == null || !_castTargetView.BeginCastSelection(allowed, OnCastTargetSelected))
+            {
+                Debug.LogWarning($"[CardViewController] 没有可选择的己方在轨执行牌: {_currentCard.Name}");
+                _castTargetView?.EndCastSelection();
+                _castTargetView = null;
+                return;
+            }
+
+            _isCastTargeting = true;
+            PushDownOtherHandCards();
+            ElevateCard();
+            SetCanvasGroupAlpha(dragAlpha);
+            // 执行牌目标在行动顺序轴上。当前手牌被提升到最前层后若仍拦截射线，
+            // 会遮住下方的引线卡，造成金框目标难以点击或完全点不到。
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.blocksRaycasts = false;
+            }
+            HideDescription();
+            Debug.Log($"[CardViewController] 进入执行牌目标选择: {_currentCard.Name}, 候选={allowed.Count}");
+        }
+
+        private void OnCastTargetSelected(string castId)
+        {
+            if (!_isCastTargeting || _currentCard == null || string.IsNullOrEmpty(castId)) return;
+
+            string ownerUnitId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+            var manager = Ashlight.Battle.BattleManager.Instance;
+            ExitCastTargetingVisuals();
+            if (manager == null || string.IsNullOrEmpty(ownerUnitId)
+                || !manager.TryPlayCardImmediately(_currentCard, ownerUnitId, castId, InstanceId))
+            {
+                RestoreCardToHandState("执行牌目标结算失败");
+                return;
+            }
+
+            var battleScene = FindObjectOfType<UI_BattleScene>();
+            battleScene?.ConsumeHandCard(this);
+            battleScene?.RefreshHandFromData();
+            battleScene?.ApplyPendingScheduleChanges();
+            Debug.Log($"[CardViewController] 执行牌目标卡结算完成: {_currentCard.Name} -> {castId}");
+        }
+
+        private void CancelCastTargeting()
+        {
+            ExitCastTargetingVisuals();
+            RestoreCardToHandState("执行牌目标选择取消");
+        }
+
+        private void ExitCastTargetingVisuals()
+        {
+            _isCastTargeting = false;
+            _castTargetView?.EndCastSelection();
+            _castTargetView = null;
+            RestoreOtherHandCards();
+            SetCanvasGroupAlpha(1f);
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.blocksRaycasts = true;
+            }
+            RestoreCard();
         }
 
         /// <summary>
@@ -1249,6 +1420,14 @@ namespace Scripts.UI
             if (_cardDragState != CardDragState.OnTime && !IsCastZoneSatisfiedForOwner())
             {
                 Debug.Log($"[CardViewController] 站位不满足，无法拖拽: {_currentCard?.Name} (CastZone={_currentCard?.CastZone})");
+                return;
+            }
+
+            if (_cardDragState == CardDragState.OnHand
+                && _currentCard != null
+                && _currentCard.TargetType == cfg.TargetTypeEnum.TimeSlot)
+            {
+                BeginCastTargeting();
                 return;
             }
 
@@ -2055,7 +2234,7 @@ namespace Scripts.UI
             {
                 return _currentCard.Energy;
             }
-            return bm.GetEffectiveEnergyCost(_currentCard, ownerUnitId);
+            return bm.GetEffectiveEnergyCost(_currentCard, ownerUnitId, _instanceId);
         }
 
         /// <summary>
@@ -2087,7 +2266,7 @@ namespace Scripts.UI
                 return true;
             }
 
-            return unit.CurrentEnergy >= battleManager.GetEffectiveEnergyCost(_currentCard, ownerUnitId);
+            return unit.CurrentEnergy >= battleManager.GetEffectiveEnergyCost(_currentCard, ownerUnitId, _instanceId);
         }
 
         /// <summary>
@@ -2146,6 +2325,8 @@ namespace Scripts.UI
                 _defaultLeftCostColorCaptured = true;
             }
 
+            // 有效费用可能因手牌中的解签等全局修正动态变化，刷新颜色时同步刷新数字。
+            Txt_LeftCost.text = GetEffectiveEnergyCost().ToString();
             bool affordable = HasEnoughEnergyForCard();
             Txt_LeftCost.color = affordable ? _defaultLeftCostColor : insufficientEnergyColor;
         }
@@ -3045,14 +3226,51 @@ namespace Scripts.UI
         /// </summary>
         private void CheckLinkHover(TextMeshProUGUI textComponent)
         {
-            if (textComponent == null || _descriptionView == null)
+            if (textComponent == null || _descriptionView == null || !textComponent.isActiveAndEnabled)
                 return;
+
+            // 卡牌预览切换时会在本帧替换文本，而 TMP 的 textInfo 通常要到 Canvas
+            // rebuild 才更新。FindIntersectingLink 直接读取 linkInfo / characterInfo，
+            // 在两者尚未生成时会在 TMP 内部抛 NullReferenceException。
+            if (textComponent.havePropertiesChanged)
+            {
+                textComponent.ForceMeshUpdate();
+            }
+
+            TMP_TextInfo textInfo = textComponent.textInfo;
+            if (textInfo == null || textInfo.linkCount <= 0 ||
+                textInfo.linkInfo == null || textInfo.characterInfo == null ||
+                textInfo.linkCount > textInfo.linkInfo.Length)
+            {
+                if (!string.IsNullOrEmpty(_currentHoveredLink))
+                {
+                    _currentHoveredLink = string.Empty;
+                    HideDescription();
+                }
+                return;
+            }
+
+            // 防止文本刚变化时 linkInfo 已更新、characterInfo 仍是旧数组。
+            for (int i = 0; i < textInfo.linkCount; i++)
+            {
+                TMP_LinkInfo info = textInfo.linkInfo[i];
+                int first = info.linkTextfirstCharacterIndex;
+                int length = info.linkTextLength;
+                if (first < 0 || length <= 0 || first + length > textInfo.characterInfo.Length)
+                {
+                    return;
+                }
+            }
 
             // 获取鼠标位置
             Vector3 mousePosition = Input.mousePosition;
 
             // 检测鼠标位置是否在link上
-            int linkIndex = TMP_TextUtilities.FindIntersectingLink(textComponent, mousePosition, null);
+            Canvas textCanvas = textComponent.canvas;
+            Camera eventCamera = textCanvas != null && textCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? (textCanvas.worldCamera != null ? textCanvas.worldCamera : Camera.main)
+                : null;
+            int linkIndex = TMP_TextUtilities.FindIntersectingLink(textComponent, mousePosition, eventCamera);
 
             if (linkIndex != -1)
             {
@@ -3578,6 +3796,11 @@ namespace Scripts.UI
 
             // 获取目标ID
             string targetId = GetTargetId(targetObj);
+            PlaceCardOnTargetIds(targetId, ownerId);
+        }
+
+        private void PlaceCardOnTargetIds(string targetId, string ownerId)
+        {
             if (string.IsNullOrEmpty(targetId))
             {
                 Debug.LogWarning("[CardViewController] 无法确定目标ID");
@@ -3602,10 +3825,15 @@ namespace Scripts.UI
             }
 
             bool isExecutionCard = _currentCard != null && _currentCard.CardType == CardTypeEnum.Execution;
+            bool isChargeCard = _currentCard != null && _currentCard.CardType == CardTypeEnum.Charge;
             bool success;
             if (isExecutionCard)
             {
                 success = battleManager.TryQueuePlayerExecutionCard(_currentCard, ownerUnitId, targetId, InstanceId, out _);
+            }
+            else if (isChargeCard)
+            {
+                success = battleManager.TryStartPlayerChargeCard(_currentCard, ownerUnitId, targetId, InstanceId);
             }
             else
             {
@@ -3615,7 +3843,9 @@ namespace Scripts.UI
             if (!success)
             {
                 Debug.LogWarning($"[CardViewController] 打牌失败，恢复手牌状态 (execution={isExecutionCard}, owner={ownerUnitId}, target={targetId}) —— 真正原因见上方 [BattleManager] 告警");
-                RestoreCardToHandState($"{(isExecutionCard ? "TryQueuePlayerExecutionCard" : "TryPlayCardImmediately")} 返回 false，详见上方 [BattleManager] 告警");
+                string entry = isExecutionCard ? "TryQueuePlayerExecutionCard"
+                    : isChargeCard ? "TryStartPlayerChargeCard" : "TryPlayCardImmediately";
+                RestoreCardToHandState($"{entry} 返回 false，详见上方 [BattleManager] 告警");
                 return;
             }
 
@@ -3623,6 +3853,10 @@ namespace Scripts.UI
             if (isExecutionCard)
             {
                 battleScene?.OnPlayerPlayedExecutionCard(this, ownerUnitId);
+            }
+            else if (isChargeCard)
+            {
+                battleScene?.OnPlayerPlayedChargeCard(this);
             }
 
             battleScene?.ConsumeHandCard(this);

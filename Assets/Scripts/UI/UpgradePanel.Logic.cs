@@ -165,11 +165,24 @@ namespace Scripts.UI
 
                 var go = Instantiate(prefab, CardParent);
                 _spawnedCards.Add(go);
+                // CardViewController prefab 可能来自对象池隐藏态；先激活根节点，
+                // 确保 Awake/UIBind 已完成，再初始化卡面。
+                go.SetActive(true);
 
                 var view = go.GetComponent<CardViewController>();
                 if (view != null)
                 {
                     view.Initialize(cardInfo, DescriptionMode.View);
+                    view.ResetForReuse();
+                    view.SetDisplayMode(DescriptionMode.View);
+                    view.Show();
+                    // Show() 只激活 CardViewController 根节点。奖励面板需要显式恢复
+                    // 完整卡面的 Card 子节点，否则 prefab/对象池残留的 inactive 状态会使卡牌空白。
+                    if (view.Card != null)
+                    {
+                        view.Card.gameObject.SetActive(true);
+                        view.Card.alpha = 1f;
+                    }
                     view.SetHoverScale(1.1f); // 选卡面板里 hover 放大别太大
                 }
 
@@ -211,6 +224,11 @@ namespace Scripts.UI
             if (target == null || _candidates == null || !_candidates.Contains(target)) return false;
 
             var unit = target.GetUnitState();
+            if (unit != null && unit.IsDead)
+            {
+                Debug.Log($"[UpgradePanel] 拒绝向死亡角色发放经验: {unit.UnitId}");
+                return false;
+            }
             if (unit == null || !Enum.TryParse<cfg.CharacterEnum>(unit.ConfigId, out var charId))
             {
                 Debug.LogWarning($"[UpgradePanel] 无法解析角色 ConfigId={unit?.ConfigId}");

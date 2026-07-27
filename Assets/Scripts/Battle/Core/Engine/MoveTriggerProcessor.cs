@@ -11,7 +11,10 @@ namespace Ashlight.Battle.Core.Engine
     /// </summary>
     public static class MoveTriggerProcessor
     {
-        public static void OnUnitMoved(BattleStateSnapshot state, UnitState mover)
+        public const string MoveAllyGrantMoraleTrait = "MoveAllyGrantMorale";
+        public const string MoraleBuffId = "Morale";
+
+        public static void OnUnitMoved(BattleStateSnapshot state, UnitState mover, string sourceOwnerId = null)
         {
             if (state == null || state.IsBattleEnded)
             {
@@ -21,6 +24,17 @@ namespace Ashlight.Battle.Core.Engine
             // 全局移动计数（本回合）：无论有没有触发器都累计，
             // 供隧穿/铁蒺藜卡面动态显示「本回合已移动 N 次」（回合结束清零）。
             state.MovesThisTurn++;
+            if (mover != null)
+            {
+                if (state.MovesByUnitThisTurn == null)
+                {
+                    state.MovesByUnitThisTurn = new System.Collections.Generic.Dictionary<string, int>();
+                }
+                state.MovesByUnitThisTurn.TryGetValue(mover.UnitId, out int count);
+                state.MovesByUnitThisTurn[mover.UnitId] = count + 1;
+            }
+
+            ApplyMovementTrait(state, mover, sourceOwnerId);
 
             if (state.MoveTriggers == null || state.MoveTriggers.Count == 0)
             {
@@ -39,6 +53,16 @@ namespace Ashlight.Battle.Core.Engine
                     continue;
                 }
 
+                if (trigger.MaxFireCount > 0 && trigger.FireCount >= trigger.MaxFireCount)
+                {
+                    continue;
+                }
+
+                if (!MatchesMoverScope(owner, mover, trigger.MoverScope))
+                {
+                    continue;
+                }
+
                 switch (trigger.TriggerType)
                 {
                     case MoveTriggerState.TypeDamage:
@@ -47,11 +71,61 @@ namespace Ashlight.Battle.Core.Engine
                     case MoveTriggerState.TypeAddCard:
                         FireAddCard(state, owner, trigger);
                         break;
+                    case MoveTriggerState.TypeDraw:
+                        FireDraw(state, owner, trigger);
+                        break;
                     default:
                         Debug.LogWarning($"[MoveTrigger] 未知触发类型: {trigger.TriggerType}");
                         break;
                 }
             }
+        }
+
+        private static bool MatchesMoverScope(UnitState owner, UnitState mover, string scope)
+        {
+            switch (scope)
+            {
+                case MoveTriggerState.ScopeOwner:
+                    return owner.UnitId == mover?.UnitId;
+                case MoveTriggerState.ScopeFriendly:
+                    return mover != null && owner.IsPlayerUnit == mover.IsPlayerUnit;
+                default:
+                    return mover != null;
+            }
+        }
+
+        /// <summary>
+        /// 周周初始百相：每当周周通过卡牌成功移动一名友方角色时，使该角色获得 1 层士气。
+        /// sourceOwnerId 是移动效果的施法者；只有同阵营目标会触发，移动敌人不会触发。
+        /// 士气的叠层上限由 BuffInfo.Morale.MaxStack 统一控制。
+        /// </summary>
+        private static void ApplyMovementTrait(BattleStateSnapshot state, UnitState mover, string sourceOwnerId)
+        {
+            if (mover == null || string.IsNullOrEmpty(sourceOwnerId))
+            {
+                return;
+            }
+
+            var source = state.GetUnitById(sourceOwnerId);
+            if (source == null || source.IsDead || source.IsPlayerUnit != mover.IsPlayerUnit)
+            {
+                return;
+            }
+
+            var characterInfo = source.GetCharacterInfo();
+            if (characterInfo == null || characterInfo.Trait != MoveAllyGrantMoraleTrait)
+            {
+                return;
+            }
+
+            mover.AddBuff(new BuffState
+            {
+                BuffId = MoraleBuffId,
+                Value = 1f,
+                RemainingDuration = -1
+            });
+
+            Debug.Log($"[MoveTrigger] {source.UnitId} 的初始百相触发：移动友方 {mover.UnitId}，使其获得 1 层士气（当前 {mover.GetBuff(MoraleBuffId)?.Value ?? 0f} 层）");
         }
 
         /// <summary>铁蒺藜：随机（确定性）对一名敌对单位造成 Amount 伤害。</summary>
@@ -67,6 +141,7 @@ namespace Ashlight.Battle.Core.Engine
             trigger.FireCount++;
 
             int dealt = target.TakeDamage(trigger.Amount);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
             Debug.Log($"[MoveTrigger] 移动触发伤害：{owner.UnitId} -> {target.UnitId} {dealt} 点 (第 {trigger.FireCount} 次)");
 
             GameEvent.Publish(new AttackExecutedEvent
@@ -92,6 +167,13 @@ namespace Ashlight.Battle.Core.Engine
             trigger.FireCount++;
             int added = state.DeckSystem.AddCardToHand(trigger.CardId, trigger.Amount, owner.GetCharacterId());
             Debug.Log($"[MoveTrigger] 移动触发加牌：{owner.UnitId} 获得 {added} 张 {trigger.CardId} (第 {trigger.FireCount} 次)");
+        }
+
+        private static void FireDraw(BattleStateSnapshot state, UnitState owner, MoveTriggerState trigger)
+        {
+            trigger.FireCount++;
+            new Commands.DrawCommand(trigger.Amount).Execute(state, owner.UnitId, owner.UnitId);
+            Debug.Log($"[MoveTrigger] 移动触发抽牌：{owner.UnitId} 抽 {trigger.Amount} 张 (第 {trigger.FireCount} 次)");
         }
     }
 }

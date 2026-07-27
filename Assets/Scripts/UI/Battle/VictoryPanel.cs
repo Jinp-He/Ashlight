@@ -41,7 +41,7 @@ namespace Scripts.UI
 
         [Header("下一关配置")]
         [SerializeField, Tooltip("点击继续后加载的遭遇战 ID（在 Excel 的 Encounter 表里先配好）")]
-        private string nextEncounterId = "E002";
+        private string nextEncounterId = "M102";
 
         [SerializeField, Tooltip("战斗场景名，用于 SceneManager.LoadScene")]
         private string battleSceneName = "BattleScene";
@@ -109,6 +109,11 @@ namespace Scripts.UI
         #endregion
 
         #region 公共方法
+
+        public void SetNextEncounterId(string encounterId)
+        {
+            nextEncounterId = encounterId;
+        }
 
         /// <summary>
         /// 播放弹出动画（缩放 0.3→1 OutBack + 淡入）。

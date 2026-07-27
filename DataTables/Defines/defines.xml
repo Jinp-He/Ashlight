@@ -70,6 +70,13 @@
         <var name="count" type="int" comment="加入张数"/>
     </bean>
 
+    <bean name="AddRandomToHandEffect" parent="Effect">
+        <var name="card_ids" type="string" comment="候选卡牌Id，以 | 分隔；同次生成不重复"/>
+        <var name="count" type="int" comment="基础生成张数 {N}"/>
+        <var name="condition_type" type="string" comment="数量翻倍条件，如 SelfInBackRow；空表示无条件"/>
+        <var name="condition_multiplier" type="int" comment="满足条件时的数量倍率"/>
+    </bean>
+
     <bean name="ChannelEffect" parent="Effect">
         <var name="duration" type="int" comment="引导持续时间"/>
     </bean>
@@ -133,6 +140,73 @@
 
     <bean name="EnergyEffect" parent="Effect">
         <var name="value" type="int" comment="立即获得 {V} 点能量"/>
+    </bean>
+
+    <bean name="MoveOnArmorBreakEffect" parent="Effect">
+        <var name="mode" type="string" comment="本效果所授护甲首次耗尽时的移动方向：FrontRow/BackRow/Toggle"/>
+    </bean>
+
+    <bean name="ChargedAttackEffect" parent="Effect">
+        <var name="damage_per_charge" type="int" comment="每层蓄力造成的伤害 {A}"/>
+        <var name="is_aoe" type="bool" comment="是否为群体攻击"/>
+    </bean>
+
+    <!-- Irene：操作在轨执行牌与天气节拍 -->
+    <bean name="CastShiftEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="在轨执行牌顺延（正）或提前（负）的公共回合数 {T}"/>
+    </bean>
+
+    <bean name="CastDamageBonusEffect" parent="Effect">
+        <var name="damage_bonus" type="int" comment="目标执行牌结算时增加的伤害 {A}"/>
+    </bean>
+
+    <bean name="CastResolveDrawEffect" parent="Effect">
+        <var name="count" type="int" comment="目标执行牌结算后抽牌数 {V}"/>
+    </bean>
+
+    <bean name="CastResolveBuffEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="目标执行牌结算后施加给施法者的 Buff Id"/>
+        <var name="value" type="float" comment="Buff 层数/数值 {V}"/>
+    </bean>
+
+    <bean name="CastImmediateEffect" parent="Effect">
+        </bean>
+
+    <bean name="CastEchoEffect" parent="Effect">
+        <var name="delay" type="int" comment="首次结算后，回声延迟的公共回合数 {V}"/>
+        <var name="multiplier" type="float" comment="回声伤害、护甲与治疗的数值倍率"/>
+    </bean>
+
+    <bean name="WeatherConditionalAttackEffect" parent="Effect">
+        <var name="damage" type="int" comment="基础伤害 {A}"/>
+        <var name="multiplier" type="float" comment="本公共回合已结算天气时的伤害倍率"/>
+    </bean>
+
+    <bean name="DelayScaledAttackEffect" parent="Effect">
+        <var name="base_damage" type="int" comment="基础伤害 {A}"/>
+        <var name="damage_per_delay" type="int" comment="每被己方卡牌顺延 1 格增加的伤害"/>
+        <var name="max_bonus" type="int" comment="顺延提供的最大额外伤害"/>
+        <var name="is_aoe" type="bool" comment="是否为群体攻击"/>
+    </bean>
+
+    <bean name="WeatherSyncEnergyEffect" parent="Effect">
+        <var name="value" type="int" comment="有己方执行牌与下一次天气同回合时获得的能量 {V}"/>
+    </bean>
+
+    <bean name="AlignToWeatherEffect" parent="Effect">
+        <var name="max_shift" type="int" comment="目标行动向下一次天气移动的最大公共回合数 {T}"/>
+    </bean>
+
+    <bean name="WeatherGuardEffect" parent="Effect">
+        <var name="value" type="int" comment="下一次天气结算前为同回合友方提供的护甲 {D}"/>
+    </bean>
+
+    <bean name="WeatherShiftEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="下一次天气顺延的公共回合数 {T}"/>
+    </bean>
+
+    <bean name="CastShiftAllEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="所有己方在轨执行牌顺延（正）或提前（负）的公共回合数 {T}"/>
     </bean>
 
 

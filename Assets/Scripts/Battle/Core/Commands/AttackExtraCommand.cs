@@ -1,5 +1,7 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
+using cfg;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -26,11 +28,22 @@ namespace Ashlight.Battle.Core.Commands
         /// </summary>
         public float Multiplier { get; set; }
 
-        public AttackExtraCommand(int damage, string conditions, float multiplier)
+        public bool IsAoe { get; set; }
+
+        public TargetZoneEnum TargetZone { get; set; } = TargetZoneEnum.Any;
+
+        public AttackExtraCommand(
+            int damage,
+            string conditions,
+            float multiplier,
+            bool isAoe = false,
+            TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             Damage = damage;
             Conditions = conditions;
             Multiplier = multiplier;
+            IsAoe = isAoe;
+            TargetZone = targetZone;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -39,6 +52,13 @@ namespace Ashlight.Battle.Core.Commands
             if (owner == null || owner.IsDead)
             {
                 Debug.LogWarning($"[AttackExtraCommand] 执行者不存在或已死亡: {ownerId}");
+                return;
+            }
+
+            state.LastDamageHitCount = 0;
+            if (IsAoe)
+            {
+                ExecuteAoe(state, owner);
                 return;
             }
 
@@ -55,13 +75,8 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            // 检查目标是否满足条件
-            bool conditionMet = CheckConditions(state, target);
-            
-            // 计算实际伤害
-            int actualDamage = conditionMet ? Mathf.RoundToInt(Damage * Multiplier) : Damage;
-            
-            int damageDealt = target.TakeDamage(actualDamage);
+            state.LastDamageHitCount = 1;
+            int damageDealt = DealDamage(state, owner, target, out bool conditionMet);
             
             if (conditionMet)
             {
@@ -84,6 +99,41 @@ namespace Ashlight.Battle.Core.Commands
 
             // 检查战斗是否结束
             state.CheckBattleEnd();
+        }
+
+        private void ExecuteAoe(BattleStateSnapshot state, UnitState owner)
+        {
+            var targets = owner.IsPlayerUnit
+                ? state.GetAliveEnemyUnits()
+                : state.GetAlivePlayerUnits();
+            targets = ZoneTargeting.FilterByZone(state, targets, TargetZone, strict: true);
+            state.LastDamageHitCount = targets.Count;
+
+            foreach (var target in targets)
+            {
+                int damageDealt = DealDamage(state, owner, target, out bool conditionMet);
+                Debug.Log($"[AttackExtraCommand] AOE {target.UnitId}: 条件={(conditionMet ? "满足" : "不满足")}, 伤害={damageDealt}");
+                GameEvent.Publish(new AttackExecutedEvent
+                {
+                    AttackerId = owner.UnitId,
+                    TargetId = target.UnitId,
+                    ActualDamage = damageDealt,
+                    IsAoe = true,
+                    IsPrediction = state.IsPrediction
+                });
+            }
+
+            state.CheckBattleEnd();
+        }
+
+        private int DealDamage(BattleStateSnapshot state, UnitState owner, UnitState target, out bool conditionMet)
+        {
+            conditionMet = CheckConditions(state, target);
+            int baseDamage = conditionMet ? Mathf.RoundToInt(Damage * Multiplier) : Damage;
+            int adjustedDamage = DamageCommand.ApplyAttackerModifiers(owner, baseDamage);
+            int dealt = target.TakeDamage(adjustedDamage);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
+            return dealt;
         }
 
         /// <summary>
@@ -162,7 +212,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new AttackExtraCommand(Damage, Conditions, Multiplier);
+            return new AttackExtraCommand(Damage, Conditions, Multiplier, IsAoe, TargetZone);
         }
     }
 }

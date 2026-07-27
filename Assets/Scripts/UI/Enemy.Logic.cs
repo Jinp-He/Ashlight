@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TMPro;
 using cfg.Enemy;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Config;
@@ -12,7 +14,7 @@ namespace Scripts.UI
     /// Enemy的业务逻辑部分（手动编写）
     /// 敌人UI控制器，管理敌人的显示和状态更新
     /// </summary>
-    public partial class Enemy : MonoBehaviour
+    public partial class Enemy : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         #region 私有字段
 
@@ -36,6 +38,12 @@ namespace Scripts.UI
         private float _initialEnemyImageHeight;
         private Vector2 _initialIntentionAnchoredPos;
 
+        // 敌人悬停名称：运行时创建，避免要求所有现有 EnemyPrefab 手工补绑定。
+        private RectTransform _hoverNameRoot;
+        private TextMeshProUGUI _hoverNameText;
+        private const string HoverNameNodeName = "HoverName";
+        private static readonly Vector2 HoverNameSize = new Vector2(190f, 30f);
+        private const float HoverNameGap = 6f;
 
         #endregion
 
@@ -62,7 +70,14 @@ namespace Scripts.UI
                 Indicator.alpha = 0f;
             }
 
+            EnsureHoverName();
+            SetHoverNameVisible(false);
             CaptureLayoutBaseline();
+        }
+
+        private void OnDisable()
+        {
+            SetHoverNameVisible(false);
         }
 
         private void CaptureLayoutBaseline()
@@ -102,6 +117,11 @@ namespace Scripts.UI
             _enemyInfo = enemyInfo;
             _isInitialized = true;
 
+            EnsureHoverName();
+            if (_hoverNameText != null)
+            {
+                _hoverNameText.text = enemyInfo.Name ?? string.Empty;
+            }
             LoadSkeletonAnimation();
             UpdateDisplay();
             SetIntentionThinking();
@@ -278,29 +298,20 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 设置执行轨意图显示：根据技能效果决定 Attack/Shield/State 图标 + 数值。
-        /// Coord 按"暗黑地牢式"展示目标位置：单体亮目标格、AOE 全亮。
+        /// 设置执行轨意图显示：根据技能效果决定 Melee/Remote/Shield/State 图标与数值。
+        /// Coord 使用单体/AOE素材，并按目标区显示前排红、后排蓝。
         /// </summary>
         /// <param name="skillInfo">敌人技能配置</param>
-        /// <param name="dotStates">每个玩家点的状态（0=未打/灰、1=打+前排/红、2=打+后排/蓝）；null=隐藏 Coord</param>
         /// <param name="targetUnitId">当前锁定的目标 UnitId（供悬停抛物线指向；空区未锁人时为 null）</param>
-        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, int[] dotStates, string targetUnitId = null)
+        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, string targetUnitId = null)
         {
             if (IntentionView != null)
             {
-                IntentionView.ShowFromSkill(skillInfo, dotStates, targetUnitId);
+                IntentionView.ShowFromSkill(skillInfo, targetUnitId);
             }
             // 兼容旧 Txt_Intention
             if (Txt_Intention != null)
                 Txt_Intention.text = string.Empty;
-        }
-
-        /// <summary>
-        /// 旧签名兜底：没有目标位置信息时调用，隐藏 Coord。
-        /// </summary>
-        public void SetIntentionExecuting(cfg.Enemy.EnemySkillInfo skillInfo, string targetName)
-        {
-            SetIntentionExecuting(skillInfo, (int[])null, null);
         }
 
         /// <summary>
@@ -805,6 +816,7 @@ namespace Scripts.UI
 
             // 2) 计算当前视觉的可见包围盒(已换算到根节点本地坐标)
             Rect visual = CalcVisualBounds();
+            UpdateHoverNamePosition(visual);
 
             // 3) clamp 到受控尺寸，宽度不超过敌人间距，避免命中区互相重叠
             float w = Mathf.Clamp(visual.width, _hitAreaMinSize.x, _hitAreaMaxSize.x);
@@ -831,6 +843,88 @@ namespace Scripts.UI
             if (IntentionView != null)
             {
                 IntentionView.transform.SetAsLastSibling();
+            }
+        }
+
+        /// <summary>
+        /// 敌人命中区悬停时，在视觉脚底下方显示名称。
+        /// </summary>
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (!_isInitialized || _enemyInfo == null) return;
+
+            EnsureHoverName();
+            if (_hoverNameText != null)
+            {
+                _hoverNameText.text = _enemyInfo.Name ?? string.Empty;
+            }
+            SetHoverNameVisible(true);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            SetHoverNameVisible(false);
+        }
+
+        private void EnsureHoverName()
+        {
+            if (_hoverNameRoot != null) return;
+
+            var existing = transform.Find(HoverNameNodeName) as RectTransform;
+            if (existing != null)
+            {
+                _hoverNameRoot = existing;
+                _hoverNameText = existing.GetComponentInChildren<TextMeshProUGUI>(true);
+                return;
+            }
+
+            var rootGo = new GameObject(HoverNameNodeName, typeof(RectTransform), typeof(Image));
+            _hoverNameRoot = rootGo.GetComponent<RectTransform>();
+            _hoverNameRoot.SetParent(transform, false);
+            _hoverNameRoot.anchorMin = _hoverNameRoot.anchorMax = new Vector2(0.5f, 0.5f);
+            _hoverNameRoot.pivot = new Vector2(0.5f, 0.5f);
+            _hoverNameRoot.sizeDelta = HoverNameSize;
+
+            var background = rootGo.GetComponent<Image>();
+            background.color = new Color(0.04f, 0.04f, 0.04f, 0.78f);
+            background.raycastTarget = false;
+
+            var textGo = new GameObject("Txt_Name", typeof(RectTransform), typeof(TextMeshProUGUI));
+            var textRect = textGo.GetComponent<RectTransform>();
+            textRect.SetParent(_hoverNameRoot, false);
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(8f, 1f);
+            textRect.offsetMax = new Vector2(-8f, -1f);
+
+            _hoverNameText = textGo.GetComponent<TextMeshProUGUI>();
+            _hoverNameText.font = Txt_Hp != null ? Txt_Hp.font : null;
+            _hoverNameText.fontSize = 21f;
+            _hoverNameText.color = Color.white;
+            _hoverNameText.alignment = TextAlignmentOptions.Center;
+            _hoverNameText.overflowMode = TextOverflowModes.Ellipsis;
+            _hoverNameText.raycastTarget = false;
+            _hoverNameText.text = _enemyInfo?.Name ?? string.Empty;
+        }
+
+        private void UpdateHoverNamePosition(Rect visual)
+        {
+            EnsureHoverName();
+            if (_hoverNameRoot == null) return;
+
+            float centerY = visual.yMin - HoverNameGap - HoverNameSize.y * 0.5f;
+            _hoverNameRoot.anchoredPosition = new Vector2(visual.center.x, centerY);
+        }
+
+        private void SetHoverNameVisible(bool visible)
+        {
+            if (_hoverNameRoot == null) return;
+
+            _hoverNameRoot.gameObject.SetActive(visible);
+            if (visible)
+            {
+                // 名称只负责显示，不参与射线；提到最上层避免被敌人图像或血条遮住。
+                _hoverNameRoot.SetAsLastSibling();
             }
         }
 

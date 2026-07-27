@@ -109,6 +109,14 @@ namespace cfg
         /// 闪避
         /// </summary>
         Dodge = 23,
+        /// <summary>
+        /// 坚毅
+        /// </summary>
+        Resolve = 24,
+        /// <summary>
+        /// 士气
+        /// </summary>
+        Morale = 25,
     }
 
 } 

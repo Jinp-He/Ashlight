@@ -16,7 +16,7 @@ namespace Ashlight.Battle.Core.Commands
         public int DefenseValue { get; set; }
 
         /// <summary>
-        /// 是否按命中次数叠加（预留）
+        /// 是否按上一条伤害指令的命中次数叠加。PerHit 防御固定加给施法者自身。
         /// </summary>
         public bool PerHit { get; set; }
 
@@ -38,6 +38,28 @@ namespace Ashlight.Battle.Core.Commands
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
         {
+            if (PerHit)
+            {
+                var owner = state.GetUnitById(ownerId);
+                if (owner == null || owner.IsDead)
+                {
+                    Debug.LogWarning($"[DefenseCommand] PerHit 施法者不存在或已死亡: {ownerId}");
+                    return;
+                }
+
+                int hitCount = Mathf.Max(0, state.LastDamageHitCount);
+                int totalDefense = DefenseValue * hitCount;
+                if (totalDefense <= 0)
+                {
+                    Debug.Log($"[DefenseCommand] {ownerId} 上一条伤害未命中目标，不获得 PerHit 护甲");
+                    return;
+                }
+
+                owner.AddDefense(totalDefense);
+                Debug.Log($"[DefenseCommand] {ownerId} 按 {hitCount} 次命中获得 {totalDefense} 点护甲");
+                return;
+            }
+
             if (IsAoe)
             {
                 ExecuteAoeDefense(state, ownerId);
@@ -79,7 +101,10 @@ namespace Ashlight.Battle.Core.Commands
                 : state.GetAliveEnemyUnits();
 
             // 分区过滤：Front 只护前排、Back 只护后排、Any 全体。strict=true：目标区无人则不回退全体。
-            allies = ZoneTargeting.FilterByZone(state, allies, TargetZone, strict: true);
+            var effectiveZone = TargetZone == TargetZoneEnum.Conditional
+                ? (owner.RowPosition == BattleRowPosition.FrontRow ? TargetZoneEnum.Front : TargetZoneEnum.Back)
+                : TargetZone;
+            allies = ZoneTargeting.FilterByZone(state, allies, effectiveZone, strict: true);
 
             foreach (var ally in allies)
             {

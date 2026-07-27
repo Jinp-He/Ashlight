@@ -14,6 +14,14 @@ namespace cfg
     public enum RarityEnum
     {
         /// <summary>
+        /// 临时
+        /// </summary>
+        Temporary = -2,
+        /// <summary>
+        /// 基础
+        /// </summary>
+        Basic = -1,
+        /// <summary>
         /// 普通
         /// </summary>
         Normal = 0,

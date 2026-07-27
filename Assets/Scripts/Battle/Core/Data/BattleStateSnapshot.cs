@@ -79,6 +79,21 @@ namespace Ashlight.Battle.Core.Data
         /// </summary>
         public int CurrentRound { get; set; }
 
+        /// <summary>【天气镜像】下一次天气结算所在的绝对公共回合；-1 表示本场无天气。</summary>
+        public int NextWeatherRound { get; set; }
+
+        /// <summary>最近一次天气实际结算的公共回合；用于“这个公共回合结算过天气”的条件。</summary>
+        public int LastWeatherResolvedRound { get; set; }
+
+        /// <summary>卡牌效果尚未落到账面的天气顺延量，由 ATB.ApplyPendingDelays 统一应用。</summary>
+        public int PendingWeatherDelay { get; set; }
+
+        /// <summary>风暴眼保护的天气回合；-1 表示没有待触发保护。</summary>
+        public int WeatherGuardRound { get; set; }
+
+        /// <summary>风暴眼在天气伤害前提供的护甲值。</summary>
+        public int WeatherGuardArmor { get; set; }
+
         /// <summary>
         /// 回合内移动触发器列表（「这回合每次有角色移动就 XX」）。回合结束时清空。
         /// </summary>
@@ -89,6 +104,21 @@ namespace Ashlight.Battle.Core.Data
         /// 供隧穿/铁蒺藜卡面动态显示「本回合已移动 N 次」；回合结束清零。
         /// </summary>
         public int MovesThisTurn { get; set; }
+
+        /// <summary>本原子回合内每名角色成功移动的次数，供“十步杀一人”等读取。</summary>
+        public Dictionary<string, int> MovesByUnitThisTurn { get; set; }
+
+        /// <summary>每名角色这个回合最近成功打出的移动主卡。闪回牌不会写入。</summary>
+        public Dictionary<string, string> LastMoveMainCardByOwner { get; set; }
+
+        /// <summary>本回合移动主卡的费用覆盖，键为施法者 UnitId；用于“千里不留行”。</summary>
+        public Dictionary<string, int> MoveCardCostOverrideByOwner { get; set; }
+
+        /// <summary>
+        /// 最近一条伤害指令实际命中的目标数。仅供紧随其后的 PerHit 防御效果读取，
+        /// 每张卡开始结算以及每条伤害指令开始执行时都会重置。
+        /// </summary>
+        public int LastDamageHitCount { get; set; }
 
         public BattleStateSnapshot()
         {
@@ -105,7 +135,16 @@ namespace Ashlight.Battle.Core.Data
             IsGlobalPaused = false;
             CardModifiers = new CardModifierRegistry();
             CurrentRound = 0;
+            NextWeatherRound = -1;
+            LastWeatherResolvedRound = -1;
+            PendingWeatherDelay = 0;
+            WeatherGuardRound = -1;
+            WeatherGuardArmor = 0;
             MoveTriggers = new List<MoveTriggerState>();
+            MovesByUnitThisTurn = new Dictionary<string, int>();
+            LastMoveMainCardByOwner = new Dictionary<string, string>();
+            MoveCardCostOverrideByOwner = new Dictionary<string, int>();
+            LastDamageHitCount = 0;
         }
 
         /// <summary>
@@ -221,12 +260,27 @@ namespace Ashlight.Battle.Core.Data
                 TurnCount = this.TurnCount,
                 IsGlobalPaused = this.IsGlobalPaused,
                 CurrentRound = this.CurrentRound,
+                NextWeatherRound = this.NextWeatherRound,
+                LastWeatherResolvedRound = this.LastWeatherResolvedRound,
+                PendingWeatherDelay = this.PendingWeatherDelay,
+                WeatherGuardRound = this.WeatherGuardRound,
+                WeatherGuardArmor = this.WeatherGuardArmor,
                 PlayerUnits = new List<UnitState>(),
                 EnemyUnits = new List<UnitState>(),
                 MoveTriggers = this.MoveTriggers != null
                     ? this.MoveTriggers.Select(t => t.Clone()).ToList()
                     : new List<MoveTriggerState>(),
-                MovesThisTurn = this.MovesThisTurn
+                MovesThisTurn = this.MovesThisTurn,
+                MovesByUnitThisTurn = this.MovesByUnitThisTurn != null
+                    ? new Dictionary<string, int>(this.MovesByUnitThisTurn)
+                    : new Dictionary<string, int>(),
+                LastMoveMainCardByOwner = this.LastMoveMainCardByOwner != null
+                    ? new Dictionary<string, string>(this.LastMoveMainCardByOwner)
+                    : new Dictionary<string, string>(),
+                MoveCardCostOverrideByOwner = this.MoveCardCostOverrideByOwner != null
+                    ? new Dictionary<string, int>(this.MoveCardCostOverrideByOwner)
+                    : new Dictionary<string, int>(),
+                LastDamageHitCount = this.LastDamageHitCount
             };
 
             // 深拷贝玩家方单位

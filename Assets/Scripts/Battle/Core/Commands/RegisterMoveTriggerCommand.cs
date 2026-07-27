@@ -13,11 +13,21 @@ namespace Ashlight.Battle.Core.Commands
         public int Amount { get; set; }
         public string CardId { get; set; }
 
-        public RegisterMoveTriggerCommand(string triggerType, int amount, string cardId = null)
+        public int MaxFireCount { get; set; }
+        public string MoverScope { get; set; }
+
+        public RegisterMoveTriggerCommand(
+            string triggerType,
+            int amount,
+            string cardId = null,
+            int maxFireCount = 0,
+            string moverScope = MoveTriggerState.ScopeAny)
         {
             TriggerType = triggerType;
             Amount = amount;
             CardId = cardId;
+            MaxFireCount = maxFireCount;
+            MoverScope = moverScope;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -32,10 +42,12 @@ namespace Ashlight.Battle.Core.Commands
                 OwnerId = ownerId,
                 TriggerType = TriggerType,
                 Amount = Amount,
-                CardId = CardId
+                CardId = CardId,
+                MaxFireCount = MaxFireCount,
+                MoverScope = MoverScope
             });
 
-            Debug.Log($"[RegisterMoveTrigger] {ownerId} 登记移动触发器 {TriggerType} (amount={Amount}, card={CardId ?? "-"})，本回合生效");
+            Debug.Log($"[RegisterMoveTrigger] {ownerId} 登记移动触发器 {TriggerType} (amount={Amount}, card={CardId ?? "-"}, max={MaxFireCount}, scope={MoverScope})，本回合生效");
         }
 
         public int GetPriority()
@@ -50,7 +62,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new RegisterMoveTriggerCommand(TriggerType, Amount, CardId);
+            return new RegisterMoveTriggerCommand(TriggerType, Amount, CardId, MaxFireCount, MoverScope);
         }
     }
 }

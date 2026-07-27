@@ -17,20 +17,16 @@ namespace Scripts.UI
     ///     Img_Think                  思考图标
     ///     Img_State                  状态图标
     ///     Img_Shield                 护盾图标
-    ///     Img_Attack                 攻击图标
-    ///   Coord/
-    ///     Img_linkPiece              坐标连接块（横向拉伸）
-    ///     Img_Coord0                 坐标点模板（prefab 里只放 1 个，运行时按需克隆）
+    ///     Img_Attack                 攻击图标容器（按目标区切换近战/远程素材）
+    ///   Coord/Img_Coord0             目标区标记容器（按单体/AOE切换素材）
     ///
     /// 颜色规范：
     ///   激活色  #9c660a
-    ///   坐标点未激活色  #3f4447
     ///
-    /// **Coord 语义（暗黑地牢式目标位置指示）：**
-    /// - 总格子数 = 我方队伍上限（默认 4 格）
-    /// - 激活的格子（橙色） = 本次技能锁定的目标位置
-    /// - AOE 技能 → 4 格全亮 + 连接条铺满
-    /// - 单体 → 仅目标位置一格亮，无连接条
+    /// **Coord 语义：**
+    /// - 单体使用 Coord_Img_Monomer，AOE 使用 Coord_Img_Aoe
+    /// - 前排为红色，后排为蓝色
+    /// - Any 表示前后排同时生效，因此同时显示红、蓝两个标记
     ///
     /// 字段优先取 Inspector 拖入的引用；未拖入时按上述名字自动查找。
     /// </summary>
@@ -41,7 +37,8 @@ namespace Scripts.UI
         // 否则会抛 "DoTryParseHtmlColor is not allowed to be called from a MonoBehaviour constructor"。
         // 直接用 Color32 字面量。#9c660a / #3f4447
         private static readonly Color ActiveColor = new Color32(0x9c, 0x66, 0x0a, 0xff);
-        private static readonly Color InactiveDotColor = new Color32(0x3f, 0x44, 0x47, 0xff);
+        private const string ResourceRoot = "UI/Intention/";
+        private static readonly Dictionary<string, Sprite> RuntimeSprites = new Dictionary<string, Sprite>();
 
         // ===== Inspector 可拖入（可选，留空将按名字自动绑定）=====
         [Header("背景")]
@@ -56,21 +53,15 @@ namespace Scripts.UI
         [SerializeField] private Image _imgShield;
         [SerializeField] private Image _imgAttack;
 
-        [Header("坐标 (Coord/*) — 模板与连接块")]
+        [Header("坐标 (Coord/*) — 运行时复用旧节点显示新标记")]
         [Tooltip("Coord 容器，默认为子节点 'Coord'")]
         [SerializeField] private Transform _coordRoot;
-        [Tooltip("坐标点模板。留空时取 Coord/Img_Coord0")]
+        [Tooltip("目标区标记模板。留空时取 Coord/CoordPoints/Img_Coord0")]
         [SerializeField] private Image _coordTemplate;
-        [Tooltip("坐标连接块。留空时取 Coord/Img_linkPiece")]
+        [Tooltip("旧坐标连接块；新方案始终隐藏")]
         [SerializeField] private Image _imgLinkPiece;
 
-        [Header("动态生成参数")]
-        [Tooltip("默认展示的坐标点总数（队伍上限，DD 式通常为 4）")]
-        [SerializeField] private int _defaultTotalCoords = 4;
-        [Tooltip("相邻坐标点之间的水平间距（像素）")]
-        [SerializeField] private float _dotSpacing = 60f;
-
-        // ===== 分区颜色（前排红 / 后排蓝）：被攻击的玩家点按其所在排上色 =====
+        // ===== 分区颜色（前排红 / 后排蓝） =====
         // 颜色数据来源(通道)：TbCustomColor（Luban 表 Id→hex）。读不到时用兜底常量。
         private const string FrontRowColorId = "FrontRow";
         private const string BackRowColorId  = "BackRow";
@@ -98,10 +89,14 @@ namespace Scripts.UI
         private TargetArrowRenderer _parabola;
         private Canvas _canvas;
 
-        // 运行时生成的坐标点列表（含模板自身）
-        private readonly List<Image> _coordDots = new List<Image>();
-        // 当前总坐标点数（已生成且激活的数量）
-        private int _currentTotalCoords;
+        // 最多使用两个标记：Front/Back 各一个；Any 时二者同时显示。
+        private readonly List<Image> _coordMarkers = new List<Image>();
+        private float _coordMarkerY;
+
+        private Sprite _meleeSprite;
+        private Sprite _remoteSprite;
+        private Sprite _coordMonomerSprite;
+        private Sprite _coordAoeSprite;
 
         // tooltip 实例与当前对应的技能配置
         private DescriptionViewController _descriptionView;
@@ -114,7 +109,8 @@ namespace Scripts.UI
         private void Awake()
         {
             AutoBindIfMissing();
-            EnsureCoordCount(_defaultTotalCoords);
+            ApplyNewArtwork();
+            PrepareCoordMarkers();
             Hide();
 
             CreateDescriptionView();
@@ -225,48 +221,49 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 改变坐标点总数（按需 Instantiate 或隐藏多余）。
-        /// 不同队伍大小时调用。
+        /// 复用 prefab 里的旧坐标点节点，整理成最多两个独立标记。
+        /// 标记直接挂到 Coord 下并手动居中，不再受旧 HorizontalLayoutGroup 控制。
         /// </summary>
-        public void EnsureCoordCount(int n)
+        private void PrepareCoordMarkers()
         {
-            if (_coordTemplate == null) return;
-            n = Mathf.Max(1, n);
+            if (_coordTemplate == null || _coordRoot == null) return;
 
-            // 首次：从 CoordPoints（HorizontalLayoutGroup 容器）收集所有已预置的点
-            if (_coordDots.Count == 0)
+            var oldParent = _coordTemplate.transform.parent;
+            if (oldParent != null)
             {
-                var layoutParent = _coordTemplate.transform.parent;
-                if (layoutParent != null)
+                var candidates = new List<Image>();
+                foreach (Transform child in oldParent)
                 {
-                    foreach (Transform child in layoutParent)
-                    {
-                        var img = child.GetComponent<Image>();
-                        if (img != null) _coordDots.Add(img);
-                    }
+                    if (child == null || !child.name.StartsWith("Img_Coord")) continue;
+                    var image = child.GetComponent<Image>();
+                    if (image != null) candidates.Add(image);
                 }
-                // 兜底：至少把模板加进去
-                if (_coordDots.Count == 0)
-                    _coordDots.Add(_coordTemplate);
+                _coordMarkers.AddRange(candidates);
             }
 
-            // 如果预置点不够，再克隆（HorizontalLayoutGroup 会自动排列）
-            while (_coordDots.Count < n)
+            if (_coordMarkers.Count == 0)
+                _coordMarkers.Add(_coordTemplate);
+
+            _coordMarkerY = _coordRoot.InverseTransformPoint(_coordTemplate.transform.position).y;
+
+            while (_coordMarkers.Count < 2)
             {
-                var clone = Instantiate(_coordTemplate, _coordTemplate.transform.parent);
-                clone.name = $"Img_Coord{_coordDots.Count}";
-                _coordDots.Add(clone);
+                var clone = Instantiate(_coordTemplate, _coordRoot);
+                clone.name = $"Img_TargetZone{_coordMarkers.Count}";
+                _coordMarkers.Add(clone);
             }
 
-            // 前 n 个显示，超出的隐藏
-            for (int i = 0; i < _coordDots.Count; i++)
+            for (int i = 0; i < _coordMarkers.Count; i++)
             {
-                bool on = i < n;
-                if (_coordDots[i].gameObject.activeSelf != on)
-                    _coordDots[i].gameObject.SetActive(on);
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                marker.transform.SetParent(_coordRoot, true);
+                marker.raycastTarget = false;
+                marker.gameObject.SetActive(false);
             }
 
-            _currentTotalCoords = n;
+            if (_imgLinkPiece != null)
+                _imgLinkPiece.gameObject.SetActive(false);
         }
 
         /// <summary>思考中：只显示思考图标，无数值，整个 Coord 区域隐藏。思考态无技能详情可看</summary>
@@ -285,17 +282,13 @@ namespace Scripts.UI
 
         /// <summary>
         /// 根据敌人技能配置 + 目标信息自动显示意图。
-        /// 含攻击效果 → Attack 图标 + 累计伤害
+        /// 含攻击效果 → Front/Any 使用 Melee，Back 使用 Remote，并显示累计伤害
         /// 含防御效果 → Shield 图标 + 累计护甲
         /// 其他 → State 图标，无数值
         /// </summary>
         /// <param name="skillInfo">技能配置</param>
-        /// <param name="dotStates">
-        /// 每个玩家点的状态数组（长度=玩家数，顺序=名单序）：0=未被攻击(灰)、1=被攻击且在前排(红)、2=被攻击且在后排(蓝)。
-        /// 为 null → 隐藏 Coord（自身/我方向技能）。
-        /// </param>
         /// <param name="targetUnitId">当前锁定目标 UnitId（供悬停抛物线）</param>
-        public void ShowFromSkill(EnemySkillInfo skillInfo, int[] dotStates, string targetUnitId = null)
+        public void ShowFromSkill(EnemySkillInfo skillInfo, string targetUnitId = null)
         {
             if (skillInfo == null)
             {
@@ -312,7 +305,8 @@ namespace Scripts.UI
             int shieldValue = 0;
             bool hasAttack = false;
             bool hasShield = false;
-            bool effectIsAoe = false;
+            bool isAoe = skillInfo.TargetType == TargetTypeEnum.AllEnemy
+                         || skillInfo.TargetType == TargetTypeEnum.AllAlly;
 
             if (skillInfo.Effects != null)
             {
@@ -323,7 +317,7 @@ namespace Scripts.UI
                         case AttackEffect atk:
                             attackDamage += atk.Damage;
                             hasAttack = true;
-                            if (atk.IsAoe) effectIsAoe = true;
+                            if (atk.IsAoe) isAoe = true;
                             break;
                         case AttackExtraEffect atkEx:
                             attackDamage += atkEx.Damage;
@@ -345,84 +339,82 @@ namespace Scripts.UI
                 }
             }
 
-            // Coord 语义：3 个点 = 3 个玩家角色；被攻击的玩家点按其所在排上色（前排红/后排蓝），未被打为灰。
-            // 具体每个点的状态由调用方(UI_BattleScene)按当前站位算好传入；null → 隐藏 Coord。
+            bool targetsPlayers = skillInfo.TargetType == TargetTypeEnum.SingleEnemy
+                                  || skillInfo.TargetType == TargetTypeEnum.AllEnemy;
+
             if (hasAttack)
-                ShowAttack(attackDamage, dotStates);
+                ShowAttack(attackDamage, skillInfo.TargetZone, isAoe, targetsPlayers);
             else if (hasShield)
-                ShowShield(shieldValue, dotStates);
+                ShowShield(shieldValue);
             else
-                ShowState(dotStates);
+                ShowState();
         }
 
-        /// <summary>旧签名兜底：没有目标信息时隐藏 Coord。</summary>
-        public void ShowFromSkill(EnemySkillInfo skillInfo)
-        {
-            ShowFromSkill(skillInfo, (int[])null, null);
-        }
-
-        public void ShowAttack(int damage, int[] dotStates)
+        public void ShowAttack(int damage, TargetZoneEnum targetZone, bool isAoe, bool targetsPlayers)
         {
             Show();
+            ApplyImageSprite(_imgAttack, targetZone == TargetZoneEnum.Back ? _remoteSprite : _meleeSprite);
             SetActiveIcon(_imgAttack);
             SetFigure(damage.ToString());
-            ApplyCoordStates(dotStates);
+            if (targetsPlayers)
+                ShowTargetZone(targetZone, isAoe);
+            else
+                SetCoordsVisible(false);
         }
 
-        public void ShowShield(int shieldValue, int[] dotStates)
+        public void ShowShield(int shieldValue)
         {
             Show();
             SetActiveIcon(_imgShield);
             SetFigure(shieldValue.ToString());
-            ApplyCoordStates(dotStates);
+            SetCoordsVisible(false);
         }
 
-        public void ShowState(int[] dotStates)
+        public void ShowState()
         {
             Show();
             SetActiveIcon(_imgState);
             SetFigure(null);
-            ApplyCoordStates(dotStates);
+            SetCoordsVisible(false);
         }
-
-        /// <summary>dotStates 为 null → 隐藏整个 Coord；否则显示并按每个玩家点的状态上色。</summary>
-        private void ApplyCoordStates(int[] dotStates)
-        {
-            if (dotStates == null || dotStates.Length == 0)
-            {
-                SetCoordsVisible(false);
-                return;
-            }
-            SetCoordsVisible(true);
-            SetCoordStates(dotStates);
-        }
-
-        // ===== 坐标点：3 个玩家点 + 前排红/后排蓝上色 =====
 
         /// <summary>
-        /// 按每个玩家点的状态上色：0=未被攻击(灰)、1=被攻击且前排(红)、2=被攻击且后排(蓝)。
-        /// 全部点都显示（代表在场的玩家角色），只有被攻击的点染成红/蓝。
+        /// 单体/群体分别使用 Monomer/Aoe 素材；Front 红、Back 蓝；Any/Conditional 同时显示红蓝。
         /// </summary>
-        private void SetCoordStates(int[] states)
+        private void ShowTargetZone(TargetZoneEnum targetZone, bool isAoe)
         {
-            int n = states.Length;
-            EnsureCoordCount(n);
+            if (_coordMarkers.Count == 0) return;
 
-            for (int i = 0; i < n && i < _coordDots.Count; i++)
+            SetCoordsVisible(true);
+            bool bothRows = targetZone == TargetZoneEnum.Any || targetZone == TargetZoneEnum.Conditional;
+            int count = bothRows ? 2 : 1;
+            Sprite sprite = isAoe ? _coordAoeSprite : _coordMonomerSprite;
+            float markerWidth = sprite != null ? sprite.rect.width : (isAoe ? 23f : 10f);
+            const float gap = 5f;
+            float firstX = count == 1 ? 0f : -(markerWidth + gap) * 0.5f;
+
+            for (int i = 0; i < _coordMarkers.Count; i++)
             {
-                var dot = _coordDots[i];
-                if (dot == null) continue;
-                if (!dot.gameObject.activeSelf) dot.gameObject.SetActive(true);
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                bool visible = i < count;
+                marker.gameObject.SetActive(visible);
+                if (!visible) continue;
 
-                Color c;
-                if (states[i] == 1) c = ReadCustomColor(FrontRowColorId, FrontRowFallback);
-                else if (states[i] == 2) c = ReadCustomColor(BackRowColorId, BackRowFallback);
-                else c = InactiveDotColor;
-                dot.color = c;
+                ApplyImageSprite(marker, sprite);
+                bool front = bothRows ? i == 0 : targetZone != TargetZoneEnum.Back;
+                marker.color = front
+                    ? ReadCustomColor(FrontRowColorId, FrontRowFallback)
+                    : ReadCustomColor(BackRowColorId, BackRowFallback);
+
+                var markerTransform = marker.transform;
+                markerTransform.localPosition = new Vector3(
+                    firstX + i * (markerWidth + gap),
+                    _coordMarkerY,
+                    0f);
             }
 
-            // 新方案按玩家点染色，不再用连接条长条：始终隐藏它
-            if (_imgLinkPiece != null && _imgLinkPiece.gameObject.activeSelf)
+            if (_imgLinkPiece != null)
                 _imgLinkPiece.gameObject.SetActive(false);
         }
 
@@ -482,7 +474,7 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 切换整个 Coord 区域（坐标点 + 连接条）的显示/隐藏。
+        /// 切换整个 Coord 区域的显示/隐藏。
         /// 思考阶段调用 false；进入执行轨公示意图时调用 true。
         /// </summary>
         private void SetCoordsVisible(bool visible)
@@ -493,20 +485,73 @@ namespace Scripts.UI
                     _coordRoot.gameObject.SetActive(visible);
                 return;
             }
-            // 没有 _coordRoot 兜底：逐个 dot + linkPiece 切换
-            for (int i = 0; i < _coordDots.Count; i++)
+            // 没有 _coordRoot 兜底：逐个标记切换
+            for (int i = 0; i < _coordMarkers.Count; i++)
             {
-                var dot = _coordDots[i];
-                if (dot == null) continue;
-                bool on = visible && i < _currentTotalCoords;
-                if (dot.gameObject.activeSelf != on)
-                    dot.gameObject.SetActive(on);
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                if (!visible && marker.gameObject.activeSelf)
+                    marker.gameObject.SetActive(false);
             }
-            if (_imgLinkPiece != null && _imgLinkPiece.gameObject.activeSelf && !visible)
+            if (_imgLinkPiece != null && !visible)
                 _imgLinkPiece.gameObject.SetActive(false);
         }
 
         // ===== 内部：自动绑定 & 工具 =====
+
+        /// <summary>把 0717 导出的独立 PNG 覆盖到旧 PSB 节点上。</summary>
+        private void ApplyNewArtwork()
+        {
+            ApplyImageSprite(_imgBase, LoadIntentionSprite("Img_IntentionBase"));
+            ApplyImageSprite(_imgThink, LoadIntentionSprite("IntentionIcon_Img_Think"));
+            ApplyImageSprite(_imgState, LoadIntentionSprite("IntentionIcon_Img_State"));
+            ApplyImageSprite(_imgShield, LoadIntentionSprite("IntentionIcon_Img_Shield"));
+
+            _meleeSprite = LoadIntentionSprite("IntentionIcon_Img_Melee");
+            _remoteSprite = LoadIntentionSprite("IntentionIcon_Img_Remote");
+            _coordMonomerSprite = LoadIntentionSprite("Coord_Img_Monomer");
+            _coordAoeSprite = LoadIntentionSprite("Coord_Img_Aoe");
+            ApplyImageSprite(_imgAttack, _meleeSprite);
+        }
+
+        /// <summary>
+        /// PNG 尚无 .meta 时 Unity 会按 Texture2D 导入，因此先尝试 Sprite，再用 Texture2D 运行时创建 Sprite。
+        /// </summary>
+        private static Sprite LoadIntentionSprite(string assetName)
+        {
+            if (RuntimeSprites.TryGetValue(assetName, out var cached) && cached != null)
+                return cached;
+
+            string path = ResourceRoot + assetName;
+            var sprite = Resources.Load<Sprite>(path);
+            if (sprite == null)
+            {
+                var texture = Resources.Load<Texture2D>(path);
+                if (texture != null)
+                {
+                    sprite = Sprite.Create(
+                        texture,
+                        new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f),
+                        100f);
+                    sprite.name = assetName;
+                }
+            }
+
+            if (sprite != null)
+                RuntimeSprites[assetName] = sprite;
+            else
+                Debug.LogWarning($"[IntentionView] 无法加载新意图素材: Resources/{path}.png");
+            return sprite;
+        }
+
+        private static void ApplyImageSprite(Image image, Sprite sprite)
+        {
+            if (image == null || sprite == null) return;
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.rectTransform.sizeDelta = new Vector2(sprite.rect.width, sprite.rect.height);
+        }
 
         private void AutoBindIfMissing()
         {

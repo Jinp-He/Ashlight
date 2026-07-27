@@ -245,5 +245,15 @@
     "DefaultDuration": -1,
     "MaxStack": 99,
     "RefreshOnReapply": false
+  },
+  {
+    "Id": "Morale",
+    "Name": "士气",
+    "Description": "特殊增益，当前 {V} 层",
+    "IconPath": "UI/Buff/Icon_Morale",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 3,
+    "RefreshOnReapply": false
   }
 ]

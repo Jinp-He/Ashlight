@@ -353,5 +353,217 @@
     ],
     "IsElite": true,
     "StartRow": 0
+  },
+  {
+    "Id": "EnemyM01",
+    "Name": "灰袍信徒",
+    "AlternativePath": "Grey",
+    "Hp": 36,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM01",
+            "TimeSlot": 1
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM02",
+            "TimeSlot": 2
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyM02",
+    "Name": "蒙眼侍僧",
+    "AlternativePath": "Tusk",
+    "Hp": 54,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM03",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM04",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "EnemyM03",
+    "Name": "戒律执事",
+    "AlternativePath": "Banner",
+    "Hp": 72,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM05",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM06",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyM04",
+    "Name": "缄默使徒",
+    "AlternativePath": "Mafe",
+    "Hp": 150,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM07",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM08",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 2,
+            "EnemySkillIndex": "ESM09",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": true,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyW01",
+    "Name": "指裔",
+    "AlternativePath": "Tusk",
+    "Hp": 36,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW01",
+            "TimeSlot": 1
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW02",
+            "TimeSlot": 1
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyW02",
+    "Name": "血肉猎手",
+    "AlternativePath": "Wangg",
+    "Hp": 54,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW03",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW04",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "EnemyW03",
+    "Name": "多臂殉道者",
+    "AlternativePath": "Mafe",
+    "Hp": 72,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW05",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW06",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
   }
 ]

@@ -1,4 +1,5 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
 using UnityEngine;
 
@@ -59,7 +60,9 @@ namespace Ashlight.Battle.Core.Commands
             }
 
             // 造成额外伤害
-            int damageDealt = target.TakeDamage(BonusDamage);
+            int adjustedDamage = DamageCommand.ApplyAttackerModifiers(owner, BonusDamage);
+            int damageDealt = target.TakeDamage(adjustedDamage);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
             Debug.Log($"[AttackConditionalCommand] 目标 {targetId} 满足条件 [{ConditionType}]，受到额外伤害 {damageDealt} 点");
 
             // 发布攻击执行事件
@@ -131,6 +134,14 @@ namespace Ashlight.Battle.Core.Commands
 
                 case "SelfInBackRow":
                     return owner != null && !state.IsFrontRow(owner);
+
+                case "AllyActingThisRound":
+                    if (owner == null)
+                    {
+                        return false;
+                    }
+                    var allies = owner.IsPlayerUnit ? state.GetAlivePlayerUnits() : state.GetAliveEnemyUnits();
+                    return allies.Exists(ally => ally.UnitId != owner.UnitId && IsActingThisRound(state, ally));
 
                 case "IsStunned":
                     // 目标处于硬直状态

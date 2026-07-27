@@ -64,7 +64,11 @@ namespace Scripts.UI
             if (!string.IsNullOrEmpty(description))
             {
                 // 替换 {} 标签（效果数值）
-                description = ReplaceEffectTags(description, cardInfo.Effects, mode);
+                var descriptionEffects = new List<Effect>();
+                if (cardInfo.Effects != null) descriptionEffects.AddRange(cardInfo.Effects);
+                if (cardInfo.ChargeStartEffects != null) descriptionEffects.AddRange(cardInfo.ChargeStartEffects);
+                if (cardInfo.ChargeWhileEffects != null) descriptionEffects.AddRange(cardInfo.ChargeWhileEffects);
+                description = ReplaceEffectTags(description, descriptionEffects, mode);
 
                 // 替换 [] 标签（其他属性）
                 description = ReplaceBracketTags(description, cardInfo);
@@ -310,7 +314,7 @@ namespace Scripts.UI
                     return healEffect.Value.ToString();
 
                 case PushCollisionEffect pushCollisionEffect:
-                    return pushCollisionEffect.ShiftValue.ToString();
+                    return Mathf.Abs(pushCollisionEffect.ShiftValue).ToString();
 
                 case TimeShiftAllEffect timeShiftAllEffect:
                     return timeShiftAllEffect.ShiftValue.ToString();
@@ -340,6 +344,12 @@ namespace Scripts.UI
                 case AddToHandEffect addToHandEffect:
                     return addToHandEffect.Count.ToString();
 
+                case AddRandomToHandEffect addRandomToHandEffect:
+                    return addRandomToHandEffect.Count.ToString();
+
+                case ChargedAttackEffect chargedAttackEffect:
+                    return chargedAttackEffect.DamagePerCharge.ToString();
+
                 case StunCurrentRoundEffect stunCurrentRoundEffect:
                     return stunCurrentRoundEffect.Duration.ToString();
 
@@ -351,6 +361,45 @@ namespace Scripts.UI
 
                 case OverloadEffect overloadEffect:
                     return overloadEffect.Value.ToString();
+
+                case CastShiftEffect castShiftEffect:
+                    return Mathf.Abs(castShiftEffect.ShiftValue).ToString();
+
+                case CastShiftAllEffect castShiftAllEffect:
+                    return Mathf.Abs(castShiftAllEffect.ShiftValue).ToString();
+
+                case CastDamageBonusEffect castDamageBonusEffect:
+                    return castDamageBonusEffect.DamageBonus.ToString();
+
+                case CastResolveDrawEffect castResolveDrawEffect:
+                    return castResolveDrawEffect.Count.ToString();
+
+                case CastResolveBuffEffect castResolveBuffEffect:
+                    float castBuffValue = castResolveBuffEffect.Value;
+                    return castBuffValue == Mathf.Floor(castBuffValue)
+                        ? ((int)castBuffValue).ToString()
+                        : castBuffValue.ToString("0.#");
+
+                case CastEchoEffect castEchoEffect:
+                    return castEchoEffect.Delay.ToString();
+
+                case WeatherConditionalAttackEffect weatherAttackEffect:
+                    return weatherAttackEffect.Damage.ToString();
+
+                case DelayScaledAttackEffect delayAttackEffect:
+                    return delayAttackEffect.BaseDamage.ToString();
+
+                case WeatherSyncEnergyEffect weatherSyncEnergyEffect:
+                    return weatherSyncEnergyEffect.Value.ToString();
+
+                case AlignToWeatherEffect alignToWeatherEffect:
+                    return alignToWeatherEffect.MaxShift.ToString();
+
+                case WeatherGuardEffect weatherGuardEffect:
+                    return weatherGuardEffect.Value.ToString();
+
+                case WeatherShiftEffect weatherShiftEffect:
+                    return Mathf.Abs(weatherShiftEffect.ShiftValue).ToString();
 
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");
@@ -460,6 +509,10 @@ namespace Scripts.UI
         {
             switch (rarity)
             {
+                case RarityEnum.Temporary:
+                    return "临时";
+                case RarityEnum.Basic:
+                    return "基础";
                 case RarityEnum.Normal:
                     return "普通";
                 case RarityEnum.Rare:

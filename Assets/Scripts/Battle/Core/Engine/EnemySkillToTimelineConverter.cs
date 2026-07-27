@@ -146,13 +146,16 @@ namespace Ashlight.Battle.Core.Engine
             // PushCollisionEffect -> ActionBarShiftCommand（单体推迟；【公共回合制】正数 = 延后 N 回合，与卡牌路径同号）
             if (effect is PushCollisionEffect pushEffect)
             {
-                return new ActionBarShiftCommand(pushEffect.ShiftValue, isAoe: false);
+                return new ActionBarShiftCommand(pushEffect.ShiftValue, isAoe: false, collisionResult: pushEffect.CollisionResult);
             }
 
             // TimeShiftAllEffect -> ActionBarShiftCommand（全体推迟；【公共回合制】正数 = 延后 N 回合，与卡牌路径同号）
             if (effect is TimeShiftAllEffect timeShiftAllEffect)
             {
-                return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true);
+                return new ActionBarShiftCommand(timeShiftAllEffect.ShiftValue, isAoe: true)
+                {
+                    TargetZone = targetZone
+                };
             }
 
             // BuffEffect -> BuffCommand
@@ -164,6 +167,12 @@ namespace Ashlight.Battle.Core.Engine
                     return null;
                 }
                 return new BuffCommand(buffEffect.BuffId, buffEffect.Value);
+            }
+
+            // AddToHandEffect -> 给被敌人技能锁定的玩家角色塞入运行时卡牌。
+            if (effect is AddToHandEffect addToHandEffect)
+            {
+                return new AddToHandCommand(addToHandEffect.CardId, addToHandEffect.Count, useTargetOwner: true);
             }
 
             // 其他Effect暂不处理

@@ -17,7 +17,7 @@ namespace Scripts.UI
     ///
     /// 敌人进入执行轨后，hover 本卡会弹出「即将执行技能」的说明（复用 DescriptionViewController，与 IntentionView 同款）。
     /// </summary>
-    public partial class UI_行动顺序 : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    public partial class UI_行动顺序 : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
         // 当前执行技能（仅敌人进入执行轨时有值）；共享 tooltip 由 TurnOrderView 注入
         private EnemySkillInfo _executingSkill;
@@ -27,6 +27,8 @@ namespace Scripts.UI
         // hover 联动：本卡承载的单位 + 通知回调（TurnOrderView 注入）——用于点亮战场上对应单位的选中标记
         private string _hoverUnitId;
         private System.Action<string, bool> _onHoverUnit;
+        private string _selectableCastId;
+        private System.Action<string> _onCastSelected;
 
         #region Unity 生命周期
 
@@ -153,24 +155,11 @@ namespace Scripts.UI
             foreach (Transform child in UnitsPiece.transform)
                 child.gameObject.SetActive(false);
 
-            var sprite = Resources.Load<Sprite>(
-                Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(card.Id).Replace('\\', '/'));
-
-            if (sprite != null)
-            {
-                var dyn = EnsureDynamicImage();
-                if (dyn == null) return;
-                dyn.sprite = sprite;
-                dyn.color = Color.white;
-                dyn.gameObject.SetActive(true);
-            }
-            else
-            {
-                var txt = EnsureDynamicText();
-                if (txt == null) return;
-                txt.text = card.Name;
-                txt.gameObject.SetActive(true);
-            }
+            // 在轨执行牌暂时统一以名称显示，避免把卡牌 MiniSprite 放入行动顺序轴。
+            var txt = EnsureDynamicText();
+            if (txt == null) return;
+            txt.text = card.Name;
+            txt.gameObject.SetActive(true);
         }
 
         /// <summary>在 UnitsPiece 下懒创建（或复用）一个铺满容器的动态文字（天气卡缺图降级用）。</summary>
@@ -304,6 +293,13 @@ namespace Scripts.UI
             _onHoverUnit = callback;
         }
 
+        /// <summary>设置本行动格是否可作为“己方在轨执行牌”目标。</summary>
+        public void SetCastSelection(string castId, bool selectable, System.Action<string> callback)
+        {
+            _selectableCastId = selectable ? castId : null;
+            _onCastSelected = selectable ? callback : null;
+        }
+
         #endregion
 
         #region Tooltip（悬停显示执行技能说明）
@@ -335,6 +331,13 @@ namespace Scripts.UI
                 _onHoverUnit?.Invoke(_hoverUnitId, false);
 
             if (_tooltip != null) _tooltip.Hide();
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData != null && eventData.button != PointerEventData.InputButton.Left) return;
+            if (!string.IsNullOrEmpty(_selectableCastId))
+                _onCastSelected?.Invoke(_selectableCastId);
         }
 
         /// <summary>把 tooltip 放到鼠标右侧（复刻 IntentionView 的定位逻辑，兼容 Overlay / Camera 画布）。</summary>
