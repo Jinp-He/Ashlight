@@ -13,6 +13,10 @@ namespace Ashlight.Systems.Core
     {
         public static GameManager Instance { get; private set; }
 
+        [Header("Development")]
+        [SerializeField, Tooltip("Temporary development setting: start every Play Mode with a fresh save.")]
+        private bool resetSaveOnStartup = true;
+
         /// <summary>
         /// 当前存档数据
         /// </summary>
@@ -54,6 +58,9 @@ namespace Ashlight.Systems.Core
             // 1. 加载配置
             ConfigLoader.Load();
 
+            if (resetSaveOnStartup)
+                SaveManager.Delete();
+
             // 2. 加载或创建存档
             bool isNewSave = !SaveManager.HasSave();
             CurrentSave = SaveManager.LoadOrCreateNew();
@@ -69,6 +76,11 @@ namespace Ashlight.Systems.Core
                 int added = CharacterSystem.ReconcileCharacters();
                 if (added > 0) Debug.Log($"[GameManager] 旧存档对账：补齐 {added} 个新角色");
             }
+
+            // New saves and older saves may have no selected team yet.
+            // MapPanel and BattleScene both use ActiveTeam as their authoritative party source.
+            if (CharacterSystem.EnsureDefaultActiveTeam())
+                SaveGame();
 
             // 4. 初始化各系统
             // TODO: 初始化其他系统

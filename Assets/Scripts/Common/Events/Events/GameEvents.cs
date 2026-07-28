@@ -5,6 +5,32 @@ using Scripts.UI;
 
 namespace Ashlight.Common.Events
 {
+    /// <summary>拼图成功放置后发布；MapPanel 用于创建或刷新地块视图。</summary>
+    public struct MapTilePlacedEvent
+    {
+        public Ashlight.State.Runtime.MapPlacedTileState Tile;
+    }
+
+    /// <summary>非战斗地块的即时内容结算通知。</summary>
+    public struct MapContentResolvedEvent
+    {
+        public Ashlight.State.Runtime.MapTileContent Content;
+        public Ashlight.State.Runtime.MapGridPosition Position;
+    }
+
+    /// <summary>地图请求进入战斗；场景/流程层决定如何加载 BattleScene。</summary>
+    public struct MapBattleRequestedEvent
+    {
+        public Ashlight.State.Runtime.MapBattleKind Kind;
+        public string EncounterId;
+    }
+
+    /// <summary>地图状态变更；UI 只能读取此状态，不得直接修改。</summary>
+    public struct MapRunStateChangedEvent
+    {
+        public Ashlight.State.Runtime.MapRuntimeState State;
+    }
+
     public struct SelectCardToDeckEvent
     {
         public CardInfo cardInfo;

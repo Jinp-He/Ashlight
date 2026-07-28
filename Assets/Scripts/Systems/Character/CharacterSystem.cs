@@ -396,6 +396,61 @@ namespace Ashlight.Systems.Character
         }
 
         /// <summary>
+        /// Ensures a new or migrated save has the default playable party.
+        /// Existing team composition is never changed.
+        /// </summary>
+        public static bool EnsureDefaultActiveTeam()
+        {
+            var saveData = GetSaveData();
+            if (saveData == null) return false;
+
+            if (saveData.ActiveTeam == null)
+                saveData.ActiveTeam = new List<CharacterEnum>();
+            if (saveData.ActiveTeam.Count > 0) return false;
+
+            if (saveData.Characters == null)
+            {
+                Debug.LogWarning("[CharacterSystem] No character data is available for the default active team.");
+                return false;
+            }
+            if (saveData.UnlockedCharacters == null)
+                saveData.UnlockedCharacters = new List<CharacterEnum>();
+
+            CharacterEnum[] defaultTeam =
+            {
+                CharacterEnum.Zhouzhou,
+                CharacterEnum.Irene,
+                CharacterEnum.Rocket
+            };
+
+            foreach (CharacterEnum characterId in defaultTeam)
+            {
+                CharacterRuntimeState characterState = null;
+                foreach (CharacterRuntimeState candidate in saveData.Characters)
+                {
+                    if (candidate == null || candidate.CharacterId != characterId) continue;
+                    characterState = candidate;
+                    break;
+                }
+
+                if (characterState == null)
+                {
+                    Debug.LogWarning($"[CharacterSystem] Default-team character is missing from save data: {characterId}");
+                    continue;
+                }
+
+                characterState.IsUnlocked = true;
+                if (!saveData.UnlockedCharacters.Contains(characterId))
+                    saveData.UnlockedCharacters.Add(characterId);
+                saveData.ActiveTeam.Add(characterId);
+            }
+
+            if (saveData.ActiveTeam.Count == 0) return false;
+            Debug.Log("[CharacterSystem] Created default active team: Zhouzhou, Irene, Rocket.");
+            return true;
+        }
+
+        /// <summary>
         /// 从激活队伍移除角色
         /// </summary>
         /// <param name="characterId">角色ID</param>
