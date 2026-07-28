@@ -43,6 +43,16 @@ namespace Ashlight.Systems.Map
             return _session.TryPlaceTile(tileId, column, row, clockwiseQuarterTurns, out failureReason);
         }
 
+        public bool CanPlaceTile(string tileId, int column, int row, int clockwiseQuarterTurns, out string failureReason)
+        {
+            if (_session == null || _session.System == null)
+            {
+                failureReason = "地图运行会话尚未初始化。";
+                return false;
+            }
+            return _session.System.CanPlaceTile(tileId, new MapGridPosition(column, row), clockwiseQuarterTurns, out failureReason);
+        }
+
         public void ResolvePendingBattle(bool isPlayerVictory)
         {
             _session?.ResolvePendingBattle(isPlayerVictory);

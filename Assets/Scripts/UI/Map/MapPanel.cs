@@ -40,7 +40,9 @@ namespace Ashlight.UI.Map
         private readonly List<GameObject> _mapObjects = new List<GameObject>();
         private readonly List<GameObject> _handObjects = new List<GameObject>();
         private readonly List<GameObject> _characterObjects = new List<GameObject>();
+        private readonly List<GameObject> _placementHighlights = new List<GameObject>();
         private MapTileHandView _draggingTile;
+        private MapTileHandView _selectedTile;
 
         private void Awake()
         {
@@ -64,6 +66,7 @@ namespace Ashlight.UI.Map
         private void Start()
         {
             if (!ValidateUiBindings()) return;
+            EnsureMapPlacementSurface();
             if (mapSystemHost == null)
             {
                 SetStatus("未找到 MapSystemHost。请将 MapPanel 与 MapSystemHost 放在同一对象，或在 Inspector 绑定。");
@@ -81,8 +84,15 @@ namespace Ashlight.UI.Map
             GameEvent.Unsubscribe<MapRunStateChangedEvent>(OnMapStateChanged);
         }
 
+        private void Update()
+        {
+            if (_selectedTile == null || _draggingTile != null || !Input.GetMouseButtonDown(0)) return;
+            TryPlaceSelectedTile(Input.mousePosition);
+        }
+
         public void BeginTileDrag(MapTileHandView tile)
         {
+            SelectTile(tile);
             _draggingTile = tile;
         }
 
@@ -100,7 +110,42 @@ namespace Ashlight.UI.Map
 
             bool placed = mapSystemHost.TryPlaceTile(tile.TileId, position.Column, position.Row, tile.ClockwiseQuarterTurns, out string failureReason);
             if (!placed) SetStatus(failureReason);
+            else ClearSelectedTile();
             return placed;
+        }
+
+        public void SelectTile(MapTileHandView tile)
+        {
+            if (tile == null) return;
+            _selectedTile = tile;
+            foreach (GameObject handObject in _handObjects)
+            {
+                if (handObject == null) continue;
+                MapTileHandView handTile = handObject.GetComponent<MapTileHandView>();
+                if (handTile != null) handTile.SetSelected(handTile == _selectedTile);
+            }
+            RefreshPlacementHighlights();
+        }
+
+        public void TryPlaceSelectedTile(PointerEventData eventData)
+        {
+            if (eventData == null) return;
+            TryPlaceSelectedTile(eventData.position);
+        }
+
+        private void TryPlaceSelectedTile(Vector2 screenPosition)
+        {
+            if (_selectedTile == null || _draggingTile != null || mapSystemHost == null) return;
+            if (!TryGetGridPosition(screenPosition, out MapGridPosition position)) return;
+
+            bool placed = mapSystemHost.TryPlaceTile(
+                _selectedTile.TileId,
+                position.Column,
+                position.Row,
+                _selectedTile.ClockwiseQuarterTurns,
+                out string failureReason);
+            if (placed) ClearSelectedTile();
+            else SetStatus(failureReason);
         }
 
         private void OnMapStateChanged(MapRunStateChangedEvent evt)
@@ -111,13 +156,19 @@ namespace Ashlight.UI.Map
         private void Render(MapRuntimeState state)
         {
             if (state == null || !ValidateUiBindings()) return;
+            ClearSelectedTile();
             Clear(_mapObjects);
             Clear(_handObjects);
 
-            RenderAnchor(state.StartPosition, "起点", MapAssetPath.Canterbury, state);
-            RenderAnchor(state.AncientRuinsPosition, state.AncientRuinsCompleted ? "古国遗迹 ✓" : "古国遗迹", MapAssetPath.AncientRuins, state);
-            RenderAnchor(state.FinalPosition, "灰雾深处", MapAssetPath.AshMistDepths, state);
+            RenderBlockedBeforeRuins(state);
+            RenderAnchor(state.StartPosition, state.StartSize, "坎特伯雷", MapAssetPath.Canterbury, state);
+            RenderAnchor(state.AncientRuinsPosition, state.AncientRuinsSize, state.AncientRuinsCompleted ? "古国遗迹 ✓" : "古国遗迹", MapAssetPath.AncientRuins, state);
+            RenderAnchor(state.MageTowerPosition, state.MageTowerSize, "法师塔", MapAssetPath.MageTower, state);
+            RenderAnchor(state.FinalPosition, state.FinalSize, "灰雾深处", MapAssetPath.AshMistDepths, state);
+            RenderAnchor(state.SirenTownPosition, state.SirenTownSize, "塞壬镇", MapAssetPath.SirenTown, state);
             foreach (MapPlacedTileState tile in state.PlacedTiles) RenderPlacedTile(tile, state);
+            foreach (MapPublicLocationState location in state.PublicLocations) RenderPublicLocation(location, state);
+            foreach (MapRegionExplorationState region in state.RegionExplorations) RenderRegionBoss(region, state);
             foreach (MapTileDefinition tile in state.TileHand) RenderHandTile(tile);
             RenderCharacters();
 
@@ -125,22 +176,68 @@ namespace Ashlight.UI.Map
             SetStatus(GetStageText(state.Stage));
         }
 
-        private void RenderAnchor(MapGridPosition position, string label, string spritePath, MapRuntimeState state)
+        private void RenderBlockedBeforeRuins(MapRuntimeState state)
+        {
+            if (state.AncientRuinsCompleted || mapSystemHost?.RunDefinition?.BlockedBeforeRuins == null) return;
+
+            foreach (MapGridPosition position in mapSystemHost.RunDefinition.BlockedBeforeRuins)
+            {
+                var image = CreateImage("BlockedBeforeRuins", tileLayer, null, new Color(0f, 0f, 0f, 0.48f));
+                image.rectTransform.anchoredPosition = GridToLocalPosition(position, state);
+                image.rectTransform.sizeDelta = CellSize(state);
+                image.raycastTarget = false;
+                _mapObjects.Add(image.gameObject);
+            }
+        }
+
+        private void RefreshPlacementHighlights()
+        {
+            Clear(_placementHighlights);
+            MapRuntimeState state = mapSystemHost?.CurrentState;
+            if (_selectedTile == null || state == null || tileLayer == null) return;
+
+            for (int row = 0; row < state.Height; row++)
+            {
+                for (int column = 0; column < state.Width; column++)
+                {
+                    if (!mapSystemHost.CanPlaceTile(_selectedTile.TileId, column, row, _selectedTile.ClockwiseQuarterTurns, out _)) continue;
+
+                    var image = CreateImage("PlacementHighlight", tileLayer, null, new Color(1f, 1f, 1f, 0.2f));
+                    image.rectTransform.anchoredPosition = GridToLocalPosition(new MapGridPosition(column, row), state);
+                    image.rectTransform.sizeDelta = CellSize(state);
+                    image.raycastTarget = false;
+                    image.gameObject.AddComponent<MapPlacementPulse>();
+                    image.transform.SetAsLastSibling();
+                    _placementHighlights.Add(image.gameObject);
+                }
+            }
+        }
+
+        private void ClearSelectedTile()
+        {
+            _selectedTile = null;
+            _draggingTile = null;
+            Clear(_placementHighlights);
+        }
+
+        private void RenderAnchor(MapGridPosition position, MapGridSize size, string label, string spritePath, MapRuntimeState state)
         {
             var root = CreateUiObject($"Anchor_{label}", tileLayer);
-            root.anchoredPosition = GridToFixedLocationCenter(position, state);
-            root.sizeDelta = GetTileSize() * MapRuntimeState.FixedLocationSize;
+            root.anchoredPosition = GridToFixedLocationCenter(position, size, state);
+            Vector2 cellSize = GetTileSize();
+            root.sizeDelta = new Vector2(cellSize.x * size.Width, cellSize.y * size.Height);
             _mapObjects.Add(root.gameObject);
 
             var image = CreateImage("Art", root, spritePath, new Color(1f, 1f, 1f, 0.9f));
             Stretch(image.rectTransform);
             image.preserveAspect = true;
             image.raycastTarget = false;
-            var text = CreateTmpText("Label", root, label, 14, Color.white);
+            var text = CreateTmpText("Label", root, label, 20, Color.white);
+            text.raycastTarget = false;
             text.rectTransform.anchorMin = new Vector2(0f, 0f);
             text.rectTransform.anchorMax = new Vector2(1f, 0f);
             text.rectTransform.pivot = new Vector2(0.5f, 1f);
-            text.rectTransform.anchoredPosition = new Vector2(0f, -4f);
+            text.rectTransform.anchoredPosition = new Vector2(0f, 46f);
             text.rectTransform.sizeDelta = new Vector2(0f, 22f);
         }
 
@@ -167,6 +264,37 @@ namespace Ashlight.UI.Map
                 icon.preserveAspect = true;
                 icon.raycastTarget = false;
             }
+        }
+
+        private void RenderPublicLocation(MapPublicLocationState location, MapRuntimeState state)
+        {
+            var root = CreateUiObject($"Public_{location.Type}", tileLayer);
+            root.anchoredPosition = GridToLocalPosition(location.Position, state);
+            root.sizeDelta = new Vector2(100f, 100f);
+            _mapObjects.Add(root.gameObject);
+
+            MapTileContent content = location.Type == MapPublicLocationType.Shop ? MapTileContent.Shop : MapTileContent.Rest;
+            var image = CreateImage("Icon", root, MapAssetPath.GetContentIconPath(content), location.Resolved ? new Color(1f, 1f, 1f, 0.45f) : Color.white);
+            image.rectTransform.anchorMin = image.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            image.rectTransform.sizeDelta = new Vector2(100f, 100f);
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+        }
+
+        private void RenderRegionBoss(MapRegionExplorationState region, MapRuntimeState state)
+        {
+            if (!region.BossSpawned) return;
+
+            var root = CreateUiObject($"RegionBoss_{region.RegionId}", tileLayer);
+            root.anchoredPosition = GridToLocalPosition(region.BossPosition, state);
+            root.sizeDelta = CellSize(state);
+            _mapObjects.Add(root.gameObject);
+
+            var image = CreateImage("Icon", root, MapAssetPath.BossIcon, Color.white);
+            image.rectTransform.anchorMin = image.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            image.rectTransform.sizeDelta = CellSize(state) * 0.72f;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
         }
 
         private void RenderHandTile(MapTileDefinition tile)
@@ -237,13 +365,12 @@ namespace Ashlight.UI.Map
             return new Vector2(size.x * (position.Column + 0.5f), size.y * (position.Row + 0.5f));
         }
 
-        private Vector2 GridToFixedLocationCenter(MapGridPosition bottomLeft, MapRuntimeState state)
+        private Vector2 GridToFixedLocationCenter(MapGridPosition bottomLeft, MapGridSize size, MapRuntimeState state)
         {
             Vector2 cellSize = CellSize(state);
-            float offset = MapRuntimeState.FixedLocationSize * 0.5f;
             return new Vector2(
-                cellSize.x * (bottomLeft.Column + offset),
-                cellSize.y * (bottomLeft.Row + offset));
+                cellSize.x * (bottomLeft.Column + size.Width * 0.5f),
+                cellSize.y * (bottomLeft.Row + size.Height * 0.5f));
         }
 
         private Vector2 CellSize(MapRuntimeState state)
@@ -278,6 +405,21 @@ namespace Ashlight.UI.Map
             return true;
         }
 
+        private void EnsureMapPlacementSurface()
+        {
+            var surface = tileLayer.GetComponent<MapPlacementSurface>();
+            if (surface == null) surface = tileLayer.gameObject.AddComponent<MapPlacementSurface>();
+            surface.Initialize(this);
+
+            Image image = tileLayer.GetComponent<Image>();
+            if (image == null)
+            {
+                image = tileLayer.gameObject.AddComponent<Image>();
+                image.color = Color.clear;
+            }
+            image.raycastTarget = true;
+        }
+
         private static RectTransform CreateUiObject(string name, RectTransform parent)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -290,7 +432,8 @@ namespace Ashlight.UI.Map
         {
             var rect = CreateUiObject(name, parent);
             var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = Resources.Load<Sprite>(resourcePath);
+            if (!string.IsNullOrEmpty(resourcePath))
+                image.sprite = Resources.Load<Sprite>(resourcePath);
             image.color = color;
             return image;
         }

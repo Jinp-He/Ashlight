@@ -17,6 +17,7 @@ namespace Ashlight.State.Runtime
     {
         EmptyRoad,
         Battle,
+        Elite,
         Event,
         Reward,
         Shop,
@@ -52,6 +53,18 @@ namespace Ashlight.State.Runtime
         ChaseBoss
     }
 
+    public enum MapPublicLocationType
+    {
+        Shop,
+        Rest
+    }
+
+    public enum MapRegionId
+    {
+        MageTower,
+        SirenTown
+    }
+
     [Serializable]
     public struct MapGridPosition : IEquatable<MapGridPosition>
     {
@@ -68,6 +81,19 @@ namespace Ashlight.State.Runtime
         public override bool Equals(object obj) => obj is MapGridPosition other && Equals(other);
         public override int GetHashCode() => (Column * 397) ^ Row;
         public override string ToString() => $"({Column}, {Row})";
+    }
+
+    [Serializable]
+    public struct MapGridSize
+    {
+        public int Width;
+        public int Height;
+
+        public MapGridSize(int width, int height)
+        {
+            Width = width;
+            Height = height;
+        }
     }
 
     [Serializable]
@@ -93,24 +119,50 @@ namespace Ashlight.State.Runtime
         public string EncounterId;
     }
 
+    [Serializable]
+    public class MapPublicLocationState
+    {
+        public MapPublicLocationType Type;
+        public MapGridPosition Position;
+        public bool Resolved;
+    }
+
+    [Serializable]
+    public class MapRegionExplorationState
+    {
+        public MapRegionId RegionId;
+        public MapGridPosition Position;
+        public MapGridSize Size;
+        public List<MapGridPosition> ExploredCells = new List<MapGridPosition>();
+        public bool BossSpawned;
+        public MapGridPosition BossPosition;
+    }
+
     /// <summary>
     /// 一局地图的可存档运行时状态。UI 不直接修改本对象，必须经 MapSystem 发出命令。
     /// </summary>
     [Serializable]
     public class MapRuntimeState
     {
-        /// <summary>起点、古国遗迹和终点等固定建筑统一占据的正方形边长。</summary>
-        public const int FixedLocationSize = 2;
         public int Width;
         public int Height;
         public MapGridPosition StartPosition;
+        public MapGridSize StartSize;
         public MapGridPosition AncientRuinsPosition;
+        public MapGridSize AncientRuinsSize;
         public MapGridPosition FinalPosition;
+        public MapGridSize FinalSize;
+        public MapGridPosition MageTowerPosition;
+        public MapGridSize MageTowerSize;
+        public MapGridPosition SirenTownPosition;
+        public MapGridSize SirenTownSize;
         public int RemainingTileBudget;
         public bool AncientRuinsCompleted;
         public MapRunStage Stage;
         public MapRunStage StageBeforeTileEncounter;
         public List<MapPlacedTileState> PlacedTiles = new List<MapPlacedTileState>();
+        public List<MapPublicLocationState> PublicLocations = new List<MapPublicLocationState>();
+        public List<MapRegionExplorationState> RegionExplorations = new List<MapRegionExplorationState>();
         public List<MapTileDefinition> TileHand = new List<MapTileDefinition>();
         public List<MapTileDefinition> TileDrawPile = new List<MapTileDefinition>();
     }

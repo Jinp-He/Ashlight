@@ -9,7 +9,7 @@ using TMPro;
 namespace Ashlight.UI.Map
 {
     /// <summary>手牌拼图的拖拽输入组件；落点合法性始终由 MapSystem 决定。</summary>
-    public class MapTileHandView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerDownHandler
+    public class MapTileHandView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerDownHandler, IPointerClickHandler
     {
         public string TileId { get; private set; }
         public int ClockwiseQuarterTurns { get; private set; }
@@ -30,6 +30,9 @@ namespace Ashlight.UI.Map
         private CanvasGroup _canvasGroup;
         private GameObject _layoutPlaceholder;
         private bool _isDragging;
+        private Outline _outline;
+        private Shadow _shadow;
+        private Vector3 _baseScale;
 
         public void Initialize(MapPanel panel, MapTileDefinition tile, Image fallbackRaycastImage = null)
         {
@@ -37,6 +40,7 @@ namespace Ashlight.UI.Map
             TileId = tile.Id;
             ClockwiseQuarterTurns = 0;
             transform.localRotation = Quaternion.identity;
+            _baseScale = transform.localScale;
             _raycastImage = raycastImage != null ? raycastImage : fallbackRaycastImage;
             _rectTransform = transform as RectTransform;
             _canvasGroup = GetComponent<CanvasGroup>();
@@ -109,19 +113,43 @@ namespace Ashlight.UI.Map
             RotateClockwise();
         }
 
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left)
+                _panel?.SelectTile(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            EnsureBlackOutline();
+            if (_outline != null)
+            {
+                _outline.effectColor = selected ? Color.white : Color.black;
+                _outline.effectDistance = selected ? new Vector2(5f, -5f) : new Vector2(3f, -3f);
+            }
+            transform.localScale = _baseScale * (selected ? 1.1f : 1f);
+        }
+
         private void RotateClockwise()
         {
             ClockwiseQuarterTurns = (ClockwiseQuarterTurns + 1) % 4;
             transform.localRotation = Quaternion.Euler(0f, 0f, -90f * ClockwiseQuarterTurns);
+            _panel?.SelectTile(this);
         }
 
         private void EnsureBlackOutline()
         {
-            var outline = GetComponent<Outline>();
-            if (outline == null) outline = gameObject.AddComponent<Outline>();
-            outline.effectColor = Color.black;
-            outline.effectDistance = new Vector2(2f, -2f);
-            outline.useGraphicAlpha = false;
+            _outline = GetComponent<Outline>();
+            if (_outline == null) _outline = gameObject.AddComponent<Outline>();
+            _outline.effectColor = Color.black;
+            _outline.effectDistance = new Vector2(3f, -3f);
+            _outline.useGraphicAlpha = false;
+
+            _shadow = GetComponent<Shadow>();
+            if (_shadow == null) _shadow = gameObject.AddComponent<Shadow>();
+            _shadow.effectColor = new Color(0f, 0f, 0f, 0.65f);
+            _shadow.effectDistance = new Vector2(3f, -3f);
+            _shadow.useGraphicAlpha = false;
         }
 
         private void ReturnToHand()

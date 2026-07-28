@@ -11,6 +11,12 @@ namespace Ashlight.Common.Events
         public Ashlight.State.Runtime.MapPlacedTileState Tile;
     }
 
+    /// <summary>战斗 Tile 已落到地图，等待道路显现后再进入战斗。</summary>
+    public struct MapTileEncounterQueuedEvent
+    {
+        public string EncounterId;
+    }
+
     /// <summary>非战斗地块的即时内容结算通知。</summary>
     public struct MapContentResolvedEvent
     {

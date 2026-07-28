@@ -17,19 +17,45 @@ namespace Ashlight.Systems.Map
         private const int TurnWeight = 3;
 
         private readonly Random _random = new Random();
+        private readonly MapTileContentWeightTable _contentWeights;
         private int _nextTileSerial;
+
+        public MapTileDealer(MapTileContentWeightTable contentWeights)
+        {
+            _contentWeights = contentWeights ?? throw new ArgumentNullException(nameof(contentWeights));
+        }
 
         public MapTileDefinition Draw()
         {
             MapTileShape shape = DrawShape();
+            MapTileContent content = DrawContent(shape, out string encounterId);
             _nextTileSerial++;
             return new MapTileDefinition
             {
                 Id = $"map_tile_{_nextTileSerial}",
                 Shape = shape,
                 Connections = GetDefaultConnections(shape),
-                Content = MapTileContent.EmptyRoad
+                Content = content,
+                EncounterId = encounterId
             };
+        }
+
+        private MapTileContent DrawContent(MapTileShape shape, out string encounterId)
+        {
+            MapTileContentWeightRow row = _contentWeights.Get(shape);
+            int roll = _random.Next(row.TotalWeight);
+            encounterId = null;
+
+            if ((roll -= row.EmptyRoadWeight) < 0) return MapTileContent.EmptyRoad;
+            if ((roll -= row.BattleWeight) < 0)
+            {
+                encounterId = row.BattleEncounterId;
+                return MapTileContent.Battle;
+            }
+            if ((roll -= row.EventWeight) < 0) return MapTileContent.Event;
+
+            encounterId = row.EliteEncounterId;
+            return MapTileContent.Elite;
         }
 
         private MapTileShape DrawShape()

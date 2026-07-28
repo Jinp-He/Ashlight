@@ -23,7 +23,9 @@ namespace Ashlight.Systems.Map
 
         public const string Canterbury = "Map/lv2/Img_Kantebolei";
         public const string AncientRuinsLocation = "Map/lv1/Img_lishibeiwen";
+        public const string MageTower = "Map/lv3/Img_Fashita";
         public const string AshMistDepths = "Map/lv3/Img_Huiwu";
+        public const string SirenTown = "Map/lv3/Img_Sairen";
 
         public static string GetTileShapePath(Ashlight.State.Runtime.MapTileShape shape)
         {
@@ -42,6 +44,7 @@ namespace Ashlight.Systems.Map
             switch (content)
             {
                 case Ashlight.State.Runtime.MapTileContent.Battle: return BattleIcon;
+                case Ashlight.State.Runtime.MapTileContent.Elite: return EliteIcon;
                 case Ashlight.State.Runtime.MapTileContent.Event: return EventIcon;
                 case Ashlight.State.Runtime.MapTileContent.Shop: return ShopIcon;
                 case Ashlight.State.Runtime.MapTileContent.Rest: return RestIcon;

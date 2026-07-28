@@ -12,6 +12,7 @@ namespace Ashlight.Systems.Map
     {
         private MapRunDefinition _definition;
         private MapTileDealer _tileDealer;
+        private readonly Random _random = new Random();
 
         public MapRuntimeState State { get; private set; }
 
@@ -20,22 +21,34 @@ namespace Ashlight.Systems.Map
             if (definition == null) throw new ArgumentNullException(nameof(definition));
             if (definition.Width <= 0 || definition.Height <= 0)
                 throw new ArgumentException("地图宽高必须大于零。", nameof(definition));
-            if (!definition.IsFootprintInside(definition.StartPosition) ||
-                !definition.IsFootprintInside(definition.AncientRuinsPosition) ||
-                !definition.IsFootprintInside(definition.FinalPosition))
-                throw new ArgumentException("固定建筑的完整 2×2 占格必须位于地图范围内。", nameof(definition));
+            if (!definition.IsFootprintInside(definition.StartPosition, definition.StartSize) ||
+                !definition.IsFootprintInside(definition.AncientRuinsPosition, definition.AncientRuinsSize) ||
+                !definition.IsFootprintInside(definition.FinalPosition, definition.FinalSize) ||
+                !definition.IsFootprintInside(definition.MageTowerPosition, definition.MageTowerSize) ||
+                !definition.IsFootprintInside(definition.SirenTownPosition, definition.SirenTownSize))
+                throw new ArgumentException("固定建筑的完整占格必须位于地图范围内。", nameof(definition));
 
             _definition = definition;
-            _tileDealer = new MapTileDealer();
+            _tileDealer = new MapTileDealer(MapTileContentWeightTable.LoadFromResources());
             State = new MapRuntimeState
             {
                 Width = definition.Width,
                 Height = definition.Height,
                 StartPosition = definition.StartPosition,
+                StartSize = definition.StartSize,
                 AncientRuinsPosition = definition.AncientRuinsPosition,
+                AncientRuinsSize = definition.AncientRuinsSize,
                 FinalPosition = definition.FinalPosition,
+                FinalSize = definition.FinalSize,
+                MageTowerPosition = definition.MageTowerPosition,
+                MageTowerSize = definition.MageTowerSize,
+                SirenTownPosition = definition.SirenTownPosition,
+                SirenTownSize = definition.SirenTownSize,
                 Stage = MapRunStage.ExploringBeforeRuins
             };
+            CreatePublicLocations();
+            RegisterBossRegion(MapRegionId.MageTower, State.MageTowerPosition, State.MageTowerSize);
+            RegisterBossRegion(MapRegionId.SirenTown, State.SirenTownPosition, State.SirenTownSize);
 
             for (int i = 0; i < definition.TileBudget; i++)
                 State.TileDrawPile.Add(_tileDealer.Draw());
@@ -47,6 +60,52 @@ namespace Ashlight.Systems.Map
         }
 
         public bool TryPlaceTile(string tileId, MapGridPosition position, int clockwiseQuarterTurns, out string failureReason)
+        {
+            if (!CanPlaceTile(tileId, position, clockwiseQuarterTurns, out failureReason)) return false;
+
+            MapTileDefinition tile = FindTileInHand(tileId);
+            MapDirection rotatedConnections = Rotate(tile.Connections, clockwiseQuarterTurns);
+
+            var placed = new MapPlacedTileState
+            {
+                TileId = tile.Id,
+                Shape = tile.Shape,
+                Position = position,
+                ClockwiseQuarterTurns = NormalizeQuarterTurns(clockwiseQuarterTurns),
+                Connections = rotatedConnections,
+                Content = tile.Content,
+                EncounterId = tile.EncounterId
+            };
+            State.PlacedTiles.Add(placed);
+            State.TileHand.Remove(tile);
+            State.RemainingTileBudget--;
+            DrawToHand(1);
+            UpdateRegionExploration(placed);
+
+            GameEvent.Publish(new MapTilePlacedEvent { Tile = placed });
+
+            if (TryReachFixedLocation(placed))
+            {
+                PublishStateChanged();
+                return true;
+            }
+
+            TryResolvePublicLocation(placed);
+
+            if (TryRequestTileEncounter(placed))
+            {
+                PublishStateChanged();
+                return true;
+            }
+
+            GameEvent.Publish(new MapContentResolvedEvent { Content = placed.Content, Position = placed.Position });
+            TriggerChaseBossIfBudgetExhausted();
+            PublishStateChanged();
+            return true;
+        }
+
+        /// <summary>Checks whether a tile's current orientation can be placed, without mutating map state.</summary>
+        public bool CanPlaceTile(string tileId, MapGridPosition position, int clockwiseQuarterTurns, out string failureReason)
         {
             failureReason = null;
             if (State == null)
@@ -79,39 +138,6 @@ namespace Ashlight.Systems.Map
                 failureReason = "拼图必须连接到当前可达道路。";
                 return false;
             }
-
-            var placed = new MapPlacedTileState
-            {
-                TileId = tile.Id,
-                Shape = tile.Shape,
-                Position = position,
-                ClockwiseQuarterTurns = NormalizeQuarterTurns(clockwiseQuarterTurns),
-                Connections = rotatedConnections,
-                Content = tile.Content,
-                EncounterId = tile.EncounterId
-            };
-            State.PlacedTiles.Add(placed);
-            State.TileHand.Remove(tile);
-            State.RemainingTileBudget--;
-            DrawToHand(1);
-
-            GameEvent.Publish(new MapTilePlacedEvent { Tile = placed });
-
-            if (TryReachFixedLocation(placed))
-            {
-                PublishStateChanged();
-                return true;
-            }
-
-            if (TryRequestTileEncounter(placed))
-            {
-                PublishStateChanged();
-                return true;
-            }
-
-            GameEvent.Publish(new MapContentResolvedEvent { Content = placed.Content, Position = placed.Position });
-            TriggerChaseBossIfBudgetExhausted();
-            PublishStateChanged();
             return true;
         }
 
@@ -160,6 +186,11 @@ namespace Ashlight.Systems.Map
                 failureReason = "固定地点不能被拼图覆盖。";
                 return false;
             }
+            if (IsPublicLocation(position))
+            {
+                failureReason = "公共地点不能被拼图覆盖。";
+                return false;
+            }
             if (FindPlacedTile(position) != null)
             {
                 failureReason = "目标格已有拼图。";
@@ -175,14 +206,14 @@ namespace Ashlight.Systems.Map
 
         private bool TryReachFixedLocation(MapPlacedTileState placed)
         {
-            if (!State.AncientRuinsCompleted && IsConnectedTo(placed, State.AncientRuinsPosition))
+            if (!State.AncientRuinsCompleted && IsConnectedTo(placed, State.AncientRuinsPosition, State.AncientRuinsSize))
             {
                 State.Stage = MapRunStage.AwaitingAncientRuinsBattle;
                 RequestBattle(MapBattleKind.AncientRuins, _definition.AncientRuinsEncounterId);
                 return true;
             }
 
-            if (State.AncientRuinsCompleted && IsConnectedTo(placed, State.FinalPosition))
+            if (State.AncientRuinsCompleted && IsConnectedTo(placed, State.FinalPosition, State.FinalSize))
             {
                 State.Stage = MapRunStage.AwaitingFinalBoss;
                 RequestBattle(MapBattleKind.FinalBoss, _definition.FinalBossEncounterId);
@@ -193,12 +224,111 @@ namespace Ashlight.Systems.Map
 
         private bool TryRequestTileEncounter(MapPlacedTileState placed)
         {
-            if (placed.Content != MapTileContent.Battle || string.IsNullOrEmpty(placed.EncounterId)) return false;
+            if ((placed.Content != MapTileContent.Battle && placed.Content != MapTileContent.Elite) || string.IsNullOrEmpty(placed.EncounterId)) return false;
 
             State.StageBeforeTileEncounter = State.Stage;
             State.Stage = MapRunStage.AwaitingTileEncounter;
-            RequestBattle(MapBattleKind.TileEncounter, placed.EncounterId);
+            GameEvent.Publish(new MapTileEncounterQueuedEvent { EncounterId = placed.EncounterId });
+            // The encounter has been queued; visually this Tile is now a normal road while
+            // the player is taken into battle, and remains a road after the encounter ends.
+            placed.Content = MapTileContent.EmptyRoad;
+            placed.EncounterId = null;
             return true;
+        }
+
+        private void CreatePublicLocations()
+        {
+            for (int corner = 0; corner < 4; corner++)
+            {
+                var candidates = new List<MapGridPosition>();
+                for (int row = 0; row < State.Height; row++)
+                {
+                    for (int column = 0; column < State.Width; column++)
+                    {
+                        var position = new MapGridPosition(column, row);
+                        if (GetCornerIndex(position) != corner || IsFixedLocation(position) ||
+                            ContainsPosition(_definition.BlockedBeforeRuins, position)) continue;
+                        candidates.Add(position);
+                    }
+                }
+
+                AddRandomPublicLocation(candidates, MapPublicLocationType.Shop);
+                AddRandomPublicLocation(candidates, MapPublicLocationType.Rest);
+            }
+        }
+
+        private void AddRandomPublicLocation(List<MapGridPosition> candidates, MapPublicLocationType type)
+        {
+            if (candidates.Count == 0)
+                throw new InvalidOperationException("公共地点没有可用的随机生成格。");
+
+            int index = _random.Next(candidates.Count);
+            State.PublicLocations.Add(new MapPublicLocationState
+            {
+                Type = type,
+                Position = candidates[index]
+            });
+            candidates.RemoveAt(index);
+        }
+
+        private int GetCornerIndex(MapGridPosition position)
+        {
+            bool right = position.Column >= State.Width / 2;
+            bool top = position.Row >= State.Height / 2;
+            if (top) return right ? 3 : 1;
+            return right ? 2 : 0;
+        }
+
+        private void RegisterBossRegion(MapRegionId regionId, MapGridPosition position, MapGridSize size)
+        {
+            State.RegionExplorations.Add(new MapRegionExplorationState
+            {
+                RegionId = regionId,
+                Position = position,
+                Size = size
+            });
+        }
+
+        private void UpdateRegionExploration(MapPlacedTileState placed)
+        {
+            foreach (MapRegionExplorationState region in State.RegionExplorations)
+            {
+                foreach (MapDirection direction in CardinalDirections)
+                {
+                    if (!HasDirection(placed.Connections, direction)) continue;
+                    MapGridPosition exploredCell = Offset(placed.Position, direction);
+                    if (!IsInsideFixedLocation(exploredCell, region.Position, region.Size) ||
+                        ContainsPosition(region.ExploredCells, exploredCell)) continue;
+                    region.ExploredCells.Add(exploredCell);
+                }
+
+                if (!region.BossSpawned && region.ExploredCells.Count >= GetBossRevealThreshold(region.Size))
+                {
+                    region.BossSpawned = true;
+                    region.BossPosition = region.ExploredCells[_random.Next(region.ExploredCells.Count)];
+                }
+            }
+        }
+
+        private bool TryResolvePublicLocation(MapPlacedTileState placed)
+        {
+            foreach (MapPublicLocationState location in State.PublicLocations)
+            {
+                if (location.Resolved || !IsConnectedTo(placed, location.Position, new MapGridSize(1, 1))) continue;
+                location.Resolved = true;
+                GameEvent.Publish(new MapContentResolvedEvent
+                {
+                    Content = location.Type == MapPublicLocationType.Shop ? MapTileContent.Shop : MapTileContent.Rest,
+                    Position = location.Position
+                });
+                return true;
+            }
+            return false;
+        }
+
+        private static int GetBossRevealThreshold(MapGridSize size)
+        {
+            return Math.Max(1, size.Width * size.Height * 80 / 100);
         }
 
         private void TriggerChaseBossIfBudgetExhausted()
@@ -226,8 +356,8 @@ namespace Ashlight.Systems.Map
                 MapGridPosition neighbor = Offset(position, direction);
                 MapDirection opposite = Opposite(direction);
 
-                if (IsInsideFixedLocation(neighbor, State.StartPosition) ||
-                    (State.AncientRuinsCompleted && IsInsideFixedLocation(neighbor, State.AncientRuinsPosition)))
+                if (IsInsideFixedLocation(neighbor, State.StartPosition, State.StartSize) ||
+                    (State.AncientRuinsCompleted && IsInsideFixedLocation(neighbor, State.AncientRuinsPosition, State.AncientRuinsSize)))
                 {
                     return true;
                 }
@@ -238,11 +368,11 @@ namespace Ashlight.Systems.Map
             return false;
         }
 
-        private bool IsConnectedTo(MapPlacedTileState placed, MapGridPosition target)
+        private bool IsConnectedTo(MapPlacedTileState placed, MapGridPosition target, MapGridSize targetSize)
         {
             foreach (MapDirection direction in CardinalDirections)
             {
-                if (HasDirection(placed.Connections, direction) && IsInsideFixedLocation(Offset(placed.Position, direction), target))
+                if (HasDirection(placed.Connections, direction) && IsInsideFixedLocation(Offset(placed.Position, direction), target, targetSize))
                     return true;
             }
             return false;
@@ -280,16 +410,26 @@ namespace Ashlight.Systems.Map
 
         private bool IsFixedLocation(MapGridPosition position)
         {
-            return IsInsideFixedLocation(position, State.StartPosition) ||
-                   IsInsideFixedLocation(position, State.AncientRuinsPosition) ||
-                   IsInsideFixedLocation(position, State.FinalPosition);
+            return IsInsideFixedLocation(position, State.StartPosition, State.StartSize) ||
+                   IsInsideFixedLocation(position, State.AncientRuinsPosition, State.AncientRuinsSize) ||
+                   IsInsideFixedLocation(position, State.FinalPosition, State.FinalSize) ||
+                   IsInsideFixedLocation(position, State.MageTowerPosition, State.MageTowerSize) ||
+                   IsInsideFixedLocation(position, State.SirenTownPosition, State.SirenTownSize);
         }
 
-        private static bool IsInsideFixedLocation(MapGridPosition position, MapGridPosition bottomLeft)
+        private bool IsPublicLocation(MapGridPosition position)
         {
-            int size = MapRuntimeState.FixedLocationSize;
-            return position.Column >= bottomLeft.Column && position.Column < bottomLeft.Column + size &&
-                   position.Row >= bottomLeft.Row && position.Row < bottomLeft.Row + size;
+            foreach (MapPublicLocationState location in State.PublicLocations)
+            {
+                if (location.Position.Equals(position)) return true;
+            }
+            return false;
+        }
+
+        private static bool IsInsideFixedLocation(MapGridPosition position, MapGridPosition bottomLeft, MapGridSize size)
+        {
+            return position.Column >= bottomLeft.Column && position.Column < bottomLeft.Column + size.Width &&
+                   position.Row >= bottomLeft.Row && position.Row < bottomLeft.Row + size.Height;
         }
 
         private bool IsExploring()

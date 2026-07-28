@@ -14,12 +14,21 @@ namespace Ashlight.Systems.Map
         [Header("Grid")]
         public int Width;
         public int Height;
-        [Tooltip("固定建筑左下角坐标；每个固定建筑统一占据 2×2 格。")]
+        [Tooltip("坎特伯雷左下角坐标。")]
         public MapGridPosition StartPosition;
-        [Tooltip("固定建筑左下角坐标；每个固定建筑统一占据 2×2 格。")]
+        public MapGridSize StartSize = new MapGridSize(2, 2);
+        [Tooltip("古国遗迹左下角坐标。")]
         public MapGridPosition AncientRuinsPosition;
-        [Tooltip("固定建筑左下角坐标；每个固定建筑统一占据 2×2 格。")]
+        public MapGridSize AncientRuinsSize = new MapGridSize(4, 2);
+        [Tooltip("灰雾深处左下角坐标。")]
         public MapGridPosition FinalPosition;
+        public MapGridSize FinalSize = new MapGridSize(3, 3);
+        [Tooltip("法师塔左下角坐标。")]
+        public MapGridPosition MageTowerPosition;
+        public MapGridSize MageTowerSize = new MapGridSize(3, 3);
+        [Tooltip("塞壬镇左下角坐标。")]
+        public MapGridPosition SirenTownPosition;
+        public MapGridSize SirenTownSize = new MapGridSize(3, 3);
 
         [Header("Progression")]
         [Tooltip("初始展示在 MapPanel 中、可被放置的拼图数量。")]
@@ -42,10 +51,11 @@ namespace Ashlight.Systems.Map
                    position.Row >= 0 && position.Row < Height;
         }
 
-        public bool IsFootprintInside(MapGridPosition bottomLeft)
+        public bool IsFootprintInside(MapGridPosition bottomLeft, MapGridSize size)
         {
-            int size = MapRuntimeState.FixedLocationSize;
-            return IsInside(bottomLeft) && IsInside(new MapGridPosition(bottomLeft.Column + size - 1, bottomLeft.Row + size - 1));
+            return size.Width > 0 && size.Height > 0 &&
+                   IsInside(bottomLeft) &&
+                   IsInside(new MapGridPosition(bottomLeft.Column + size.Width - 1, bottomLeft.Row + size.Height - 1));
         }
     }
 }

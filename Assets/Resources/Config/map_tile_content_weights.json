@@ -1,0 +1,49 @@
+{
+  "Rows": [
+    {
+      "Shape": "End",
+      "EmptyRoadWeight": 65,
+      "BattleWeight": 15,
+      "EventWeight": 18,
+      "EliteWeight": 2,
+      "BattleEncounterId": "E001",
+      "EliteEncounterId": "E101"
+    },
+    {
+      "Shape": "Straight",
+      "EmptyRoadWeight": 45,
+      "BattleWeight": 30,
+      "EventWeight": 20,
+      "EliteWeight": 5,
+      "BattleEncounterId": "E001",
+      "EliteEncounterId": "E101"
+    },
+    {
+      "Shape": "Turn",
+      "EmptyRoadWeight": 45,
+      "BattleWeight": 25,
+      "EventWeight": 25,
+      "EliteWeight": 5,
+      "BattleEncounterId": "E001",
+      "EliteEncounterId": "E101"
+    },
+    {
+      "Shape": "TShaped",
+      "EmptyRoadWeight": 30,
+      "BattleWeight": 35,
+      "EventWeight": 20,
+      "EliteWeight": 15,
+      "BattleEncounterId": "E001",
+      "EliteEncounterId": "E101"
+    },
+    {
+      "Shape": "Cross",
+      "EmptyRoadWeight": 20,
+      "BattleWeight": 40,
+      "EventWeight": 20,
+      "EliteWeight": 20,
+      "BattleEncounterId": "E001",
+      "EliteEncounterId": "E101"
+    }
+  ]
+}
