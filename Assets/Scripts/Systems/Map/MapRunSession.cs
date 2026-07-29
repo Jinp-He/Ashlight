@@ -99,6 +99,9 @@ namespace Ashlight.Systems.Map
             }
 
             System.StartRun(RunDefinition);
+            // Warm the cutscene frames while the player is still on the map so their
+            // synchronous Resources load cannot interrupt the map → battle transition.
+            SceneTransitionOverlay.GetOrCreate();
             BeginBattleScenePreload();
         }
 
@@ -185,7 +188,8 @@ namespace Ashlight.Systems.Map
         private IEnumerator LoadSceneWithTransition(string sceneName)
         {
             _isTransitioning = true;
-            SceneTransitionOverlay transition = SceneTransitionOverlay.GetOrCreate();
+            bool useCutscene = sceneName == _battleSceneName;
+            SceneTransitionOverlay transition = useCutscene ? SceneTransitionOverlay.GetOrCreate() : null;
             bool usedPreload = sceneName == _battleSceneName && _battleScenePreload != null;
             float loadRequestedAt = Time.realtimeSinceStartup;
             AsyncOperation loadOperation = TakeBattleScenePreload(sceneName) ?? SceneManager.LoadSceneAsync(sceneName);
@@ -195,23 +199,29 @@ namespace Ashlight.Systems.Map
                 yield break;
             }
 
-            // Let asset loading run while the transition closes. A preloaded BattleScene is
-            // already held at 90%; a new operation is held here until the screen is covered.
-            if (loadOperation.progress < 0.9f) loadOperation.allowSceneActivation = false;
-            yield return transition.FadeToBlack();
+            if (useCutscene)
+            {
+                // Let asset loading run while the curtain closes. A preloaded BattleScene is
+                // already held at 90%; a new operation is held here until the sequence ends.
+                if (loadOperation.progress < 0.9f) loadOperation.allowSceneActivation = false;
+                yield return transition.FadeToBlack();
+            }
 
-            while (loadOperation.progress < 0.9f)
-                yield return null;
+            if (useCutscene)
+            {
+                while (loadOperation.progress < 0.9f)
+                    yield return null;
+            }
 
             Debug.Log($"[MapRunSession] {sceneName} load-ready in {Time.realtimeSinceStartup - loadRequestedAt:F3}s (preload={usedPreload}).", this);
 
-            loadOperation.allowSceneActivation = true;
+            if (useCutscene) loadOperation.allowSceneActivation = true;
             while (!loadOperation.isDone)
                 yield return null;
 
             if (sceneName == _mapSceneName) BeginBattleScenePreload();
             yield return null;
-            yield return transition.FadeFromBlack();
+            if (useCutscene) yield return transition.FadeFromBlack();
             _isTransitioning = false;
         }
 

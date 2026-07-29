@@ -1,22 +1,38 @@
+using System;
 using System.Collections;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Ashlight.Systems.Core
 {
-    /// <summary>Persistent spiral-black transition used while gameplay scenes are swapped.</summary>
+    /// <summary>
+    /// Persistent loading transition. It keeps the YAYA and BlackCurtain frame sequences
+    /// independent so scene loading can continue while the curtain holds on its last frame.
+    /// </summary>
     public sealed class SceneTransitionOverlay : MonoBehaviour
     {
-        private const float TransitionDuration = 0.38f;
+        private const float YayaFrameDuration = 1f / 24f;
+        private const float YayaFadeDuration = 0.4f;
+        private const float CurtainFrameDuration = 0.1f;
+        private const string YayaResourcePath = "Cutscene/Anim_YAYA";
+        private const string CurtainResourcePath = "Cutscene/Anim_BlackCurtain";
+
+        private static readonly Regex FrameNumberPattern = new Regex(@"(\d+)$", RegexOptions.Compiled);
         private static SceneTransitionOverlay _instance;
 
         private CanvasGroup _canvasGroup;
-        private Image _blackScreen;
-        private RawImage _spiral;
+        private Image _yaya;
+        private Image _blackCurtain;
+        private Sprite[] _yayaFrames;
+        private Sprite[] _blackCurtainFrames;
+        private bool _isYayaLooping;
+        private float _yayaLoopElapsed;
 
         public static SceneTransitionOverlay GetOrCreate()
         {
             if (_instance != null) return _instance;
+
             var root = new GameObject("SceneTransitionOverlay");
             _instance = root.AddComponent<SceneTransitionOverlay>();
             return _instance;
@@ -35,18 +51,36 @@ namespace Ashlight.Systems.Core
             CreateUi();
         }
 
+        /// <summary>Plays YAYA's fade-in and the curtain frames 01 → 05, then holds.</summary>
         public IEnumerator FadeToBlack()
         {
-            _canvasGroup.blocksRaycasts = true;
+            if (!HasFrames()) yield break;
+
             _canvasGroup.alpha = 1f;
-            yield return Animate(0f, 1f, false);
+            _canvasGroup.blocksRaycasts = true;
+            yield return PlayOpening();
+            _isYayaLooping = true;
+            _yayaLoopElapsed = 0f;
         }
 
+        /// <summary>Plays YAYA's fade-out and the curtain frames 05 → 01, then hides.</summary>
         public IEnumerator FadeFromBlack()
         {
-            yield return Animate(1f, 0f, true);
+            if (!HasFrames()) yield break;
+
+            _isYayaLooping = false;
+            yield return PlayClosing();
             _canvasGroup.alpha = 0f;
             _canvasGroup.blocksRaycasts = false;
+        }
+
+        private void Update()
+        {
+            if (!_isYayaLooping || !HasFrames()) return;
+
+            _yayaLoopElapsed += Time.unscaledDeltaTime;
+            int frame = Mathf.FloorToInt(_yayaLoopElapsed / YayaFrameDuration) % _yayaFrames.Length;
+            _yaya.sprite = _yayaFrames[frame];
         }
 
         private void CreateUi()
@@ -54,58 +88,126 @@ namespace Ashlight.Systems.Core
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = short.MaxValue;
-            gameObject.AddComponent<CanvasScaler>();
+
+            var scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1600f, 900f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
             gameObject.AddComponent<GraphicRaycaster>();
+
             _canvasGroup = gameObject.AddComponent<CanvasGroup>();
             _canvasGroup.alpha = 0f;
             _canvasGroup.blocksRaycasts = false;
 
-            _blackScreen = CreateImage("BlackScreen", transform, Color.black);
-            Stretch(_blackScreen.rectTransform);
+            LoadFrames();
+            _blackCurtain = CreateImage("BlackCurtain", transform);
+            _blackCurtain.preserveAspect = false;
+            _blackCurtain.raycastTarget = true;
+            Stretch(_blackCurtain.rectTransform);
 
-            _spiral = CreateRawImage("SpiralMask", transform, Color.black);
-            _spiral.texture = CreateSpiralTexture(256);
-            Stretch(_spiral.rectTransform);
+            // The curtain's final frame is fully opaque. YAYA must therefore be created
+            // after it so the loading indicator remains visible during the hold phase.
+            _yaya = CreateImage("YAYA", transform);
+            _yaya.preserveAspect = true;
+            _yaya.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            _yaya.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            _yaya.rectTransform.anchoredPosition = Vector2.zero;
+            _yaya.rectTransform.sizeDelta = new Vector2(186f, 220f);
+            _yaya.color = Color.clear;
+
+            if (HasFrames())
+            {
+                _yaya.sprite = _yayaFrames[0];
+                _blackCurtain.sprite = _blackCurtainFrames[0];
+            }
         }
 
-        private IEnumerator Animate(float from, float to, bool opening)
+        private IEnumerator PlayOpening()
         {
             float elapsed = 0f;
-            while (elapsed < TransitionDuration)
+            int yayaFrame = 0;
+            _blackCurtain.sprite = _blackCurtainFrames[0];
+
+            while (elapsed < CurtainSequenceDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.Clamp01(elapsed / TransitionDuration);
-                SetProgress(Mathf.Lerp(from, to, progress), opening);
+                _yaya.sprite = NextYayaFrame(ref yayaFrame, elapsed);
+                _yaya.color = new Color(1f, 1f, 1f, Mathf.Clamp01(elapsed / YayaFadeDuration));
+                _blackCurtain.sprite = _blackCurtainFrames[FrameAt(elapsed, false)];
                 yield return null;
             }
-            SetProgress(to, opening);
+
+            _yaya.color = Color.white;
+            _blackCurtain.sprite = _blackCurtainFrames[_blackCurtainFrames.Length - 1];
         }
 
-        private void SetProgress(float progress, bool opening)
+        private IEnumerator PlayClosing()
         {
-            float eased = Mathf.SmoothStep(0f, 1f, progress);
-            _blackScreen.color = new Color(0f, 0f, 0f, eased);
-            float scale = opening ? Mathf.Lerp(2.4f, 0.15f, eased) : Mathf.Lerp(0.15f, 2.4f, eased);
-            _spiral.rectTransform.localScale = Vector3.one * scale;
-            _spiral.rectTransform.localRotation = Quaternion.Euler(0f, 0f, (opening ? 1f : -1f) * eased * 140f);
+            float elapsed = 0f;
+            int yayaFrame = 0;
+            _blackCurtain.sprite = _blackCurtainFrames[_blackCurtainFrames.Length - 1];
+
+            while (elapsed < CurtainSequenceDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                _yaya.sprite = NextYayaFrame(ref yayaFrame, elapsed);
+                _yaya.color = new Color(1f, 1f, 1f, 1f - Mathf.Clamp01(elapsed / YayaFadeDuration));
+                _blackCurtain.sprite = _blackCurtainFrames[FrameAt(elapsed, true)];
+                yield return null;
+            }
+
+            _yaya.color = Color.clear;
+            _blackCurtain.sprite = _blackCurtainFrames[0];
         }
 
-        private static Image CreateImage(string name, Transform parent, Color color)
+        private Sprite NextYayaFrame(ref int frame, float elapsed)
+        {
+            frame = Mathf.FloorToInt(elapsed / YayaFrameDuration) % _yayaFrames.Length;
+            return _yayaFrames[frame];
+        }
+
+        private int FrameAt(float elapsed, bool reverse)
+        {
+            int frame = Mathf.Min(Mathf.FloorToInt(elapsed / CurtainFrameDuration), _blackCurtainFrames.Length - 1);
+            return reverse ? _blackCurtainFrames.Length - 1 - frame : frame;
+        }
+
+        private float CurtainSequenceDuration => _blackCurtainFrames.Length * CurtainFrameDuration;
+
+        private void LoadFrames()
+        {
+            _yayaFrames = Resources.LoadAll<Sprite>(YayaResourcePath);
+            _blackCurtainFrames = Resources.LoadAll<Sprite>(CurtainResourcePath);
+            SortFrames(_yayaFrames);
+            SortFrames(_blackCurtainFrames);
+
+            if (!HasFrames())
+                Debug.LogError("[SceneTransitionOverlay] Cutscene frames could not be loaded from Resources/Cutscene.", this);
+        }
+
+        private bool HasFrames()
+        {
+            return _yayaFrames != null && _yayaFrames.Length > 0 &&
+                   _blackCurtainFrames != null && _blackCurtainFrames.Length > 0;
+        }
+
+        private static void SortFrames(Sprite[] frames)
+        {
+            Array.Sort(frames, (left, right) => GetFrameNumber(left.name).CompareTo(GetFrameNumber(right.name)));
+        }
+
+        private static int GetFrameNumber(string frameName)
+        {
+            Match match = FrameNumberPattern.Match(frameName);
+            return match.Success ? int.Parse(match.Value) : 0;
+        }
+
+        private static Image CreateImage(string name, Transform parent)
         {
             var child = new GameObject(name, typeof(RectTransform), typeof(Image));
             child.transform.SetParent(parent, false);
             var image = child.GetComponent<Image>();
-            image.color = color;
-            image.raycastTarget = false;
-            return image;
-        }
-
-        private static RawImage CreateRawImage(string name, Transform parent, Color color)
-        {
-            var child = new GameObject(name, typeof(RectTransform), typeof(RawImage));
-            child.transform.SetParent(parent, false);
-            var image = child.GetComponent<RawImage>();
-            image.color = color;
             image.raycastTarget = false;
             return image;
         }
@@ -116,32 +218,6 @@ namespace Ashlight.Systems.Core
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
-        }
-
-        private static Texture2D CreateSpiralTexture(int size)
-        {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                wrapMode = TextureWrapMode.Clamp
-            };
-            var pixels = new Color32[size * size];
-            float half = (size - 1) * 0.5f;
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = (x - half) / half;
-                    float dy = (y - half) / half;
-                    float radius = Mathf.Sqrt(dx * dx + dy * dy);
-                    float angle = Mathf.Atan2(dy, dx);
-                    float wave = Mathf.Sin(angle * 5f + radius * 18f);
-                    byte alpha = radius <= 1f && wave > -0.18f ? (byte)255 : (byte)0;
-                    pixels[y * size + x] = new Color32(0, 0, 0, alpha);
-                }
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            return texture;
         }
     }
 }
