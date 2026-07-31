@@ -91,6 +91,9 @@ namespace Ashlight.Common.Events
         /// </summary>
         public int ActualDamage;
 
+        /// <summary>Damage absorbed by armor during this hit.</summary>
+        public int ArmorDamage;
+
         /// <summary>
         /// 是否为AOE伤害
         /// </summary>

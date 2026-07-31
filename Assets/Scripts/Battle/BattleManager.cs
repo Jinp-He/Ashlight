@@ -2448,7 +2448,7 @@ namespace Ashlight.Battle
                 return;
             }
 
-            bool isAttackSkill = commands.Any(c => c is DamageCommand);
+            bool isAttackSkill = commands.Any(IsAttackCommand);
             GameEvent.Publish(new CardExecutedEvent
             {
                 CasterId = enemyUnit.UnitId,

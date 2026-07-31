@@ -84,6 +84,7 @@ namespace Ashlight.Battle.Core.Commands
                 AttackerId = ownerId,
                 TargetId = targetId,
                 ActualDamage = actualDamage,
+                ArmorDamage = target.LastArmorDamage,
                 IsAoe = false,
                 IsPrediction = state.IsPrediction
             });
@@ -118,6 +119,7 @@ namespace Ashlight.Battle.Core.Commands
                     AttackerId = owner.UnitId,
                     TargetId = target.UnitId,
                     ActualDamage = actualDamage,
+                    ArmorDamage = target.LastArmorDamage,
                     IsAoe = true,
                     IsPrediction = state.IsPrediction
                 });

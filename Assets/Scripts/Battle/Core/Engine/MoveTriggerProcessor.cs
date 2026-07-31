@@ -149,6 +149,7 @@ namespace Ashlight.Battle.Core.Engine
                 AttackerId = owner.UnitId,
                 TargetId = target.UnitId,
                 ActualDamage = dealt,
+                ArmorDamage = target.LastArmorDamage,
                 IsAoe = false,
                 IsPrediction = state.IsPrediction
             });

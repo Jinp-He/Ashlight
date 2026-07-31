@@ -2077,8 +2077,15 @@ namespace Scripts.UI
                 var ui = FindUnitUiTransform(kv.Key);
                 if (ui != null)
                 {
-                    string label = kv.Value > 0 ? $"-{kv.Value}" : "格挡";
-                    _animationHandler?.ShowFloatingLabel(ui.position, label, new Color(1f, 0.85f, 0.2f));
+                    int armorDamage = _battleManager.CurrentState?.GetUnitById(kv.Key)?.LastArmorDamage ?? 0;
+                    if (armorDamage > 0)
+                    {
+                        _animationHandler?.ShowFloatingLabel(ui.position + new Vector3(-0.35f, 0f, 0f), armorDamage.ToString(), Color.gray);
+                    }
+                    if (kv.Value > 0)
+                    {
+                        _animationHandler?.ShowFloatingLabel(ui.position, $"-{kv.Value}", new Color(1f, 0.85f, 0.2f));
+                    }
                 }
             }
             UpdateAllUnitsDisplay();
@@ -2427,7 +2434,7 @@ namespace Scripts.UI
             }
 
             // 委托给动画处理器缓存伤害
-            _animationHandler.CacheDamage(evt.AttackerId, evt.TargetId, evt.ActualDamage);
+            _animationHandler.CacheDamage(evt.AttackerId, evt.TargetId, evt.ActualDamage, evt.ArmorDamage);
         }
 
         /// <summary>
@@ -2645,11 +2652,21 @@ namespace Scripts.UI
 
             if (state.PlayerUnits != null)
             {
-                foreach (var u in state.PlayerUnits) u?.Buffs?.Clear();
+                foreach (var u in state.PlayerUnits)
+                {
+                    if (u == null) continue;
+                    u.Buffs?.Clear();
+                    u.Defense = 0;
+                }
             }
             if (state.EnemyUnits != null)
             {
-                foreach (var u in state.EnemyUnits) u?.Buffs?.Clear();
+                foreach (var u in state.EnemyUnits)
+                {
+                    if (u == null) continue;
+                    u.Buffs?.Clear();
+                    u.Defense = 0;
+                }
             }
 
             // 刷新 UI，被清空的 buff 图标随之移除

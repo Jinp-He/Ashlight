@@ -29,7 +29,17 @@ namespace Scripts.UI
         /// <summary>
         /// 待处理的伤害缓存：attackerId->targetId -> damage
         /// </summary>
-        private Dictionary<string, int> _pendingDamageByPair = new Dictionary<string, int>();
+        private struct PendingDamage
+        {
+            public string TargetId;
+            public int HealthDamage;
+            public int ArmorDamage;
+        }
+
+        // 伤害事件必须逐次保留：同一技能的 AOE 会命中多个目标，多段攻击也可能连续命中同一目标。
+        // 不能按 attacker/target 聚合，否则 UI 只能播放最后一个目标或合并后的总伤害。
+        private readonly Dictionary<string, Queue<PendingDamage>> _pendingDamageByAttacker =
+            new Dictionary<string, Queue<PendingDamage>>();
 
         /// <summary>
         /// 战斗管理器引用
@@ -93,18 +103,26 @@ namespace Scripts.UI
         /// <param name="attackerId">攻击者ID</param>
         /// <param name="targetId">目标ID</param>
         /// <param name="damage">伤害值</param>
-        public void CacheDamage(string attackerId, string targetId, int damage)
+        public void CacheDamage(string attackerId, string targetId, int healthDamage, int armorDamage)
         {
-            string key = GetAttackPairKey(attackerId, targetId);
-            if (_pendingDamageByPair.ContainsKey(key))
+            if (string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId))
             {
-                _pendingDamageByPair[key] += damage;
+                return;
             }
-            else
+
+            if (!_pendingDamageByAttacker.TryGetValue(attackerId, out Queue<PendingDamage> pendingHits))
             {
-                _pendingDamageByPair[key] = damage;
+                pendingHits = new Queue<PendingDamage>();
+                _pendingDamageByAttacker.Add(attackerId, pendingHits);
             }
-            Debug.Log($"[BattleAnimationHandler] 缓存伤害: {attackerId} -> {targetId}, 伤害: {damage}");
+
+            pendingHits.Enqueue(new PendingDamage
+            {
+                TargetId = targetId,
+                HealthDamage = healthDamage,
+                ArmorDamage = armorDamage
+            });
+            Debug.Log($"[BattleAnimationHandler] 缓存伤害: {attackerId} -> {targetId}, 血量: {healthDamage}, 护甲: {armorDamage}");
         }
 
         /// <summary>
@@ -114,33 +132,30 @@ namespace Scripts.UI
         /// <param name="targetId">目标ID</param>
         /// <param name="damage">输出伤害值</param>
         /// <returns>是否成功获取</returns>
-        public bool TryConsumePendingDamage(string attackerId, string targetId, out int damage)
+        private bool TryConsumePendingDamages(string attackerId, List<PendingDamage> hits)
         {
-            string key = GetAttackPairKey(attackerId, targetId);
-            if (_pendingDamageByPair.TryGetValue(key, out damage))
+            if (hits == null || string.IsNullOrEmpty(attackerId)
+                || !_pendingDamageByAttacker.TryGetValue(attackerId, out Queue<PendingDamage> pendingHits))
             {
-                _pendingDamageByPair.Remove(key);
-                return true;
+                return false;
             }
-            damage = 0;
-            return false;
+
+            while (pendingHits.Count > 0)
+            {
+                hits.Add(pendingHits.Dequeue());
+            }
+            _pendingDamageByAttacker.Remove(attackerId);
+            return hits.Count > 0;
         }
 
         /// <summary>
         /// 检查指定攻击对是否已有待消费伤害
         /// </summary>
-        private bool HasPendingDamage(string attackerId, string targetId)
+        private bool HasPendingDamage(string attackerId)
         {
-            string key = GetAttackPairKey(attackerId, targetId);
-            return _pendingDamageByPair.ContainsKey(key);
-        }
-
-        /// <summary>
-        /// 获取攻击对的key
-        /// </summary>
-        private string GetAttackPairKey(string attackerId, string targetId)
-        {
-            return $"{attackerId}->{targetId}";
+            return !string.IsNullOrEmpty(attackerId)
+                   && _pendingDamageByAttacker.TryGetValue(attackerId, out Queue<PendingDamage> hits)
+                   && hits.Count > 0;
         }
 
         /// <summary>
@@ -148,7 +163,7 @@ namespace Scripts.UI
         /// </summary>
         public void ClearDamageCache()
         {
-            _pendingDamageByPair.Clear();
+            _pendingDamageByAttacker.Clear();
         }
 
         #endregion
@@ -207,61 +222,71 @@ namespace Scripts.UI
                 yield break;
             }
 
-            // 获取施法者和目标的UnitState
+            // 获取施法者状态和 UI；攻击的实际目标须以 AttackExecutedEvent 为准。
             UnitState casterState = _unitUIManager.FindUnitState(evt.CasterId);
-            UnitState targetState = _unitUIManager.FindUnitState(evt.TargetId);
 
-            if (casterState == null || targetState == null)
+            if (casterState == null)
             {
-                Debug.LogError($"[BattleAnimationHandler] 无法找到UnitState: {evt.CasterId} 或 {evt.TargetId}");
+                Debug.LogError($"[BattleAnimationHandler] 无法找到施法者 UnitState: {evt.CasterId}");
                 SignalAnimationComplete();
                 yield break;
             }
 
-            // 获取对应的UI组件
             MonoBehaviour casterUI = _unitUIManager.FindUnitComponent(evt.CasterId);
-            MonoBehaviour targetUI = _unitUIManager.FindUnitComponent(evt.TargetId);
-
-            if (casterUI == null || targetUI == null)
+            if (casterUI == null)
             {
-                Debug.LogWarning($"[BattleAnimationHandler] 无法找到UI组件: {evt.CasterId} 或 {evt.TargetId}");
+                Debug.LogWarning($"[BattleAnimationHandler] 无法找到施法者 UI: {evt.CasterId}");
                 SignalAnimationComplete();
                 yield break;
             }
 
-            // 获取缓存的伤害值
-            int damage = 0;
+            var hits = new List<PendingDamage>();
             if (evt.IsAttackCard)
             {
                 // 时序修正：
                 // CardExecutedEvent 可能先于 AttackExecutedEvent 到达，
                 // 最多等待2帧让伤害事件完成缓存，避免伤害数字延后一拍。
                 int waitFrames = 2;
-                while (waitFrames > 0 && !HasPendingDamage(evt.CasterId, evt.TargetId))
+                while (waitFrames > 0 && !HasPendingDamage(evt.CasterId))
                 {
                     waitFrames--;
                     yield return null;
                 }
             }
 
-            if (TryConsumePendingDamage(evt.CasterId, evt.TargetId, out damage))
+            TryConsumePendingDamages(evt.CasterId, hits);
+
+            // 未命中任何目标（例如目标分区为空）时仍保留一次原有的施法演出。
+            if (hits.Count == 0)
             {
-                Debug.Log($"[BattleAnimationHandler] 获取到缓存的伤害值: {damage}");
+                hits.Add(new PendingDamage { TargetId = evt.TargetId });
             }
 
-            // 播放战斗演出动画
-            yield return battleAnimComponent.PlayBattleAnimation(
-                casterState,
-                targetState,
-                casterUI,
-                targetUI,
-                evt.IsAttackCard,
-                damage,
-                () => {
-                    // 受击回调：更新目标血量显示
-                    UpdateUnitDisplay(targetUI);
+            foreach (PendingDamage hit in hits)
+            {
+                UnitState targetState = _unitUIManager.FindUnitState(hit.TargetId);
+                MonoBehaviour targetUI = _unitUIManager.FindUnitComponent(hit.TargetId);
+                if (targetState == null || targetUI == null)
+                {
+                    Debug.LogWarning($"[BattleAnimationHandler] 跳过找不到的受击目标: {hit.TargetId}");
+                    continue;
                 }
-            );
+
+                if (hit.ArmorDamage > 0)
+                {
+                    ShowFloatingLabel(targetUI.transform.position + new Vector3(-0.35f, 0f, 0f), hit.ArmorDamage.ToString(), Color.gray);
+                }
+
+                yield return battleAnimComponent.PlayBattleAnimation(
+                    casterState,
+                    targetState,
+                    casterUI,
+                    targetUI,
+                    evt.IsAttackCard,
+                    hit.HealthDamage,
+                    () => UpdateUnitDisplay(targetUI)
+                );
+            }
 
             // 更新所有单位的UI显示
             _updateAllUnitsCallback?.Invoke();
@@ -292,6 +317,10 @@ namespace Scripts.UI
             PlayAttackAnimation(attackerObj);
 
             // 4. 同时播放目标shouji动画 + 伤害数字 + 实时更新血量显示
+            if (evt.ArmorDamage > 0)
+            {
+                ShowFloatingLabel(targetObj.transform.position + new Vector3(-0.35f, 0f, 0f), evt.ArmorDamage.ToString(), Color.gray);
+            }
             PlayHitAnimation(targetObj, evt.ActualDamage);
 
             // 5. 等待所有动画完成

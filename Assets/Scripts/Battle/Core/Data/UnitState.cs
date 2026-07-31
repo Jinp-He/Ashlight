@@ -148,6 +148,7 @@ namespace Ashlight.Battle.Core.Data
         public string ArmorBreakMoveMode { get; set; }
 
         public bool ArmorBreakMovePending { get; set; }
+        public int LastArmorDamage { get; private set; }
 
         // ========== 敌人意图轴/执行轴字段 ==========
 
@@ -228,6 +229,7 @@ namespace Ashlight.Battle.Core.Data
         /// <returns>实际受到的伤害</returns>
         public int TakeDamage(int damage, bool canBeDodged = true)
         {
+            LastArmorDamage = 0;
             if (damage <= 0)
             {
                 return 0;
@@ -270,9 +272,11 @@ namespace Ashlight.Battle.Core.Data
             int actualDamage = adjusted;
             if (Defense > 0)
             {
+                int defenseBefore = Defense;
                 if (Defense >= adjusted)
                 {
                     Defense -= adjusted;
+                    LastArmorDamage = defenseBefore - Defense;
                     MarkArmorBreakMoveIfNeeded();
                     return 0; // 完全被护甲吸收
                 }
@@ -280,6 +284,7 @@ namespace Ashlight.Battle.Core.Data
                 {
                     actualDamage = adjusted - Defense;
                     Defense = 0;
+                    LastArmorDamage = defenseBefore;
                     MarkArmorBreakMoveIfNeeded();
                 }
             }
