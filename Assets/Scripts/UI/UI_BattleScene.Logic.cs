@@ -298,6 +298,10 @@ namespace Scripts.UI
         /// </summary>
         private void OnDestroy()
         {
+            // IntentionView 的静态解析器捕获本场战斗实例，离场时必须释放。
+            IntentionView.TargetTransformResolver = null;
+            IntentionView.PlayerTurnActivePredicate = null;
+
             // 取消订阅事件
             GameEvent.Unsubscribe<EnemyIntentionSelectedEvent>(OnEnemyIntentionSelected);
             GameEvent.Unsubscribe<AttackExecutedEvent>(OnAttackExecuted);
@@ -373,6 +377,7 @@ namespace Scripts.UI
                 var ch = FindCharacterByUnitId(id);
                 return ch != null ? ch.transform : null;
             };
+            IntentionView.PlayerTurnActivePredicate = IsPlayerTurnActive;
 
             // 新战斗开始：复位升级流程相关 UI（隐藏经验条、恢复手牌区、收起升级面板）
             ResetUpgradeUIForNewBattle();
@@ -2399,6 +2404,15 @@ namespace Scripts.UI
             if (target == null)
             {
                 Debug.LogWarning($"[UI_BattleScene] 未找到目标角色UI: {evt.TargetUnitId}");
+            }
+
+            // 兼容事件驱动的旧意图生成路径：意图一经选定就立即更新敌人头顶显示并播放箭头。
+            if (attacker != null)
+            {
+                if (target != null)
+                    attacker.SetIntentionExecuting(evt.SkillInfo, evt.TargetUnitId);
+                else
+                    attacker.SetIntentionThinking();
             }
 
             // 直接在敌人时间轴上放置 EnemyTimeSlot，传递攻击者和目标

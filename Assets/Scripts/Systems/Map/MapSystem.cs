@@ -186,11 +186,6 @@ namespace Ashlight.Systems.Map
                 failureReason = "固定地点不能被拼图覆盖。";
                 return false;
             }
-            if (IsPublicLocation(position))
-            {
-                failureReason = "公共地点不能被拼图覆盖。";
-                return false;
-            }
             if (FindPlacedTile(position) != null)
             {
                 failureReason = "目标格已有拼图。";
@@ -314,7 +309,7 @@ namespace Ashlight.Systems.Map
         {
             foreach (MapPublicLocationState location in State.PublicLocations)
             {
-                if (location.Resolved || !IsConnectedTo(placed, location.Position, new MapGridSize(1, 1))) continue;
+                if (location.Resolved || !location.Position.Equals(placed.Position)) continue;
                 location.Resolved = true;
                 GameEvent.Publish(new MapContentResolvedEvent
                 {
@@ -415,15 +410,6 @@ namespace Ashlight.Systems.Map
                    IsInsideFixedLocation(position, State.FinalPosition, State.FinalSize) ||
                    IsInsideFixedLocation(position, State.MageTowerPosition, State.MageTowerSize) ||
                    IsInsideFixedLocation(position, State.SirenTownPosition, State.SirenTownSize);
-        }
-
-        private bool IsPublicLocation(MapGridPosition position)
-        {
-            foreach (MapPublicLocationState location in State.PublicLocations)
-            {
-                if (location.Position.Equals(position)) return true;
-            }
-            return false;
         }
 
         private static bool IsInsideFixedLocation(MapGridPosition position, MapGridPosition bottomLeft, MapGridSize size)

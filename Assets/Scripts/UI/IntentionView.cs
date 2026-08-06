@@ -85,9 +85,19 @@ namespace Scripts.UI
         /// </summary>
         public static System.Func<string, Transform> TargetTransformResolver;
 
+        /// <summary>由战斗界面注入；为 true 时按间隔重复播放意图箭头。</summary>
+        public static System.Func<bool> PlayerTurnActivePredicate;
+
+        [Header("意图箭头动画")]
+        [SerializeField, Min(0.5f)]
+        [Tooltip("玩家回合内重复播放意图箭头的间隔（秒）")]
+        private float _arrowRepeatInterval = 4f;
+
         // 悬停时从意图指向锁定目标的抛物线（复用玩家出牌的 TargetArrowRenderer；红色示意来袭攻击）
         private TargetArrowRenderer _parabola;
+        private ArcProjectile _intentProjectile;
         private Canvas _canvas;
+        private float _arrowRepeatTimer;
 
         // 最多使用两个标记：Front/Back 各一个；Any 时二者同时显示。
         private readonly List<Image> _coordMarkers = new List<Image>();
@@ -116,6 +126,25 @@ namespace Scripts.UI
             CreateDescriptionView();
         }
 
+        private void Update()
+        {
+            bool shouldRepeat = _currentSkillInfo != null
+                                && !string.IsNullOrEmpty(_currentTargetUnitId)
+                                && PlayerTurnActivePredicate != null
+                                && PlayerTurnActivePredicate();
+            if (!shouldRepeat)
+            {
+                _arrowRepeatTimer = 0f;
+                return;
+            }
+
+            _arrowRepeatTimer += Time.unscaledDeltaTime;
+            if (_arrowRepeatTimer < _arrowRepeatInterval) return;
+
+            _arrowRepeatTimer = 0f;
+            TryPlayIntentProjectile();
+        }
+
         private void OnDestroy()
         {
             if (_descriptionView != null)
@@ -127,6 +156,11 @@ namespace Scripts.UI
             {
                 Destroy(_parabola.gameObject);
                 _parabola = null;
+            }
+            if (_intentProjectile != null)
+            {
+                Destroy(_intentProjectile.gameObject);
+                _intentProjectile = null;
             }
         }
 
@@ -185,6 +219,51 @@ namespace Scripts.UI
             if (_parabola != null) _parabola.Hide();
         }
 
+        /// <summary>懒创建兼容 Overlay Canvas 的粒子箭头渲染器。</summary>
+        private ArcProjectile EnsureIntentProjectile()
+        {
+            if (_intentProjectile != null) return _intentProjectile;
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            if (_canvas == null) return null;
+
+            var go = new GameObject("IntentionArcProjectile");
+            go.transform.SetParent(_canvas.transform, false);
+            go.layer = _canvas.gameObject.layer;
+
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            _intentProjectile = go.AddComponent<ArcProjectile>();
+            _intentProjectile.raycastTarget = false;
+            return _intentProjectile;
+        }
+
+        /// <summary>从意图图标向当前锁定角色播放一次弧线箭头。</summary>
+        private void TryPlayIntentProjectile()
+        {
+            if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
+
+            Transform target = TargetTransformResolver(_currentTargetUnitId);
+            if (target == null) return;
+
+            ArcProjectile projectile = EnsureIntentProjectile();
+            if (projectile == null) return;
+
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            Camera camera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? _canvas.worldCamera
+                : null;
+            Vector2 startScreen = RectTransformUtility.WorldToScreenPoint(camera, transform.position);
+            Vector2 endScreen = RectTransformUtility.WorldToScreenPoint(camera, target.position);
+
+            projectile.transform.SetAsLastSibling();
+            projectile.Fire(startScreen, endScreen, _canvas);
+        }
+
         private void CreateDescriptionView()
         {
             if (_descriptionViewControllerPrefab == null) return;
@@ -209,6 +288,8 @@ namespace Scripts.UI
 
             _currentSkillInfo = null;
             _currentTargetUnitId = null;
+            _arrowRepeatTimer = 0f;
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
             HideTooltip();
             HideParabola();
         }
@@ -276,6 +357,8 @@ namespace Scripts.UI
 
             _currentSkillInfo = null;
             _currentTargetUnitId = null;
+            _arrowRepeatTimer = 0f;
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
             HideTooltip();
             HideParabola();
         }
@@ -348,6 +431,10 @@ namespace Scripts.UI
                 ShowShield(shieldValue);
             else
                 ShowState();
+
+            // 新意图生成（或锁定目标发生变化）时立即播放一次；后续玩家回合内每 4 秒重复。
+            _arrowRepeatTimer = 0f;
+            TryPlayIntentProjectile();
         }
 
         public void ShowAttack(int damage, TargetZoneEnum targetZone, bool isAoe, bool targetsPlayers)
