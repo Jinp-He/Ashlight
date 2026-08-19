@@ -43,6 +43,12 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     [BoxGroup("战斗演出控制台/时间设置"), LabelText("4. 动画播放完毕停留时间"), MinValue(0f), SuffixLabel("秒")]
     [SerializeField] private float postAnimationHoldDuration = 0.15f;
 
+    [BoxGroup("战斗演出控制台/画面设置"), LabelText("5. 人物 Y 轴偏移"), SuffixLabel("px")]
+    [SerializeField] private float characterYOffset = 0f;
+
+    [BoxGroup("战斗演出控制台/画面设置"), LabelText("6. 黑影动画帧率"), MinValue(1f), SuffixLabel("FPS")]
+    [SerializeField] private float shadowAnimationFps = 15f;
+
     #endregion
 
     #region 私有字段
@@ -55,13 +61,15 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     private const float PAIR_GAP = 310f;
     private const float PAIR_SCREEN_Y = 360f;
     private const float EFFECT_SCREEN_Y = 400f;
-    private const float EFFECT_FPS = 15f;
     private const int PRESENTATION_SORTING_ORDER = 300;
     private const string EFFECT_RESOURCE_PATH = "UI/BattleScene/BattleCutscene/Frames";
 
     private RectTransform _presentationRoot;
     private Sprite[] _effectFrames;
     private readonly Queue<Image> _effectPool = new Queue<Image>();
+    private readonly List<CanvasGroupSnapshot> _hiddenBattleUi = new List<CanvasGroupSnapshot>();
+    private readonly List<IntentionView> _hiddenIntentionViews = new List<IntentionView>();
+    private int _battleUiHideDepth;
 
     private sealed class CanvasSortingSnapshot
     {
@@ -80,6 +88,15 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         public GameObject Placeholder;
     }
 
+    private sealed class CanvasGroupSnapshot
+    {
+        public CanvasGroup Group;
+        public bool WasAdded;
+        public float Alpha;
+        public bool Interactable;
+        public bool BlocksRaycasts;
+    }
+
     #endregion
 
     #region Unity生命周期
@@ -87,6 +104,11 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     private void Awake()
     {
         _canvas = GetComponentInParent<Canvas>();
+    }
+
+    private void OnDisable()
+    {
+        ForceRestoreBattleStatusUi();
     }
 
     #endregion
@@ -144,12 +166,13 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         EnsurePresentationRoot();
 
         bool moveLeftToRight = casterState.IsPlayerUnit;
-        Vector3 casterStart = ComputePairPosition(moveLeftToRight ? PairPoint.Start : PairPoint.End, true);
-        Vector3 targetStart = ComputePairPosition(moveLeftToRight ? PairPoint.Start : PairPoint.End, false);
-        Vector3 casterCenter = ComputePairPosition(PairPoint.Center, true);
-        Vector3 targetCenter = ComputePairPosition(PairPoint.Center, false);
-        Vector3 casterEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, true);
-        Vector3 targetEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, false);
+        bool casterOnLeft = casterState.IsPlayerUnit;
+        Vector3 casterStart = ComputePairPosition(moveLeftToRight ? PairPoint.Start : PairPoint.End, casterOnLeft);
+        Vector3 targetStart = ComputePairPosition(moveLeftToRight ? PairPoint.Start : PairPoint.End, !casterOnLeft);
+        Vector3 casterCenter = ComputePairPosition(PairPoint.Center, casterOnLeft);
+        Vector3 targetCenter = ComputePairPosition(PairPoint.Center, !casterOnLeft);
+        Vector3 casterEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, casterOnLeft);
+        Vector3 targetEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, !casterOnLeft);
 
         bool sameUnit = casterRect == targetRect;
         if (sameUnit)
@@ -162,11 +185,19 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         // 把真实单位临时挂到战场演出层：跨前后排时层级稳定，且震动只影响演出层，不影响手牌。
         LayoutSlotSnapshot casterLayout = DetachToPresentationLayer(casterRect);
         LayoutSlotSnapshot targetLayout = sameUnit ? null : DetachToPresentationLayer(targetRect);
+        HideBattleStatusUi();
 
         try
         {
             casterRect.position = casterStart;
             if (!sameUnit) targetRect.position = targetStart;
+
+            // 入场第一帧就切换战斗姿态，动作和位移同时进行。
+            PlayCasterAttack(casterUI);
+            if (isAttackCard && !sameUnit)
+            {
+                PlayTargetHurt(targetUI);
+            }
 
             // 特效与角色进入必须在同一帧启动，形成一个完整的入场动作。
             StartCoroutine(PlayEffectFrames(!moveLeftToRight));
@@ -176,14 +207,10 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             if (!sameUnit) targetRect.DOMove(targetCenter, enterCenterDuration).SetEase(Ease.OutCubic);
             yield return entry.WaitForCompletion();
 
-            PlayCasterAttack(casterUI);
-            if (isAttackCard && !sameUnit)
-            {
-                PlayTargetHurt(targetUI);
-            }
-
-            if (battleAnimationDuration > 0f)
-                yield return new WaitForSeconds(battleAnimationDuration);
+            // 战斗动画时长从入场开始计时，扣除已经用于进入中央的时间。
+            float remainingBattleDuration = Mathf.Max(0f, battleAnimationDuration - enterCenterDuration);
+            if (remainingBattleDuration > 0f)
+                yield return new WaitForSeconds(remainingBattleDuration);
 
             // 动作完整播放后停留一拍，再确认数值结果。
             if (postAnimationHoldDuration > 0f)
@@ -216,6 +243,7 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             RestoreLayoutSlot(targetLayout);
             RestorePresentationSorting(casterSorting);
             RestorePresentationSorting(targetSorting);
+            RestoreBattleStatusUi();
         }
     }
 
@@ -264,7 +292,7 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     /// </summary>
     private enum PairPoint { Start, Center, End }
 
-    private Vector3 ComputePairPosition(PairPoint point, bool isCaster)
+    private Vector3 ComputePairPosition(PairPoint point, bool useLeftSlot)
     {
         if (_canvas == null)
         {
@@ -287,8 +315,8 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             default: centerX = 0f; break;
         }
 
-        float x = centerX + (isCaster ? -pairHalfGap : pairHalfGap);
-        float y = canvasRect.rect.yMax - PAIR_SCREEN_Y;
+        float x = centerX + (useLeftSlot ? -pairHalfGap : pairHalfGap);
+        float y = canvasRect.rect.yMax - PAIR_SCREEN_Y + characterYOffset;
         return canvasRect.TransformPoint(new Vector3(x, y, 0f));
     }
 
@@ -352,6 +380,133 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         snapshot.Rect.localScale = snapshot.HomeLocalScale;
     }
 
+    private void HideBattleStatusUi()
+    {
+        _battleUiHideDepth++;
+        if (_battleUiHideDepth > 1)
+            return;
+
+        _hiddenBattleUi.Clear();
+        _hiddenIntentionViews.Clear();
+        var roots = new HashSet<GameObject>();
+
+        foreach (Character character in FindObjectsOfType<Character>(true))
+        {
+            CollectHealthUiRoots(character.transform, character.Fill_Hp, character.Txt_Hp, roots);
+        }
+
+        foreach (Enemy enemy in FindObjectsOfType<Enemy>(true))
+        {
+            CollectHealthUiRoots(enemy.transform, enemy.Fill_Hp, enemy.Txt_Hp, roots);
+            if (enemy.IntentionView != null)
+                roots.Add(enemy.IntentionView.gameObject);
+            if (enemy.Txt_Intention != null)
+                roots.Add(enemy.Txt_Intention.gameObject);
+        }
+
+        // 兼容尚未正确绑定到 Enemy.IntentionView 的旧场景对象。
+        foreach (IntentionView intention in FindObjectsOfType<IntentionView>(true))
+        {
+            if (intention == null) continue;
+            intention.SetPresentationHidden(true);
+            _hiddenIntentionViews.Add(intention);
+            roots.Add(intention.gameObject);
+        }
+
+        foreach (GameObject root in roots)
+        {
+            if (root == null) continue;
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            bool wasAdded = group == null;
+            if (wasAdded)
+                group = root.AddComponent<CanvasGroup>();
+
+            _hiddenBattleUi.Add(new CanvasGroupSnapshot
+            {
+                Group = group,
+                WasAdded = wasAdded,
+                Alpha = group.alpha,
+                Interactable = group.interactable,
+                BlocksRaycasts = group.blocksRaycasts
+            });
+
+            group.alpha = 0f;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+        }
+    }
+
+    private static void CollectHealthUiRoots(
+        Transform unitRoot,
+        Graphic hpFill,
+        Graphic hpText,
+        HashSet<GameObject> roots)
+    {
+        Transform fillTransform = hpFill != null ? hpFill.transform : null;
+        Transform textTransform = hpText != null ? hpText.transform : null;
+        Transform commonRoot = FindCommonAncestorBelow(fillTransform, textTransform, unitRoot);
+        if (commonRoot != null)
+        {
+            roots.Add(commonRoot.gameObject);
+            return;
+        }
+
+        // 绑定不完整时只隐藏能找到的血条元素，不能误关整个角色根节点。
+        if (hpFill != null) roots.Add(hpFill.gameObject);
+        if (hpText != null) roots.Add(hpText.gameObject);
+    }
+
+    private static Transform FindCommonAncestorBelow(Transform first, Transform second, Transform boundary)
+    {
+        if (first == null || second == null)
+            return null;
+
+        var firstAncestors = new HashSet<Transform>();
+        for (Transform current = first; current != null && current != boundary; current = current.parent)
+            firstAncestors.Add(current);
+
+        for (Transform current = second; current != null && current != boundary; current = current.parent)
+        {
+            if (firstAncestors.Contains(current))
+                return current;
+        }
+        return null;
+    }
+
+    private void RestoreBattleStatusUi()
+    {
+        if (_battleUiHideDepth <= 0)
+            return;
+
+        _battleUiHideDepth--;
+        if (_battleUiHideDepth > 0)
+            return;
+
+        ForceRestoreBattleStatusUi();
+    }
+
+    private void ForceRestoreBattleStatusUi()
+    {
+        _battleUiHideDepth = 0;
+        foreach (CanvasGroupSnapshot snapshot in _hiddenBattleUi)
+        {
+            if (snapshot?.Group == null) continue;
+            snapshot.Group.alpha = snapshot.Alpha;
+            snapshot.Group.interactable = snapshot.Interactable;
+            snapshot.Group.blocksRaycasts = snapshot.BlocksRaycasts;
+            if (snapshot.WasAdded)
+                Destroy(snapshot.Group);
+        }
+        _hiddenBattleUi.Clear();
+
+        foreach (IntentionView intention in _hiddenIntentionViews)
+        {
+            if (intention != null)
+                intention.SetPresentationHidden(false);
+        }
+        _hiddenIntentionViews.Clear();
+    }
+
     private void EnsurePresentationRoot()
     {
         if (_presentationRoot != null || _canvas == null) return;
@@ -390,7 +545,7 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         rect.anchoredPosition = new Vector2(0f, ((_canvas.transform as RectTransform)?.rect.yMax ?? 450f) - EFFECT_SCREEN_Y);
         rect.localScale = new Vector3(flipHorizontal ? -1f : 1f, 1f, 1f);
 
-        float frameDuration = 1f / EFFECT_FPS;
+        float frameDuration = 1f / Mathf.Max(1f, shadowAnimationFps);
         foreach (Sprite frame in _effectFrames)
         {
             if (instance == null) yield break;

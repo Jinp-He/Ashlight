@@ -3302,6 +3302,42 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 549051347}
   m_CullTransparentMesh: 1
+--- !u!1 &549447627
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 549447628}
+  m_Layer: 0
+  m_Name: EndPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &549447628
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 549447627}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7781739798012796647}
+  m_RootOrder: 2
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 1290, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &596286551
 GameObject:
   m_ObjectHideFlags: 0
@@ -4869,6 +4905,10 @@ MonoBehaviour:
   EnemyPosition: {fileID: 1265879503}
   skeletonGraphicPrefab: {fileID: 6019933993951995940, guid: 1ff39f35c0f2d524faaf1415cc5c7b0d, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
+  battleAnimationDuration: 0.55
+  enterCenterDuration: 0.2
+  exitDuration: 0.2
+  postAnimationHoldDuration: 0.15
 --- !u!1 &816288353
 GameObject:
   m_ObjectHideFlags: 0
@@ -7292,6 +7332,42 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1194519177}
   m_CullTransparentMesh: 1
+--- !u!1 &1199127264
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1199127265}
+  m_Layer: 0
+  m_Name: StartPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1199127265
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1199127264}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7781739798012796647}
+  m_RootOrder: 1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1200284669
 GameObject:
   m_ObjectHideFlags: 0
@@ -16705,6 +16781,8 @@ MonoBehaviour:
   cardSpacing: 10
   handCompressionThreshold: 7
   minimumCompressedHandSpacing: -100
+  cardDrawStartPoint: {fileID: 1199127265}
+  cardRecycleEndPoint: {fileID: 549447628}
   cardDrawDuration: 0.35
   cardDiscardDuration: 0.35
   cardDrawStagger: 0.1
@@ -16714,6 +16792,8 @@ MonoBehaviour:
   handCompactDuration: 0.2
   characterPrefab: {fileID: 4643064549056291281, guid: cdb42e5bc4f8cb341b9e7eb1f80f5905, type: 3}
   enemyPrefab: {fileID: 7003494035819158781, guid: 6f7f211558b9c6642acf0ee8b90b2b74, type: 3}
+  enemyDeathHoldDuration: 0.55
+  enemyDeathFadeDuration: 0.2
   timelineTrackPrefab: {fileID: 1266222384735868427, guid: 8f3450fa82768d14589ce4cc4b7caf1f, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
   testCardCount: 3
@@ -17569,6 +17649,8 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 358557809506871909}
+  - {fileID: 1199127265}
+  - {fileID: 549447628}
   m_Father: {fileID: 1256928875}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

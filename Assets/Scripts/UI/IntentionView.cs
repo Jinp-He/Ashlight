@@ -98,6 +98,7 @@ namespace Scripts.UI
         private ArcProjectile _intentProjectile;
         private Canvas _canvas;
         private float _arrowRepeatTimer;
+        private bool _presentationHidden;
 
         // 最多使用两个标记：Front/Back 各一个；Any 时二者同时显示。
         private readonly List<Image> _coordMarkers = new List<Image>();
@@ -128,6 +129,12 @@ namespace Scripts.UI
 
         private void Update()
         {
+            if (_presentationHidden)
+            {
+                _arrowRepeatTimer = 0f;
+                return;
+            }
+
             bool shouldRepeat = _currentSkillInfo != null
                                 && !string.IsNullOrEmpty(_currentTargetUnitId)
                                 && PlayerTurnActivePredicate != null
@@ -193,6 +200,7 @@ namespace Scripts.UI
         /// <summary>悬停时若已锁定目标，画一条抛物线从意图指向该目标当前 UI 位置。</summary>
         private void TryShowParabola()
         {
+            if (_presentationHidden) return;
             if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
 
             var targetT = TargetTransformResolver(_currentTargetUnitId);
@@ -245,6 +253,7 @@ namespace Scripts.UI
         /// <summary>从意图图标向当前锁定角色播放一次弧线箭头。</summary>
         private void TryPlayIntentProjectile()
         {
+            if (_presentationHidden) return;
             if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
 
             Transform target = TargetTransformResolver(_currentTargetUnitId);
@@ -279,6 +288,21 @@ namespace Scripts.UI
         }
 
         // ===== 公共 API =====
+
+        /// <summary>
+        /// 战斗插入演出期间临时关闭意图的外部视觉，不清空技能和锁定目标。
+        /// 图标本体由演出层的 CanvasGroup 统一隐藏；此处负责停止独立挂在 Canvas 下的箭头与提示。
+        /// </summary>
+        public void SetPresentationHidden(bool hidden)
+        {
+            _presentationHidden = hidden;
+            _arrowRepeatTimer = 0f;
+            if (!hidden) return;
+
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
+            HideTooltip();
+            HideParabola();
+        }
 
         /// <summary>隐藏整个意图指示物</summary>
         public void Hide()
