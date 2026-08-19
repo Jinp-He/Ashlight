@@ -93,7 +93,10 @@ public class BattleAnimation : MonoBehaviour, IBattleAnimationPlayer
             PlayCasterAttack(casterUI);
 
             // 2. 目标在原位播放 shouji
-            PlayTargetHurt(targetUI);
+            if (isAttackCard)
+            {
+                PlayTargetHurt(targetUI);
+            }
 
             // 3. 在目标头顶显示伤害数字
             if (damage > 0)

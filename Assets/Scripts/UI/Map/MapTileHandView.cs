@@ -9,7 +9,7 @@ using TMPro;
 namespace Ashlight.UI.Map
 {
     /// <summary>手牌拼图的拖拽输入组件；落点合法性始终由 MapSystem 决定。</summary>
-    public class MapTileHandView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerDownHandler, IPointerClickHandler
+    public class MapTileHandView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerDownHandler, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         public string TileId { get; private set; }
         public int ClockwiseQuarterTurns { get; private set; }
@@ -65,7 +65,12 @@ namespace Ashlight.UI.Map
                 contentImage.raycastTarget = false;
             }
             if (contentLabel != null)
+            {
                 contentLabel.text = tile.Content == MapTileContent.EmptyRoad ? string.Empty : tile.Content.ToString();
+                // 文本不应截获 Tile 本体的 hover/drag 射线事件。
+                contentLabel.raycastTarget = false;
+                SetContentLabelVisible(false);
+            }
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -82,6 +87,7 @@ namespace Ashlight.UI.Map
             _canvasGroup.blocksRaycasts = false;
             _canvasGroup.alpha = 0.8f;
             _isDragging = true;
+            SetContentLabelVisible(false);
             _panel.BeginTileDrag(this);
         }
 
@@ -105,6 +111,16 @@ namespace Ashlight.UI.Map
             bool placed = _panel != null && _panel.EndTileDrag(this, eventData);
             if (placed) RemoveLayoutPlaceholder();
             else ReturnToHand();
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (!_isDragging) SetContentLabelVisible(true);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            SetContentLabelVisible(false);
         }
 
         public void OnPointerDown(PointerEventData eventData)
@@ -150,6 +166,12 @@ namespace Ashlight.UI.Map
             _shadow.effectColor = new Color(0f, 0f, 0f, 0.65f);
             _shadow.effectDistance = new Vector2(3f, -3f);
             _shadow.useGraphicAlpha = false;
+        }
+
+        private void SetContentLabelVisible(bool visible)
+        {
+            if (contentLabel != null && contentLabel.gameObject.activeSelf != visible)
+                contentLabel.gameObject.SetActive(visible);
         }
 
         private void ReturnToHand()

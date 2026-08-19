@@ -17,4 +17,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/BattleScene.unity
     guid: 72ba8c44a3bbd2f4f9b2e078e3742e10
+  - enabled: 1
+    path: Assets/Scenes/BattleScene_TempoPrototype.unity
+    guid: b7a4e8e1475b4af4a5a782a960d56e0c
   m_configObjects: {}

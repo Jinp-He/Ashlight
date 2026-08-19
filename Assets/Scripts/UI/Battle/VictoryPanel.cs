@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using TMPro;
 using DG.Tweening;
 using Ashlight.Battle;
+using Ashlight.Systems.Map;
 
 namespace Scripts.UI
 {
@@ -200,6 +201,11 @@ namespace Scripts.UI
 
         private void OnContinueClicked()
         {
+            if (MapRunSession.Instance != null && MapRunSession.Instance.ContinueAfterBattleVictory())
+            {
+                return;
+            }
+
             // 记录下一关 EncounterId，新的 BattleScene 启动时会读取并消费
             BattleManager.PendingEncounterId = nextEncounterId;
             Debug.Log($"[VictoryPanel] 继续：加载下一关 EncounterId={nextEncounterId}, Scene={battleSceneName}");

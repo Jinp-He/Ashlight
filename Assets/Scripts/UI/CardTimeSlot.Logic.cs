@@ -5,6 +5,7 @@ using cfg.Character;
 using Ashlight.Config;
 using Ashlight.State.Runtime;
 using Ashlight.Common.Utils;
+using Ashlight.Battle.Prototype;
 using Scripts.UI.Timeline;
 
 namespace Scripts.UI
@@ -256,7 +257,8 @@ namespace Scripts.UI
             }
 
             // 获取 MiniSprite 资源路径
-            string spritePath = AssetPath.GetCardMiniSpriteAssetPath(cardId);
+            string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cardId);
+            string spritePath = AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
 
             // 从 Resources 加载 Sprite
             Sprite sprite = Resources.Load<Sprite>(spritePath);

@@ -11,6 +11,7 @@ using Ashlight.Common.Utils;
 using Ashlight.Config;
 using Ashlight.Battle;
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Prototype;
 using Ashlight.State.Runtime;
 using Ashlight.Systems.Core;
 using Sirenix.OdinInspector;
@@ -49,6 +50,45 @@ namespace Scripts.UI
         [Tooltip("大量手牌重叠时允许的最小 Layout spacing")]
         private float minimumCompressedHandSpacing = -100f;
 
+        [Header("卡牌流转动画")]
+        [SerializeField, LabelText("抽牌起始点")]
+        [Tooltip("抽牌动画的独立起始锚点；未配置时回退到 CardDeck")]
+        private RectTransform cardDrawStartPoint;
+
+        [SerializeField, LabelText("回收结束点")]
+        [Tooltip("结束回合回收动画的独立结束锚点；未配置时回退到 CardBin")]
+        private RectTransform cardRecycleEndPoint;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("卡牌从抽牌起点移动并放大到手牌区的时长；设为 0 可关闭动画")]
+        private float cardDrawDuration = 0.35f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("卡牌从手牌区移动并缩小到回收终点的时长；设为 0 可关闭动画")]
+        private float cardDiscardDuration = 0.35f;
+
+        [SerializeField, Range(0f, 0.2f)]
+        [Tooltip("连续抽牌的错峰间隔")]
+        private float cardDrawStagger = 0.1f;
+
+        [SerializeField, Range(0f, 0.2f)]
+        [Tooltip("结束回合时从右向左逐张回收的错峰间隔")]
+        private float cardRecycleStagger = 0.1f;
+
+        [SerializeField]
+        [Tooltip("抽牌落位期间使用的展开间距")]
+        private float expandedHandSpacing = 10f;
+
+        [SerializeField]
+        [Tooltip("全部抽完后自动收紧到的间距")]
+        private float compactHandSpacing = 5f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("从展开手牌收紧到紧凑模式的动画时长")]
+        private float handCompactDuration = 0.2f;
+
+        private const float CARD_FLOW_MIN_SCALE = 0.08f;
+
         [Header("单位预制体设置")]
         [SerializeField]
         [Tooltip("Character预制体")]
@@ -57,6 +97,15 @@ namespace Scripts.UI
         [SerializeField]
         [Tooltip("Enemy预制体")]
         private GameObject enemyPrefab;
+
+        [Header("敌人死亡退场")]
+        [SerializeField, Min(0f)]
+        [Tooltip("播放死亡动作后开始淡出的等待时间")]
+        private float enemyDeathHoldDuration = 0.55f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("敌人死亡淡出时间；设为0则立即消失")]
+        private float enemyDeathFadeDuration = 0.2f;
 
         [Header("时间轴设置")]
         [SerializeField]
@@ -164,8 +213,16 @@ namespace Scripts.UI
         /// 当前回合内是否已打出过执行牌（用于手牌压制：一回合限一张执行牌）。
         /// </summary>
         private bool _playerPlayedExecutionCardThisAtbTurn;
+        private bool _isDealingHand;
+        private int _pendingDrawAnimations;
+        private int _drawSequenceVersion;
+        private Tween _handCompactTween;
+        private Coroutine _displayHandAfterRecycleCoroutine;
         private bool _handLayoutSpacingCaptured;
         private float _defaultHandLayoutSpacing;
+        private RectTransform _cardAnimationLayer;
+        private readonly Dictionary<CardViewController, Tween> _cardFlowTweens = new Dictionary<CardViewController, Tween>();
+        private readonly HashSet<string> _retiringEnemyIds = new HashSet<string>();
 
         #endregion
 
@@ -298,6 +355,12 @@ namespace Scripts.UI
         /// </summary>
         private void OnDestroy()
         {
+            // SetUpdate(true) 的 UI 流转动画不依赖 Time.timeScale；场景销毁时必须主动停止，
+            // 以免延迟回调访问已被回收的对象池。
+            foreach (var tween in _cardFlowTweens.Values.ToList())
+                tween.Kill();
+            _cardFlowTweens.Clear();
+
             // IntentionView 的静态解析器捕获本场战斗实例，离场时必须释放。
             IntentionView.TargetTransformResolver = null;
             IntentionView.PlayerTurnActivePredicate = null;
@@ -549,8 +612,51 @@ namespace Scripts.UI
                 return;
             }
 
-            // 1. 将当前 UI 层手牌移到弃牌堆（而非销毁）
-            _cardPoolManager.ClearHandCards();
+            // 同一批手牌可能在回合切换的多个 UI 刷新入口中被请求显示。
+            // 回收尚未结束时，等待中的协程会读取最新数据；抽牌尚未结束时，
+            // 若 UI 已经代表当前数据，则不能再次回收并从起点重播。
+            if (_displayHandAfterRecycleCoroutine != null || IsCurrentHandAlreadyBeingDrawn())
+                return;
+
+            // 1. 将当前 UI 层手牌送入弃牌堆（而非销毁）
+            // 数据层在此之前已经完成换手牌；UI 仍保留旧牌一小段时间，便于玩家看清流向。
+            float recycleDuration = AnimateAllHandCardsToDiscard();
+            if (recycleDuration > 0f)
+            {
+                if (_displayHandAfterRecycleCoroutine != null)
+                    StopCoroutine(_displayHandAfterRecycleCoroutine);
+                _displayHandAfterRecycleCoroutine = StartCoroutine(DisplayCurrentHandAfterRecycle(recycleDuration));
+                return;
+            }
+
+            DisplayCurrentHandCards();
+        }
+
+        private bool IsCurrentHandAlreadyBeingDrawn()
+        {
+            if (_pendingDrawAnimations <= 0 || _battleManager?.CurrentState?.DeckSystem?.Hand == null)
+                return false;
+
+            var dataIds = new HashSet<string>(_battleManager.CurrentState.DeckSystem.Hand
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+            var viewIds = new HashSet<string>(_handCards
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+
+            return dataIds.Count == viewIds.Count && dataIds.SetEquals(viewIds);
+        }
+
+        private IEnumerator DisplayCurrentHandAfterRecycle(float delay)
+        {
+            yield return new WaitForSecondsRealtime(delay);
+            _displayHandAfterRecycleCoroutine = null;
+            DisplayCurrentHandCards();
+        }
+
+        /// <summary>回收序列完成后，按当前数据层手牌建立并播放抽牌序列。</summary>
+        private void DisplayCurrentHandCards()
+        {
 
             // 2. 从数据层获取当前手牌
             var handCards = _battleManager.CurrentState.DeckSystem.Hand;
@@ -561,6 +667,7 @@ namespace Scripts.UI
             }
 
             // 3. 从池中获取对应的 CardViewController
+            var drawnCards = new List<CardViewController>();
             foreach (var cardState in handCards)
             {
                 if (cardState == null)
@@ -574,6 +681,7 @@ namespace Scripts.UI
                 if (cardView != null)
                 {
                     _cardPoolManager.MoveToHand(cardView);
+                    drawnCards.Add(cardView);
                 }
                 else
                 {
@@ -583,6 +691,7 @@ namespace Scripts.UI
 
             // 更新手牌布局
             UpdateHandLayout();
+            AnimateDrawCards(drawnCards);
 
             Debug.Log($"[UI_BattleScene] 显示手牌完成: {_handCards.Count} 张");
         }
@@ -823,6 +932,7 @@ namespace Scripts.UI
         /// </summary>
         private void ClearBattleUnits()
         {
+            _retiringEnemyIds.Clear();
             _unitUIManager.ClearAll();
         }
 
@@ -936,7 +1046,62 @@ namespace Scripts.UI
 
                 // 移除该单位残留在敌人共享时间轴上的时间槽卡牌（仅敌人会有）。
                 _enemyTimeline?.RemoveEnemyTimeSlotsByOwner(u.UnitId);
+
+                if (!u.IsPlayerUnit)
+                {
+                    BeginEnemyDeathRetirement(u.UnitId);
+                }
             }
+        }
+
+        private void BeginEnemyDeathRetirement(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId) || _retiringEnemyIds.Contains(unitId))
+                return;
+
+            Enemy enemy = FindEnemyByUnitId(unitId);
+            if (enemy == null)
+                return;
+
+            _retiringEnemyIds.Add(unitId);
+            StartCoroutine(RetireEnemyAfterDeath(enemy));
+        }
+
+        private IEnumerator RetireEnemyAfterDeath(Enemy enemy)
+        {
+            if (enemy == null)
+                yield break;
+
+            enemy.ClearIntention();
+            enemy.PlayDeathAnimation();
+            enemy.enabled = false;
+
+            CanvasGroup group = enemy.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = enemy.gameObject.AddComponent<CanvasGroup>();
+            }
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            if (enemyDeathHoldDuration > 0f)
+            {
+                yield return new WaitForSeconds(enemyDeathHoldDuration);
+            }
+
+            if (enemy != null && enemyDeathFadeDuration > 0f)
+            {
+                Tween fade = group.DOFade(0f, enemyDeathFadeDuration).SetEase(Ease.InQuad);
+                yield return fade.WaitForCompletion();
+            }
+
+            if (enemy == null)
+                yield break;
+
+            _unitUIManager.UnregisterEnemy(enemy);
+            enemy.gameObject.SetActive(false);
+            Destroy(enemy.gameObject);
+            RebuildEnemyRowLayout();
         }
 
         /// <summary>
@@ -1282,7 +1447,7 @@ namespace Scripts.UI
                 return;
             }
 
-            _cardPoolManager.MoveToDiscard(card);
+            AnimateCardToDiscard(card);
             UpdateHandLayout();
             // 出牌后能量减少，剩余手牌可能转为能量不足 —— 立即刷新变色
             RefreshHandEnergyAffordability();
@@ -1315,7 +1480,7 @@ namespace Scripts.UI
                 }
             }
 
-            bool added = false;
+            var drawnCards = new List<CardViewController>();
             foreach (var cardState in handData)
             {
                 if (cardState == null || shownInstanceIds.Contains(cardState.InstanceId))
@@ -1327,14 +1492,15 @@ namespace Scripts.UI
                 if (cardView != null)
                 {
                     _cardPoolManager.MoveToHand(cardView);
-                    added = true;
+                    drawnCards.Add(cardView);
                     Debug.Log($"[UI_BattleScene] 补齐产出卡牌到手牌: {cardState.CardId} ({cardState.InstanceId})");
                 }
             }
 
-            if (added)
+            if (drawnCards.Count > 0)
             {
                 UpdateHandLayout();
+                AnimateDrawCards(drawnCards);
                 RefreshHandEnergyAffordability();
             }
         }
@@ -1360,7 +1526,8 @@ namespace Scripts.UI
             var cast = _battleManager?.LastQueuedCast;
             if (cast != null && ATB != null)
             {
-                string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(cast.Card.Id);
+                string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cast.Card.Id);
+                string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
                 ATB.AddCastIcon(cast.CastId, iconPath, cast.ResolveRound);
                 TurnOrderView?.SetCast(cast.CastId, cast.Card);
                 TurnOrderView?.RefreshOrder();
@@ -1511,7 +1678,7 @@ namespace Scripts.UI
                         sortedCards[i].transform.SetSiblingIndex(i);
                 }
 
-                float spacing = _defaultHandLayoutSpacing;
+                float spacing = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
                 if (sortedCards.Count > handCompressionThreshold)
                 {
                     float availableWidth = Mathf.Max(0f,
@@ -1533,16 +1700,20 @@ namespace Scripts.UI
                     float fitSpacing =
                         (availableWidth - cardsWidth - outerVisualOverflow) /
                         Mathf.Max(1, sortedCards.Count - 1);
-                    spacing = Mathf.Clamp(fitSpacing, minimumCompressedHandSpacing, _defaultHandLayoutSpacing);
+                    spacing = Mathf.Clamp(fitSpacing, minimumCompressedHandSpacing, spacing);
                 }
 
                 layout.spacing = spacing;
                 LayoutRebuilder.ForceRebuildLayoutImmediate(CardContainer.rectTransform);
+                foreach (var card in sortedCards)
+                {
+                    card?.RefreshHandLayoutBaseline();
+                }
                 return;
             }
 
             // 无 LayoutGroup 的场景回退到手动居中，并在超过阈值后压缩中心点间距。
-            float step = cardSpacing;
+            float step = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
             if (sortedCards.Count > handCompressionThreshold)
             {
                 var firstRect = sortedCards.FirstOrDefault(card => card != null)?.transform as RectTransform;
@@ -1565,8 +1736,245 @@ namespace Scripts.UI
                     float xPos = startX + i * step;
                     cardRect.anchoredPosition = new Vector2(xPos, 0f);
                     cardRect.SetSiblingIndex(i);
+                    sortedCards[i].RefreshHandLayoutBaseline();
                 }
             }
+        }
+
+        /// <summary>
+        /// 提供一个脱离 LayoutGroup 的临时动画层。动画期间卡牌不参与手牌布局，
+        /// 结束后才归入目标容器，因此不会被 HorizontalLayoutGroup 覆盖位移。
+        /// </summary>
+        private RectTransform GetCardAnimationLayer()
+        {
+            if (_cardAnimationLayer != null)
+                return _cardAnimationLayer;
+
+            var layer = new GameObject("CardAnimationLayer", typeof(RectTransform), typeof(CanvasGroup));
+            _cardAnimationLayer = layer.GetComponent<RectTransform>();
+            _cardAnimationLayer.SetParent(transform, false);
+            _cardAnimationLayer.anchorMin = Vector2.zero;
+            _cardAnimationLayer.anchorMax = Vector2.one;
+            _cardAnimationLayer.offsetMin = Vector2.zero;
+            _cardAnimationLayer.offsetMax = Vector2.zero;
+            _cardAnimationLayer.SetAsLastSibling();
+
+            var group = layer.GetComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+            return _cardAnimationLayer;
+        }
+
+        private void StopCardFlow(CardViewController card)
+        {
+            if (card != null && _cardFlowTweens.TryGetValue(card, out var tween))
+            {
+                tween.Kill();
+                _cardFlowTweens.Remove(card);
+            }
+        }
+
+        private void AnimateDrawCards(IReadOnlyList<CardViewController> cards)
+        {
+            RectTransform drawStartPoint = cardDrawStartPoint != null ? cardDrawStartPoint : CardDeck;
+            if (cards == null || cards.Count == 0 || drawStartPoint == null || cardDrawDuration <= 0f)
+                return;
+
+            _handCompactTween?.Kill();
+            _isDealingHand = true;
+            var drawableCards = cards
+                .Where(card => card != null && card.transform is RectTransform)
+                .ToList();
+            _pendingDrawAnimations = drawableCards.Count;
+            int drawSequenceVersion = ++_drawSequenceVersion;
+            // 先用展开间距计算每张牌的最终槽位；全部落位后再统一收紧。
+            UpdateHandLayout();
+
+            // 必须在任何牌脱离 LayoutGroup 前一次性冻结所有终点，否则逐张重挂父节点时
+            // 后面的牌会被布局重算，造成飞入终点左右跳动。
+            var drawDestinations = new Dictionary<CardViewController, Vector3>();
+            var drawScales = new Dictionary<CardViewController, Vector3>();
+            foreach (var drawableCard in drawableCards)
+            {
+                RectTransform drawableRect = drawableCard.transform as RectTransform;
+                drawDestinations[drawableCard] = drawableRect.position;
+                drawScales[drawableCard] = drawableRect.localScale;
+            }
+
+            var animationLayer = GetCardAnimationLayer();
+            for (int i = 0; i < drawableCards.Count; i++)
+            {
+                var card = drawableCards[i];
+                var rect = card.transform as RectTransform;
+
+                // 同一张牌在极短时间内被重抽/重置时，取消尚未结束的流转，
+                // 避免旧弃牌动画的回调把已经回到手里的牌再次隐藏。
+                StopCardFlow(card);
+                rect.DOKill();
+                card.PrepareForCardFlowAnimation();
+
+                Vector3 destination = drawDestinations[card];
+                Vector3 destinationScale = drawScales[card];
+                card.transform.SetParent(animationLayer, true);
+                rect.position = drawStartPoint.position;
+                rect.localScale = destinationScale * CARD_FLOW_MIN_SCALE;
+
+                var canvasGroup = card.GetComponent<CanvasGroup>();
+                if (canvasGroup != null)
+                {
+                    canvasGroup.DOKill();
+                    canvasGroup.alpha = 0f;
+                    canvasGroup.blocksRaycasts = false;
+                    canvasGroup.interactable = false;
+                }
+
+                float delay = i * cardDrawStagger;
+                Sequence sequence = DOTween.Sequence().SetUpdate(true);
+                _cardFlowTweens[card] = sequence;
+                if (delay > 0f)
+                    sequence.AppendInterval(delay);
+                if (canvasGroup != null)
+                    sequence.AppendCallback(() => canvasGroup.alpha = 1f);
+                sequence.Append(rect.DOMove(destination, cardDrawDuration).SetEase(Ease.OutCubic));
+                sequence.Join(rect.DOScale(destinationScale, cardDrawDuration).SetEase(Ease.OutCubic));
+                sequence.OnComplete(() =>
+                {
+                    if (card == null) return;
+                    _cardFlowTweens.Remove(card);
+                    card.transform.SetParent(CardContainer.transform, true);
+                    if (canvasGroup != null)
+                    {
+                        canvasGroup.alpha = 1f;
+                        canvasGroup.blocksRaycasts = true;
+                        canvasGroup.interactable = true;
+                    }
+                    UpdateHandLayout();
+                    if (drawSequenceVersion == _drawSequenceVersion)
+                    {
+                        _pendingDrawAnimations = Mathf.Max(0, _pendingDrawAnimations - 1);
+                        if (_pendingDrawAnimations == 0)
+                            CompleteDrawSequence(drawSequenceVersion);
+                    }
+                });
+            }
+
+            if (_pendingDrawAnimations == 0)
+                CompleteDrawSequence(drawSequenceVersion);
+        }
+
+        private void CompleteDrawSequence(int drawSequenceVersion)
+        {
+            if (drawSequenceVersion != _drawSequenceVersion)
+                return;
+            _isDealingHand = false;
+            var layout = CardContainer != null ? CardContainer.GetComponent<HorizontalLayoutGroup>() : null;
+            if (layout == null || handCompactDuration <= 0f)
+            {
+                UpdateHandLayout();
+                return;
+            }
+
+            float targetSpacing = compactHandSpacing;
+            if (_handCards.Count > handCompressionThreshold)
+            {
+                float availableWidth = Mathf.Max(0f,
+                    CardContainer.rectTransform.rect.width - layout.padding.left - layout.padding.right);
+                float cardsWidth = _handCards
+                    .Where(card => card != null)
+                    .Select(card => card.transform as RectTransform)
+                    .Where(rect => rect != null)
+                    .Sum(rect => rect.rect.width);
+                float fitSpacing = (availableWidth - cardsWidth) / Mathf.Max(1, _handCards.Count - 1);
+                targetSpacing = Mathf.Clamp(fitSpacing, minimumCompressedHandSpacing, compactHandSpacing);
+            }
+
+            _handCompactTween = DOTween.To(
+                    () => layout.spacing,
+                    value =>
+                    {
+                        layout.spacing = value;
+                        LayoutRebuilder.ForceRebuildLayoutImmediate(CardContainer.rectTransform);
+                    },
+                    targetSpacing,
+                    handCompactDuration)
+                .SetEase(Ease.InOutCubic)
+                .SetUpdate(true)
+                .OnComplete(() =>
+                {
+                    foreach (var card in _handCards)
+                        card?.RefreshHandLayoutBaseline();
+                    _handCompactTween = null;
+                });
+        }
+
+        private float AnimateAllHandCardsToDiscard()
+        {
+            // 回收开始即终止上一轮抽牌收紧状态，旧 Tween 回调不得再影响下一手牌。
+            _drawSequenceVersion++;
+            _pendingDrawAnimations = 0;
+            _isDealingHand = false;
+            _handCompactTween?.Kill();
+            _handCompactTween = null;
+
+            var cardsRightToLeft = _handCards
+                .Where(card => card != null)
+                .OrderByDescending(card => card.transform.GetSiblingIndex())
+                .ToList();
+
+            for (int i = 0; i < cardsRightToLeft.Count; i++)
+                AnimateCardToDiscard(cardsRightToLeft[i], i * cardRecycleStagger);
+
+            return cardsRightToLeft.Count == 0
+                ? 0f
+                : cardDiscardDuration + (cardsRightToLeft.Count - 1) * cardRecycleStagger;
+        }
+
+        private void AnimateCardToDiscard(CardViewController card, float startDelay = 0f)
+        {
+            if (card == null) return;
+
+            RectTransform recycleEndPoint = cardRecycleEndPoint != null ? cardRecycleEndPoint : CardBin;
+            if (recycleEndPoint == null || cardDiscardDuration <= 0f)
+            {
+                _cardPoolManager.MoveToDiscard(card);
+                return;
+            }
+
+            var rect = card.transform as RectTransform;
+            if (rect == null)
+            {
+                _cardPoolManager.MoveToDiscard(card);
+                return;
+            }
+
+            StopCardFlow(card);
+            rect.DOKill();
+            card.PrepareForCardFlowAnimation();
+
+            // 先从手牌列表除名，让剩余手牌立即补位；实体卡牌留在动画层直到飞入弃牌堆。
+            _cardPoolManager.RemoveFromHandList(card);
+            card.transform.SetParent(GetCardAnimationLayer(), true);
+
+            var canvasGroup = card.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.DOKill();
+                canvasGroup.blocksRaycasts = false;
+                canvasGroup.interactable = false;
+            }
+
+            Vector3 originalScale = rect.localScale;
+            Sequence sequence = DOTween.Sequence().SetUpdate(true);
+            _cardFlowTweens[card] = sequence;
+            if (startDelay > 0f)
+                sequence.AppendInterval(startDelay);
+            sequence.Append(rect.DOMove(recycleEndPoint.position, cardDiscardDuration).SetEase(Ease.InCubic));
+            sequence.Join(rect.DOScale(originalScale * CARD_FLOW_MIN_SCALE, cardDiscardDuration).SetEase(Ease.InCubic));
+            sequence.OnComplete(() =>
+            {
+                _cardFlowTweens.Remove(card);
+                _cardPoolManager.MoveToDiscard(card);
+            });
         }
 
         /// <summary>
@@ -1869,7 +2277,8 @@ namespace Scripts.UI
             {
                 if (!existing.Contains(cast.CastId))
                 {
-                    string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(cast.Card.Id);
+                    string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cast.Card.Id);
+                    string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
                     ATB.AddCastIcon(cast.CastId, iconPath, cast.ResolveRound);
                     changed = true;
                 }
@@ -1921,9 +2330,13 @@ namespace Scripts.UI
                         }
 
                         // 【公共回合制】重排：下次行动 = 当前公共回合 + Speed + 过载次数。
-                        ATB.Reschedule(currentTurnUnitId, currentTurnUnit.Speed, overloadDelay);
+                        int actionDelay = TempoPrototypeMode.GetActionDelayForEndTurn(
+                            currentTurnUnitId,
+                            currentTurnUnit.Speed);
+                        int appliedOverloadDelay = TempoPrototypeMode.IsActive ? 0 : overloadDelay;
+                        ATB.Reschedule(currentTurnUnitId, actionDelay, appliedOverloadDelay);
                         // 记录已落账的过载负债，供肾上腺素（ClearOverload）拉回
-                        currentTurnUnit.AppliedOverloadRoundDelay = overloadDelay;
+                        currentTurnUnit.AppliedOverloadRoundDelay = appliedOverloadDelay;
                         ATB.TriggerNextUnit();
                         Debug.Log($"[UI_BattleScene] 玩家回合结束，重排 {currentTurnUnitId} (speed={currentTurnUnit.Speed}, overload={overloadDelay})");
                         yield break;

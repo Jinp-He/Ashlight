@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Battle.Core.Engine;
+using Ashlight.Common.Events;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -126,6 +127,30 @@ namespace Ashlight.Battle.Core.Commands
         public int GetPriority() => 90;
         public string GetCommandType() => "MoveSelfIfMoraleSpent";
         public ICommand Clone() => new MoveSelfIfMoraleSpentCommand(_moraleSpent);
+    }
+
+    public sealed class GrantDefenseIfMoraleSpentCommand : ICommand
+    {
+        private readonly bool _moraleSpent;
+        private readonly int _defense;
+
+        public GrantDefenseIfMoraleSpentCommand(bool moraleSpent, int defense)
+        {
+            _moraleSpent = moraleSpent;
+            _defense = Mathf.Max(0, defense);
+        }
+
+        public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
+        {
+            if (_moraleSpent)
+            {
+                new DefenseCommand(_defense).Execute(state, ownerId, ownerId);
+            }
+        }
+
+        public int GetPriority() => 90;
+        public string GetCommandType() => "GrantDefenseIfMoraleSpent";
+        public ICommand Clone() => new GrantDefenseIfMoraleSpentCommand(_moraleSpent, _defense);
     }
 
     public sealed class GrantTeamArmorAndConsumeMoraleCommand : ICommand

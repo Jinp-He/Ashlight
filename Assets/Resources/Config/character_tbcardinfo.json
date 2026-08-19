@@ -1433,17 +1433,12 @@
   {
     "Id": "Zhouzhou005",
     "Name": "挽袖同行",
-    "Description": "[移动]一名其他友方角色；使其获得{D}点护甲。",
+    "Description": "使一名其他友方角色获得{D}点护甲。",
     "Effects": [
-      {
-        "$type": "MovePositionEffect",
-        "EffectType": 4,
-        "mode": "Toggle"
-      },
       {
         "$type": "DefenseEffect",
         "EffectType": 1,
-        "value": 5,
+        "value": 7,
         "per_hit": false
       }
     ],
@@ -1514,32 +1509,6 @@
     "Rarity": -1,
     "IsLocked": false,
     "Energy": 1,
-    "ExecutingCost": 0,
-    "IsEthereal": false,
-    "IsExhaust": false,
-    "TargetZone": 2,
-    "CastZone": 2,
-    "IsInUpgrade": false,
-    "ChargeStartEffects": [],
-    "ChargeWhileEffects": []
-  },
-  {
-    "Id": "Zhouzhou008",
-    "Name": "预知一击",
-    "Description": "对当前公共回合的所有敌方角色造成{A}点伤害。",
-    "Effects": [
-      {
-        "$type": "AttackCurrentRoundEffect",
-        "EffectType": 0,
-        "damage": 4
-      }
-    ],
-    "CardType": 0,
-    "BelongTo": 2,
-    "TargetType": 4,
-    "Rarity": -1,
-    "IsLocked": false,
-    "Energy": 0,
     "ExecutingCost": 0,
     "IsEthereal": false,
     "IsExhaust": false,
@@ -1629,7 +1598,7 @@
   {
     "Id": "Zhouzhou012",
     "Name": "回锋",
-    "Description": "造成{A}点伤害；若这张牌消耗了[士气]，随后[移动]。",
+    "Description": "造成{A}点伤害；若这张牌消耗了[士气]，获得{D}点护甲。",
     "Effects": [
       {
         "$type": "AttackEffect",
@@ -1656,7 +1625,7 @@
   {
     "Id": "Zhouzhou013",
     "Name": "行云",
-    "Description": "[移动]；若移动后拥有3层[士气]，抽1张牌。",
+    "Description": "这个回合中，你首次成功移动后，抽1张牌。",
     "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
@@ -1676,8 +1645,21 @@
   {
     "Id": "Zhouzhou014",
     "Name": "折返",
-    "Description": "连续[移动]2次；第二次移动成功后，获得1层[闪避]。",
-    "Effects": [],
+    "Description": "获得{D}点护甲和[闪避]{F}。",
+    "Effects": [
+      {
+        "$type": "DefenseEffect",
+        "EffectType": 1,
+        "value": 4,
+        "per_hit": false
+      },
+      {
+        "$type": "BuffEffect",
+        "EffectType": 6,
+        "buff_id": "Dodge",
+        "value": 1
+      }
+    ],
     "CardType": 0,
     "BelongTo": 2,
     "TargetType": 2,
@@ -1756,7 +1738,7 @@
   {
     "Id": "Zhouzhou018",
     "Name": "飒沓流星",
-    "Description": "这个回合中，接下来每当你成功移动，抽1张牌，最多触发2次；随后[移动]，并将1张[飞刀]加入手牌。",
+    "Description": "这个回合中，接下来每当你成功移动，抽1张牌，最多触发2次；将1张[飞刀]加入手牌。",
     "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
@@ -1796,7 +1778,7 @@
   {
     "Id": "Zhouzhou020",
     "Name": "旧步重寻",
-    "Description": "获得这个回合中最近打出的一张移动主卡的0费[闪回]副本。",
+    "Description": "这个回合中，你首次成功移动后，将1张[飞刀]加入手牌。",
     "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
@@ -1894,7 +1876,7 @@
   {
     "Id": "Zhouzhou021",
     "Name": "千里不留行",
-    "Description": "这个回合中，你的移动牌费用变为0；将3张[移步]加入手牌。",
+    "Description": "这个回合中，你的移动牌费用变为0；前两次成功移动时，各将1张[飞刀]加入手牌。",
     "Effects": [],
     "CardType": 0,
     "BelongTo": 2,
@@ -1934,7 +1916,7 @@
   {
     "Id": "Zhouzhou023",
     "Name": "满场飞花",
-    "Description": "[过载]1。依次[移动]至多3名不同的友方角色；被移动的角色各获得1层[闪避]。",
+    "Description": "[过载]1。依次[移动]至多2名不同的友方角色；被移动的角色各获得1层[闪避]。",
     "Effects": [
       {
         "$type": "OverloadEffect",

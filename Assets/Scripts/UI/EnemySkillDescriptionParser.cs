@@ -21,6 +21,16 @@ namespace Scripts.UI
         private const string AmountColor = "#921303";
 
         /// <summary>
+        /// Healing amount color - green.
+        /// </summary>
+        private const string HealAmountColor = "#2E7D32";
+
+        /// <summary>
+        /// Armor amount color - dark gray.
+        /// </summary>
+        private const string DefenseAmountColor = "#5F6368";
+
+        /// <summary>
         /// 标签颜色（用于[]标签内容） - 绿色
         /// </summary>
         private const string TagColor = "#9c660a";
@@ -98,7 +108,7 @@ namespace Scripts.UI
                         {
                             // 找到目标Effect，提取数值并添加颜色标签
                             string value = GetEffectValue(effect, mode);
-                            return WrapWithColor(value, AmountColor);
+                            return WrapWithColor(value, GetAmountColor(effectType));
                         }
                         currentIndex++;
                     }
@@ -126,6 +136,23 @@ namespace Scripts.UI
                 default:
                     Debug.LogWarning($"[EnemySkillDescriptionParser] 未知的效果类型代码: {code}");
                     return EffectEnum.Null;
+            }
+        }
+
+        /// <summary>
+        /// Uses semantic colors for skill amounts while preserving the existing
+        /// red color for damage and all other effect values.
+        /// </summary>
+        private static string GetAmountColor(EffectEnum effectType)
+        {
+            switch (effectType)
+            {
+                case EffectEnum.Heal:
+                    return HealAmountColor;
+                case EffectEnum.Defense:
+                    return DefenseAmountColor;
+                default:
+                    return AmountColor;
             }
         }
 

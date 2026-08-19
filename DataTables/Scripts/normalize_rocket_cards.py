@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[2]
 CARD_PATH = ROOT / "DataTables" / "Datas" / "Character" / "#CardInfo.xlsx"
+CHARACTER_PATH = ROOT / "DataTables" / "Datas" / "Character" / "#CharaterInfo.xlsx"
 ENUM_PATH = ROOT / "DataTables" / "Datas" / "__enums__.xlsx"
 
 EFFECT_LIST_TYPE = "(list#sep=;),(Effect#sep=,)"
@@ -361,9 +362,27 @@ def main() -> None:
     wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True
     wb.save(CARD_PATH)
+
+    character_book = load_workbook(CHARACTER_PATH)
+    character_sheet = character_book["Sheet1"]
+    character_headers = {cell.value: cell.column for cell in character_sheet[1] if cell.value}
+    for row in range(4, character_sheet.max_row + 1):
+        if character_sheet.cell(row, character_headers["Character"]).value == "Rocket":
+            character_sheet.cell(row, character_headers["BaseDeck"]).value = (
+                "Rocket001,Rocket001,Rocket001,Rocket001,Rocket001,"
+                "Rocket005,Rocket005,Rocket005,Rocket005,Rocket005"
+            )
+            break
+    else:
+        raise RuntimeError("Rocket character row is missing")
+    if character_book.calculation is not None:
+        character_book.calculation.fullCalcOnLoad = True
+        character_book.calculation.forceFullCalc = True
+    character_book.save(CHARACTER_PATH)
+
     print(
         f"Normalized {len(CARDS)} Rocket cards and "
-        f"{len(EXTRA_CARDS)} inventions in {CARD_PATH}"
+        f"{len(EXTRA_CARDS)} inventions in {CARD_PATH} and updated Rocket base deck"
     )
 
 

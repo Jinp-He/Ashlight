@@ -19,6 +19,7 @@ namespace Ashlight.Systems.Map
         public MapSystem System { get; private set; }
         public MapRuntimeState CurrentState => System?.State;
         public MapRunDefinition RunDefinition { get; private set; }
+        public bool IsAwaitingBattleVictoryContinue => _returnToMapAfterBattle;
 
         private string _mapSceneName = "MapScene";
         private string _battleSceneName = "BattleScene";
@@ -115,6 +116,16 @@ namespace Ashlight.Systems.Map
             System.ResolvePendingBattle(isPlayerVictory);
         }
 
+        public bool ContinueAfterBattleVictory()
+        {
+            if (!_returnToMapAfterBattle || _isTransitioning) return false;
+
+            _returnToMapAfterBattle = false;
+            ResolvePendingBattle(true);
+            StartCoroutine(ReturnToMapAfterBattleEnd());
+            return true;
+        }
+
         private void OnMapBattleRequested(MapBattleRequestedEvent evt)
         {
             if (_isTransitioning) return;
@@ -172,6 +183,8 @@ namespace Ashlight.Systems.Map
         private void OnBattleEnded(BattleEndedEvent evt)
         {
             if (!_returnToMapAfterBattle) return;
+
+            if (evt.IsPlayerVictory) return;
 
             _returnToMapAfterBattle = false;
             ResolvePendingBattle(evt.IsPlayerVictory);

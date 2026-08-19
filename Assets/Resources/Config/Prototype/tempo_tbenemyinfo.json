@@ -1,0 +1,54 @@
+[
+  {
+    "Id": "TempoEnemyStriker",
+    "Name": "节拍处刑者",
+    "AlternativePath": "DogKnight",
+    "Hp": 72,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 0, "EnemySkillIndex": "TempoEnemySkill001", "TimeSlot": 1 }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 1, "EnemySkillIndex": "TempoEnemySkill002", "TimeSlot": 4 }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 2, "EnemySkillIndex": "TempoEnemySkill003", "TimeSlot": 3 }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "TempoEnemyOracle",
+    "Name": "迟滞观测者",
+    "AlternativePath": "Remy",
+    "Hp": 58,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 0, "EnemySkillIndex": "TempoEnemySkill004", "TimeSlot": 2 }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 1, "EnemySkillIndex": "TempoEnemySkill005", "TimeSlot": 3 }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          { "EnemyIntentionType": 2, "EnemySkillIndex": "TempoEnemySkill006", "TimeSlot": 4 }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  }
+]

@@ -60,6 +60,9 @@ namespace Scripts.UI
         /// 更新所有单位显示的回调
         /// </summary>
         private Action _updateAllUnitsCallback;
+        private Coroutine _screenShakeCoroutine;
+        private RectTransform _screenShakeTarget;
+        private readonly List<float> _pendingShakeStartTimes = new List<float>();
 
         #endregion
 
@@ -82,6 +85,16 @@ namespace Scripts.UI
             _unitUIManager = unitUIManager;
             _battleAnimationRect = battleAnimationRect;
             _updateAllUnitsCallback = updateAllUnitsCallback;
+        }
+
+        private void OnDisable()
+        {
+            if (_screenShakeCoroutine != null)
+                StopCoroutine(_screenShakeCoroutine);
+            _screenShakeCoroutine = null;
+            _pendingShakeStartTimes.Clear();
+            if (_screenShakeTarget != null)
+                _screenShakeTarget.anchoredPosition = Vector2.zero;
         }
 
         /// <summary>
@@ -272,19 +285,25 @@ namespace Scripts.UI
                     continue;
                 }
 
-                if (hit.ArmorDamage > 0)
-                {
-                    ShowFloatingLabel(targetUI.transform.position + new Vector3(-0.35f, 0f, 0f), hit.ArmorDamage.ToString(), Color.gray);
-                }
+                // 演出中的 AB 使用结算后的状态：先同步血量/护甲，再把真实 UI 抽到演出层。
+                UpdateUnitDisplay(casterUI);
+                UpdateUnitDisplay(targetUI);
 
                 yield return battleAnimComponent.PlayBattleAnimation(
                     casterState,
                     targetState,
                     casterUI,
                     targetUI,
-                    evt.IsAttackCard,
+                    evt.IsAttackCard && hit.HealthDamage + hit.ArmorDamage > 0,
                     hit.HealthDamage,
-                    () => UpdateUnitDisplay(targetUI)
+                    () =>
+                    {
+                        if (hit.ArmorDamage > 0)
+                        {
+                            ShowFloatingLabel(targetUI.transform.position + new Vector3(-0.35f, 0f, 0f), hit.ArmorDamage.ToString(), Color.gray);
+                        }
+                        PlayCardImpactShake(hit.HealthDamage, hit.ArmorDamage);
+                    }
                 );
             }
 
@@ -337,6 +356,66 @@ namespace Scripts.UI
         #endregion
 
         #region 视觉效果
+
+        private void PlayCardImpactShake(int healthDamage, int armorDamage)
+        {
+            if (_battleManager == null
+                || !_battleManager.EnableCardPlayScreenShake
+                || healthDamage + armorDamage <= 0
+                || _battleManager.CardPlayScreenShakeStrength <= 0f)
+            {
+                return;
+            }
+
+            BattleAnimation_CenterStage centerStage = _battleAnimationRect != null
+                ? _battleAnimationRect.GetComponent<BattleAnimation_CenterStage>()
+                : null;
+            RectTransform shakeTarget = centerStage != null
+                ? centerStage.GetPresentationRoot()
+                : _battleAnimationRect;
+            if (shakeTarget == null)
+                return;
+
+            _screenShakeTarget = shakeTarget;
+            _pendingShakeStartTimes.Add(Time.unscaledTime + _battleManager.CardPlayScreenShakeDelay);
+            if (_screenShakeCoroutine == null)
+                _screenShakeCoroutine = StartCoroutine(PlayLinearShake());
+        }
+
+        private IEnumerator PlayLinearShake()
+        {
+            float duration = Mathf.Max(0.01f, _battleManager.CardPlayScreenShakeDuration);
+            if (_screenShakeTarget != null)
+                _screenShakeTarget.anchoredPosition = Vector2.zero;
+
+            while (_pendingShakeStartTimes.Count > 0 && _screenShakeTarget != null)
+            {
+                float now = Time.unscaledTime;
+                float maximumAmplitude = 0f;
+                for (int i = _pendingShakeStartTimes.Count - 1; i >= 0; i--)
+                {
+                    float elapsed = now - _pendingShakeStartTimes[i];
+                    if (elapsed >= duration)
+                    {
+                        _pendingShakeStartTimes.RemoveAt(i);
+                        continue;
+                    }
+                    if (elapsed >= 0f)
+                    {
+                        float amplitude = _battleManager.CardPlayScreenShakeStrength * (1f - elapsed / duration);
+                        maximumAmplitude = Mathf.Max(maximumAmplitude, amplitude);
+                    }
+                }
+
+                _screenShakeTarget.anchoredPosition = UnityEngine.Random.insideUnitCircle * maximumAmplitude;
+                yield return null;
+            }
+
+            if (_screenShakeTarget != null)
+                _screenShakeTarget.anchoredPosition = Vector2.zero;
+            _pendingShakeStartTimes.Clear();
+            _screenShakeCoroutine = null;
+        }
 
         /// <summary>
         /// 应用攻击演出效果（无关角色变黑，有关角色放大）

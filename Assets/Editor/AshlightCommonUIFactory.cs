@@ -707,15 +707,27 @@ namespace Ashlight.EditorTools
     public sealed class AshlightCommonUISpriteImporter : AssetPostprocessor
     {
         private const string SpriteRoot = "Assets/Resources/UI/CommonGUI/Sprites/";
+        private const string BattleCutsceneRoot = "Assets/Resources/UI/BattleScene/BattleCutscene/";
         private const string ImportMarker = "AshlightCommonGUI:v1";
 
         private void OnPreprocessTexture()
         {
-            if (!assetPath.StartsWith(SpriteRoot, StringComparison.OrdinalIgnoreCase))
+            bool isCommonUi = assetPath.StartsWith(SpriteRoot, StringComparison.OrdinalIgnoreCase);
+            bool isBattleCutscene = assetPath.StartsWith(BattleCutsceneRoot, StringComparison.OrdinalIgnoreCase);
+            if (!isCommonUi && !isBattleCutscene)
                 return;
 
             TextureImporter importer = (TextureImporter)assetImporter;
             ApplyImporterSettings(importer, assetPath);
+            if (isBattleCutscene)
+            {
+                // 演出帧需要保持原始边缘和尺寸，禁用压缩避免连续播放时出现色块/抖边。
+                importer.textureCompression = TextureImporterCompression.Uncompressed;
+                var textureSettings = new TextureImporterSettings();
+                importer.ReadTextureSettings(textureSettings);
+                textureSettings.spriteMeshType = SpriteMeshType.FullRect;
+                importer.SetTextureSettings(textureSettings);
+            }
         }
 
         public static void ConfigureExistingSprites(bool force = false)

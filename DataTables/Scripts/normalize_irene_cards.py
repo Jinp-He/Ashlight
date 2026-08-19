@@ -242,8 +242,8 @@ def main() -> None:
     for row in range(4, character_sheet.max_row + 1):
         if character_sheet.cell(row, character_headers["Character"]).value == "Irene":
             character_sheet.cell(row, character_headers["BaseDeck"]).value = (
-                "Irene001,Irene001,Irene002,Irene006,Irene007,"
-                "Irene003,Irene004,Irene008,Irene010,Irene012"
+                "Irene001,Irene001,Irene001,Irene001,Irene001,"
+                "Irene002,Irene002,Irene002,Irene002,Irene002"
             )
             break
     else:

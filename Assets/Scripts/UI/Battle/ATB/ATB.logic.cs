@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Common.Utils;
+using Ashlight.Config;
 using System;
 using System.Linq;
 
@@ -586,7 +587,7 @@ namespace Scripts.UI
 
         /// <summary>
         /// 【公共回合镜像】把调度同步进战场快照：CurrentRound + 各单位 NextActionRound。
-        /// Core 命令（预知一击/示现/全知全闪、[执行]中判定等）只读这份镜像。
+        /// Core 命令（示现/全知全闪、[执行]中判定等）只读这份镜像。
         /// 在每个原子回合开始、以及 ApplyPendingDelays 落账后调用。
         /// </summary>
         public void SyncScheduleToState(BattleStateSnapshot state)
@@ -842,6 +843,15 @@ namespace Scripts.UI
                 : AssetPath.GetEnemyIconAssetPath(configId);
 
             var sprite = Resources.Load<Sprite>(path);
+            if (sprite == null && !isPlayer)
+            {
+                var enemyInfo = ConfigLoader.Tables?.TbEnemyInfo?.GetOrDefault(configId);
+                if (enemyInfo != null && !string.IsNullOrEmpty(enemyInfo.AlternativePath))
+                {
+                    path = AssetPath.GetEnemyIconAssetPath(enemyInfo.AlternativePath);
+                    sprite = Resources.Load<Sprite>(path);
+                }
+            }
             if (sprite == null)
             {
                 Debug.LogWarning($"[ATB] 未找到图标 Sprite: {path}");

@@ -2043,9 +2043,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   descriptionViewControllerPrefab: {fileID: 1718052173079804665, guid: 0def1198c3a25a44daa225fc3f941036, type: 3}
-  hoverScale: 1.8
+  hoverScale: 1.4
   scaleDuration: 0.2
-  hoverLiftDistance: 80
+  hoverLiftDistance: 50
   descriptionOffset: {x: 300, y: 0}
   hoverSortingOrder: 100
   dragScale: 1.8

@@ -1,9 +1,59 @@
 [
   {
+    "Id": "UP_Common_001",
+    "Name": "强健根基",
+    "IsCommon": true,
+    "Theme": "Common",
+    "Description": "最大生命 +6",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyUnitStat",
+        "stat": "MaxHp",
+        "delta": 6,
+        "target": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Common_002",
+    "Name": "战斗专注",
+    "IsCommon": true,
+    "Theme": "Common",
+    "Description": "战斗开始时获得 1 点力量",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "GrantBuff",
+        "buff_id": "Strength",
+        "stack": 1,
+        "target": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Common_003",
+    "Name": "灵巧身法",
+    "IsCommon": true,
+    "Theme": "Common",
+    "Description": "战斗开始时获得 1 点敏捷",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "GrantBuff",
+        "buff_id": "Dexterity",
+        "stack": 1,
+        "target": 2
+      }
+    ]
+  },
+  {
     "Id": "UP_Rocket_001",
-    "Name": "强化爆破",
+    "Name": "强化挥砍",
     "BelongTo": 1,
-    "Description": "「爆破」造成的伤害 +5",
+    "IsCommon": false,
+    "Theme": "DirectAttack",
+    "Description": "「挥砍」造成的伤害 +5",
     "Rarity": 0,
     "Effects": [
       {
@@ -16,9 +66,11 @@
   },
   {
     "Id": "UP_Rocket_002",
-    "Name": "连锁爆破",
+    "Name": "横扫挥砍",
     "BelongTo": 1,
-    "Description": "「爆破」改为对全体敌人造成伤害",
+    "IsCommon": false,
+    "Theme": "DirectAttack",
+    "Description": "「挥砍」改为对全体敌人造成伤害",
     "Rarity": 1,
     "Prerequisite": "UP_Rocket_001",
     "Effects": [
@@ -31,9 +83,123 @@
     ]
   },
   {
+    "Id": "UP_Rocket_003",
+    "Name": "复合装甲",
+    "BelongTo": 1,
+    "IsCommon": false,
+    "Theme": "Armor",
+    "Description": "所有护甲牌的护甲 +2",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "All",
+        "stat": "Defense",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Rocket_004",
+    "Name": "战线加固",
+    "BelongTo": 1,
+    "IsCommon": false,
+    "Theme": "Armor",
+    "Description": "「举盾」「装甲齐射」「阵线加固」「应急装甲」「区域装甲」「推进阵线」的护甲额外 +2",
+    "Rarity": 1,
+    "Prerequisite": "UP_Rocket_003",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket005",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket011",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket012",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket016",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket019",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket020",
+        "stat": "Defense",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Rocket_005",
+    "Name": "过载弹头",
+    "BelongTo": 1,
+    "IsCommon": false,
+    "Theme": "Overload",
+    "Description": "「超载火炮」「震荡冲击」造成的伤害 +3",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket004",
+        "stat": "Damage",
+        "delta": 3
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket017",
+        "stat": "Damage",
+        "delta": 3
+      }
+    ]
+  },
+  {
+    "Id": "UP_Rocket_006",
+    "Name": "临界超载",
+    "BelongTo": 1,
+    "IsCommon": false,
+    "Theme": "Overload",
+    "Description": "「超载火炮」「震荡冲击」造成的伤害额外 +4",
+    "Rarity": 1,
+    "Prerequisite": "UP_Rocket_005",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket004",
+        "stat": "Damage",
+        "delta": 4
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Rocket017",
+        "stat": "Damage",
+        "delta": 4
+      }
+    ]
+  },
+  {
     "Id": "UP_Irene_001",
     "Name": "凝神",
     "BelongTo": 0,
+    "IsCommon": false,
+    "Theme": "General",
     "Description": "战斗开始时获得 2 点力量",
     "Rarity": 0,
     "Effects": [
@@ -46,9 +212,87 @@
     ]
   },
   {
+    "Id": "UP_Irene_002",
+    "Name": "咏唱增幅",
+    "BelongTo": 0,
+    "IsCommon": false,
+    "Theme": "Execution",
+    "Description": "所有执行牌造成的伤害 +2",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "CardType:Execution",
+        "stat": "Damage",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Irene_003",
+    "Name": "长线蓄能",
+    "BelongTo": 0,
+    "IsCommon": false,
+    "Theme": "Execution",
+    "Description": "所有执行牌造成的伤害额外 +3",
+    "Rarity": 1,
+    "Prerequisite": "UP_Irene_002",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "CardType:Execution",
+        "stat": "Damage",
+        "delta": 3
+      }
+    ]
+  },
+  {
+    "Id": "UP_Irene_004",
+    "Name": "雷云导体",
+    "BelongTo": 0,
+    "IsCommon": false,
+    "Theme": "Weather",
+    "Description": "「连锁闪电」造成的伤害 +4",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Irene009",
+        "stat": "Damage",
+        "delta": 4
+      }
+    ]
+  },
+  {
+    "Id": "UP_Irene_005",
+    "Name": "风暴共鸣",
+    "BelongTo": 0,
+    "IsCommon": false,
+    "Theme": "Weather",
+    "Description": "「连锁闪电」造成的伤害额外 +6；「终焉倒数」造成的伤害 +4",
+    "Rarity": 1,
+    "Prerequisite": "UP_Irene_004",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Irene009",
+        "stat": "Damage",
+        "delta": 6
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Irene020",
+        "stat": "Damage",
+        "delta": 4
+      }
+    ]
+  },
+  {
     "Id": "UP_Zhouzhou_001",
     "Name": "坚守",
     "BelongTo": 2,
+    "IsCommon": false,
+    "Theme": "General",
     "Description": "最大生命 +8",
     "Rarity": 2,
     "Effects": [
@@ -57,6 +301,94 @@
         "stat": "MaxHp",
         "delta": 8,
         "target": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Zhouzhou_002",
+    "Name": "流动掩护",
+    "BelongTo": 2,
+    "IsCommon": false,
+    "Theme": "Movement",
+    "Description": "「挽袖同行」「游身」提供的护甲 +2",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Zhouzhou005",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Zhouzhou007",
+        "stat": "Defense",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Zhouzhou_003",
+    "Name": "无痕折返",
+    "BelongTo": 2,
+    "IsCommon": false,
+    "Theme": "Movement",
+    "Description": "「挽袖同行」「游身」提供的护甲额外 +2",
+    "Rarity": 1,
+    "Prerequisite": "UP_Zhouzhou_002",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Zhouzhou005",
+        "stat": "Defense",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Zhouzhou007",
+        "stat": "Defense",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Zhouzhou_004",
+    "Name": "飞刃随行",
+    "BelongTo": 2,
+    "IsCommon": false,
+    "Theme": "Movement",
+    "Description": "「飞刀」造成的伤害 +2",
+    "Rarity": 0,
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Extra001",
+        "stat": "Damage",
+        "delta": 2
+      }
+    ]
+  },
+  {
+    "Id": "UP_Zhouzhou_005",
+    "Name": "连步追刃",
+    "BelongTo": 2,
+    "IsCommon": false,
+    "Theme": "Movement",
+    "Description": "「飞刀」造成的伤害额外 +2；「钩锁」造成的伤害 +2",
+    "Rarity": 1,
+    "Prerequisite": "UP_Zhouzhou_004",
+    "Effects": [
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Extra001",
+        "stat": "Damage",
+        "delta": 2
+      },
+      {
+        "$type": "ModifyCardStat",
+        "selector": "Zhouzhou011",
+        "stat": "Damage",
+        "delta": 2
       }
     ]
   }

@@ -51,7 +51,6 @@ BALANCE_DATA = {
     "Zhouzhou004": {"damage": 12},         # 多重射击: AOE 15→12
     "Zhouzhou005": {"damage": 25},         # 狙击: 5格 60→25
     "Zhouzhou006": {"damage": 8},          # 后撤步: 迅捷+控制 5→8
-    "Zhouzhou008": {"damage": 12, "bonus_damage": 12},  # 致命射击: 25+25→12+12
     "Zhouzhou012": {"damage": 18},         # 穿云箭: 穿甲 40→18
 }
 

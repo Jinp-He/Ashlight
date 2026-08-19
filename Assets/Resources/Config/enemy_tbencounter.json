@@ -103,13 +103,11 @@
     "Id": "M102",
     "EnemySet": [
       "EnemyM01",
-      "EnemyM01",
-      "EnemyM01"
+      "EnemyM02"
     ],
     "StrategySet": [
       {
         "EnemyIntentionsScript": [
-          0,
           0,
           0
         ],
@@ -120,8 +118,8 @@
   {
     "Id": "M103",
     "EnemySet": [
-      "EnemyM02",
-      "EnemyM02"
+      "EnemyM01",
+      "EnemyM03"
     ],
     "StrategySet": [
       {
@@ -136,8 +134,8 @@
   {
     "Id": "M104",
     "EnemySet": [
-      "EnemyM03",
-      "EnemyM01"
+      "EnemyM02",
+      "EnemyM03"
     ],
     "StrategySet": [
       {
@@ -185,13 +183,11 @@
     "Id": "W102",
     "EnemySet": [
       "EnemyW01",
-      "EnemyW01",
-      "EnemyW01"
+      "EnemyW02"
     ],
     "StrategySet": [
       {
         "EnemyIntentionsScript": [
-          0,
           0,
           0
         ],
@@ -202,8 +198,8 @@
   {
     "Id": "W103",
     "EnemySet": [
-      "EnemyW02",
-      "EnemyW02"
+      "EnemyW01",
+      "EnemyW03"
     ],
     "StrategySet": [
       {
@@ -218,8 +214,8 @@
   {
     "Id": "W104",
     "EnemySet": [
-      "EnemyW03",
-      "EnemyW01"
+      "EnemyW02",
+      "EnemyW03"
     ],
     "StrategySet": [
       {

@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 using TMPro;
 using DG.Tweening;
 using Ashlight.Battle;
+using Ashlight.Systems.Map;
 
 namespace Scripts.UI
 {
@@ -164,6 +165,11 @@ namespace Scripts.UI
 
         private void OnNextBattleClicked()
         {
+            if (MapRunSession.Instance != null && MapRunSession.Instance.ContinueAfterBattleVictory())
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(nextEncounterId))
             {
                 Debug.LogWarning("[WinPanel] 未配置下一关 EncounterId，保持在结算界面");

@@ -98,12 +98,6 @@ CARD_UPDATES = {
         "Rarity": "稀有",
     },
     "Zhouzhou007": {"Rarity": "稀有"},
-    "Zhouzhou008": {
-        "Description": "[过载]1：使目标[推迟]{T}格。",
-        "Effects": "OverloadEffect,F,1;PushCollisionEffect,T,2,None",
-        "Energy": 0,
-        "Rarity": "稀有",
-    },
     "Zhouzhou009": {
         "Effects": "OverloadEffect,F,2;AttackEffect,A,4,true;AttackEffect,A,4,true;AttackEffect,A,4,true",
         "Energy": 0,

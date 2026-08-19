@@ -19,7 +19,9 @@ public sealed partial class UpgradeOptions : Luban.BeanBase
     {
         { if(!_buf["Id"].IsString) { throw new SerializationException(); }  Id = _buf["Id"]; }
         { if(!_buf["Name"].IsString) { throw new SerializationException(); }  Name = _buf["Name"]; }
-        { if(!_buf["BelongTo"].IsNumber) { throw new SerializationException(); }  BelongTo = (CharacterEnum)_buf["BelongTo"].AsInt; }
+        { var _j = _buf["BelongTo"]; if (_j.Tag != JSONNodeType.None && _j.Tag != JSONNodeType.NullValue) { { if(!_j.IsNumber) { throw new SerializationException(); }  BelongTo = (CharacterEnum?)_j.AsInt; } } else { BelongTo = null; } }
+        { if(!_buf["IsCommon"].IsBoolean) { throw new SerializationException(); }  IsCommon = _buf["IsCommon"]; }
+        { if(!_buf["Theme"].IsString) { throw new SerializationException(); }  Theme = _buf["Theme"]; }
         { if(!_buf["Description"].IsString) { throw new SerializationException(); }  Description = _buf["Description"]; }
         { if(!_buf["Rarity"].IsNumber) { throw new SerializationException(); }  Rarity = (RarityEnum)_buf["Rarity"].AsInt; }
         { var _j = _buf["Prerequisite"]; if (_j.Tag != JSONNodeType.None && _j.Tag != JSONNodeType.NullValue) { { if(!_j.IsString) { throw new SerializationException(); }  Prerequisite = _j; } } else { Prerequisite = null; } }
@@ -40,9 +42,17 @@ public sealed partial class UpgradeOptions : Luban.BeanBase
     /// </summary>
     public readonly string Name;
     /// <summary>
-    /// 从属角色
+    /// 从属角色(公共选项留空)
     /// </summary>
-    public readonly CharacterEnum BelongTo;
+    public readonly CharacterEnum? BelongTo;
+    /// <summary>
+    /// 是否进入所有角色的公共池
+    /// </summary>
+    public readonly bool IsCommon;
+    /// <summary>
+    /// 构筑主题；副选项必须与前置主题一致
+    /// </summary>
+    public readonly string Theme;
     /// <summary>
     /// 升级文本
     /// </summary>
@@ -74,6 +84,8 @@ public sealed partial class UpgradeOptions : Luban.BeanBase
         + "Id:" + Id + ","
         + "Name:" + Name + ","
         + "BelongTo:" + BelongTo + ","
+        + "IsCommon:" + IsCommon + ","
+        + "Theme:" + Theme + ","
         + "Description:" + Description + ","
         + "Rarity:" + Rarity + ","
         + "Prerequisite:" + Prerequisite + ","

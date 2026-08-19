@@ -67,6 +67,10 @@ AI 必须先建立以下字典，再解析业务表单元格：
   - 输入：`DataTables/Datas/Character/#CharaterInfo.xlsx`
   - 输出：`Assets/Resources/Config/character_tbcharaterinfo.json`
   - 记录类：`cfg.Character.CharaterInfo`
+- `Character.TbUpgradeOptions`
+  - 输入：`DataTables/Datas/Character/#UpgradeOptions.xlsx`
+  - 输出：`Assets/Resources/Config/character_tbupgradeoptions.json`
+  - 记录类：`cfg.Character.UpgradeOptions`
 - `Enemy.TbEnemyInfo`  
   - 输入：`DataTables/Datas/Enemy/#EnemyInfo.xlsx`
   - 输出：`Assets/Resources/Config/enemy_tbenemyinfo.json`
@@ -123,6 +127,17 @@ AI 必须先建立以下字典，再解析业务表单元格：
 - `Encounter.EnemySet` -> `string#ref=Enemy.TbEnemyInfo`  
   生成后会在运行时解析为 `EnemySet_Ref`。
 - `EnemyIntention.EnemySkillIndex` -> `string#ref=Enemy.TbEnemySkillInfo`
+
+### 6.3 UpgradeEffect 多态层级
+
+- 抽象基类：`cfg.UpgradeEffect`
+- 已生成派生：
+  - `GrantBuff`
+  - `ModifyUnitStat`
+  - `ModifyCardStat`
+  - `ModifyCardFlag`
+- `UpgradeOptions.IsCommon=true` 表示公共池，公共项的 `BelongTo` 留空。
+- 有 `Prerequisite` 的副选项必须与前置项的 `Theme`、公共/职业池及所属角色一致。
 
 ## 7. AI 读取时的强制校验清单
 

@@ -357,7 +357,7 @@
   {
     "Id": "EnemyM01",
     "Name": "灰袍信徒",
-    "AlternativePath": "Grey",
+    "AlternativePath": "AshrobeDevotee",
     "Hp": 36,
     "Speed": 2,
     "IntentionSet": [
@@ -386,7 +386,7 @@
   {
     "Id": "EnemyM02",
     "Name": "蒙眼侍僧",
-    "AlternativePath": "Tusk",
+    "AlternativePath": "VeiledAcolyte",
     "Hp": 54,
     "Speed": 3,
     "IntentionSet": [
@@ -415,7 +415,7 @@
   {
     "Id": "EnemyM03",
     "Name": "戒律执事",
-    "AlternativePath": "Banner",
+    "AlternativePath": "TheDisciplinarian",
     "Hp": 72,
     "Speed": 4,
     "IntentionSet": [

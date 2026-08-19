@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Ashlight.Battle.Core.Commands
 {
     /// <summary>
-    /// 对「当前公共回合将行动」的所有敌对单位造成伤害，对应 AttackCurrentRoundEffect（预知一击）。
+    /// 对「当前公共回合将行动」的所有敌对单位造成伤害，对应 AttackCurrentRoundEffect。
     /// 目标判定 = NextActionRound == CurrentRound（公共回合镜像，见 BattleStateSnapshot.GetCurrentRoundOpponents）。
     /// 本回合无敌人行动时打空（miss，不回退全体）。
     /// </summary>

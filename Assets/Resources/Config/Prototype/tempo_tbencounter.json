@@ -1,0 +1,15 @@
+[
+  {
+    "Id": "TempoEncounter001",
+    "EnemySet": [
+      "TempoEnemyStriker",
+      "TempoEnemyOracle"
+    ],
+    "StrategySet": [
+      {
+        "EnemyIntentionsScript": [0, 0],
+        "Weight": 1
+      }
+    ]
+  }
+]

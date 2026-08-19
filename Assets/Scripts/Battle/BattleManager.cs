@@ -4,6 +4,7 @@ using System.Linq;
 using Ashlight.Battle.Core.Commands;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Battle.Core.Engine;
+using Ashlight.Battle.Prototype;
 using Ashlight.Common.Events;
 using Ashlight.Config;
 using Ashlight.State.Runtime;
@@ -36,6 +37,33 @@ namespace Ashlight.Battle
         private const string DivinationCurseCardId = "Extra006";
 
         public static BattleManager Instance { get; private set; }
+
+        [Header("打牌反馈 - 屏幕震动")]
+        [SerializeField]
+        [Tooltip("是否启用打牌或怪物意图命中时的屏幕震动")]
+        private bool enableCardPlayScreenShake = true;
+
+        [SerializeField, Range(0f, 40f)]
+        [Tooltip("屏幕震动基础幅度；设为0等同关闭")]
+        private float cardPlayScreenShakeStrength = 3f;
+
+        [SerializeField, Range(0.02f, 0.5f)]
+        [Tooltip("单次屏幕震动持续时间")]
+        private float cardPlayScreenShakeDuration = 0.25f;
+
+        [SerializeField, Range(0f, 1f)]
+        [Tooltip("从命中到震动开始的延迟")]
+        private float cardPlayScreenShakeDelay = 0.3f;
+
+        [SerializeField, Range(1, 30)]
+        [Tooltip("单次震动的频率")]
+        private int cardPlayScreenShakeVibrato = 12;
+
+        public bool EnableCardPlayScreenShake => enableCardPlayScreenShake;
+        public float CardPlayScreenShakeStrength => cardPlayScreenShakeStrength;
+        public float CardPlayScreenShakeDuration => cardPlayScreenShakeDuration;
+        public float CardPlayScreenShakeDelay => cardPlayScreenShakeDelay;
+        public int CardPlayScreenShakeVibrato => cardPlayScreenShakeVibrato;
 
         /// <summary>
         /// 待加载的遭遇战 ID：VictoryPanel "继续" 按钮设置后重载 BattleScene，
@@ -246,6 +274,8 @@ namespace Ashlight.Battle
         /// <param name="battleInfo">战斗初始化参数</param>
         public void InitializeBattle(BattleInfo battleInfo)
         {
+            TempoPrototypeMode.PrepareBattleInfo(battleInfo);
+
             if (battleInfo == null || !battleInfo.IsValid())
             {
                 Debug.LogError("[BattleManager] 战斗初始化失败：BattleInfo无效");
@@ -275,7 +305,10 @@ namespace Ashlight.Battle
             InitializeDeckSystem(battleInfo.PlayerCharacters, battleInfo.InitialDrawCount);
 
             // 3.5 应用已获得的升级效果（贴永久buff / 改单位属性 / 写卡牌修正表）
-            UpgradeEffectApplier.Apply(CurrentState, battleInfo.PlayerCharacters);
+            if (!TempoPrototypeMode.IsActive)
+            {
+                UpgradeEffectApplier.Apply(CurrentState, battleInfo.PlayerCharacters);
+            }
 
             // 4. 保存初始快照
             SaveInitialSnapshot();
@@ -303,6 +336,12 @@ namespace Ashlight.Battle
         private void RollWeather()
         {
             CurrentWeather = null;
+
+            if (TempoPrototypeMode.IsActive)
+            {
+                Debug.Log("[TempoPrototype] 原型战斗关闭随机天气，避免干扰行动间隔测试。");
+                return;
+            }
 
             var table = ConfigLoader.Tables?.TbWeatherInfo;
             if (table == null || table.DataList == null || table.DataList.Count == 0)
@@ -409,7 +448,7 @@ namespace Ashlight.Battle
                 var characterState = CharacterSystem.GetCharacterState(characterId);
                 int currentHp = characterConfig.BaseHp; // 默认使用配置表的最大血量
 
-                if (characterState != null)
+                if (characterState != null && !TempoPrototypeMode.IsActive)
                 {
                     // 如果找到运行时状态，使用运行时的当前血量
                     currentHp = characterState.CurrentHp;
@@ -530,6 +569,11 @@ namespace Ashlight.Battle
             }
 
             // 如果没有任何卡牌，至少创建一些基础卡牌以便测试
+            if (TempoPrototypeMode.IsActive)
+            {
+                allCards = TempoPrototypeMode.CreatePrototypeDeck(characters);
+            }
+
             if (allCards.Count == 0)
             {
                 Debug.LogWarning($"[BattleManager] 没有找到任何卡牌，创建最小测试卡组");
@@ -743,6 +787,12 @@ namespace Ashlight.Battle
                 return false;
             }
 
+            if (!TempoPrototypeMode.CanPlayCard(ownerId))
+            {
+                Debug.LogWarning($"[TempoPrototype] {ownerId} 本次行动已经打出一张牌。");
+                return false;
+            }
+
             // 【近战/远程】单体牌索敌分区限制：目标必须站在卡牌声明的排
             bool isMultiAllyTarget = cardInfo.Id == "Zhouzhou023";
             var zoneTarget = string.IsNullOrEmpty(targetId) ? null : CurrentState.GetUnitById(targetId.Split('|')[0]);
@@ -793,7 +843,8 @@ namespace Ashlight.Battle
                 CardId = cardInfo.Id,
                 IsAttackCard = isAttackCard,
                 IsPrediction = false,
-                SkipBattleAnimation = skipBattleAnimation
+                SkipBattleAnimation = skipBattleAnimation,
+                UseCenterStage = !skipBattleAnimation
             });
 
             // 通过 CardPlayResolver 直接结算卡牌效果
@@ -853,6 +904,7 @@ namespace Ashlight.Battle
                 PredictionManager.TriggerPrediction("卡牌立即执行");
             }
 
+            TempoPrototypeMode.RecordSuccessfulCard(ownerId, cardInfo);
             return true;
         }
 
@@ -891,6 +943,12 @@ namespace Ashlight.Battle
             if (owner == null || owner.IsDead || !owner.IsPlayerUnit)
             {
                 Debug.LogWarning($"[BattleManager] 无法挂起执行牌：施法者无效 ownerId={ownerId}");
+                return false;
+            }
+
+            if (!TempoPrototypeMode.CanPlayCard(ownerId))
+            {
+                Debug.LogWarning($"[TempoPrototype] {ownerId} 本次行动已经打出一张牌。");
                 return false;
             }
 
@@ -983,6 +1041,7 @@ namespace Ashlight.Battle
                 PredictionManager.TriggerPrediction("执行牌挂起");
             }
 
+            TempoPrototypeMode.RecordSuccessfulCard(ownerId, cardInfo);
             return true;
         }
 
@@ -1007,6 +1066,12 @@ namespace Ashlight.Battle
             if (owner == null || owner.IsDead || !owner.IsPlayerUnit || target == null || target.IsDead)
             {
                 Debug.LogWarning($"[BattleManager] 无法开始蓄力：施法者或目标无效 owner={ownerId}, target={targetId}");
+                return false;
+            }
+
+            if (!TempoPrototypeMode.CanPlayCard(ownerId))
+            {
+                Debug.LogWarning($"[TempoPrototype] {ownerId} 本次行动已经打出一张牌。");
                 return false;
             }
 
@@ -1062,6 +1127,7 @@ namespace Ashlight.Battle
             });
 
             PredictionManager?.TriggerPrediction("开始蓄力");
+            TempoPrototypeMode.RecordSuccessfulCard(ownerId, cardInfo);
             return true;
         }
 
@@ -1281,6 +1347,8 @@ namespace Ashlight.Battle
                 return;
             }
 
+            TempoPrototypeMode.BeginPlayerTurn(unitId);
+
             // 新回合重置「每回合限挂 1 张执行牌」标记（在轨引线保留，不受新回合影响）
             _executionHungCountThisTurn.Remove(unitId);
             _chargeStartedThisTurn.Remove(unitId);
@@ -1466,6 +1534,11 @@ namespace Ashlight.Battle
             if (card == null)
             {
                 return 0;
+            }
+
+            if (TempoPrototypeMode.IsActive && TempoPrototypeMode.IsPrototypeCard(card))
+            {
+                return Mathf.Max(1, card.Energy);
             }
 
             int baseCost = GetCardEnergyCost(card);

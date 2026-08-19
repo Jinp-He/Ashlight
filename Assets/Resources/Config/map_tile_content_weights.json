@@ -2,9 +2,9 @@
   "Rows": [
     {
       "Shape": "End",
-      "EmptyRoadWeight": 65,
-      "BattleWeight": 15,
-      "EventWeight": 18,
+      "EmptyRoadWeight": 70,
+      "BattleWeight": 20,
+      "EventWeight": 8,
       "EliteWeight": 2,
       "BattleEncounterId": "E001",
       "EliteEncounterId": "E101"
@@ -12,8 +12,8 @@
     {
       "Shape": "Straight",
       "EmptyRoadWeight": 45,
-      "BattleWeight": 30,
-      "EventWeight": 20,
+      "BattleWeight": 40,
+      "EventWeight": 10,
       "EliteWeight": 5,
       "BattleEncounterId": "E001",
       "EliteEncounterId": "E101"
@@ -21,8 +21,8 @@
     {
       "Shape": "Turn",
       "EmptyRoadWeight": 45,
-      "BattleWeight": 25,
-      "EventWeight": 25,
+      "BattleWeight": 35,
+      "EventWeight": 15,
       "EliteWeight": 5,
       "BattleEncounterId": "E001",
       "EliteEncounterId": "E101"
@@ -30,8 +30,8 @@
     {
       "Shape": "TShaped",
       "EmptyRoadWeight": 30,
-      "BattleWeight": 35,
-      "EventWeight": 20,
+      "BattleWeight": 45,
+      "EventWeight": 10,
       "EliteWeight": 15,
       "BattleEncounterId": "E001",
       "EliteEncounterId": "E101"
@@ -39,8 +39,8 @@
     {
       "Shape": "Cross",
       "EmptyRoadWeight": 20,
-      "BattleWeight": 40,
-      "EventWeight": 20,
+      "BattleWeight": 50,
+      "EventWeight": 10,
       "EliteWeight": 20,
       "BattleEncounterId": "E001",
       "EliteEncounterId": "E101"

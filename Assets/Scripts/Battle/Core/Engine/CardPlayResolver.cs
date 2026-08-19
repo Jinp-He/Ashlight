@@ -349,7 +349,7 @@ namespace Ashlight.Battle.Core.Engine
                 return new RegisterMoveTriggerCommand(MoveTriggerState.TypeAddCard, onMoveAddCardEffect.Count, onMoveAddCardEffect.CardId);
             }
 
-            // 预知一击：打「当前公共回合将行动」的所有敌人
+            // 对「当前公共回合将行动」的所有敌人造成伤害
             if (effect is AttackCurrentRoundEffect attackCurrentRoundEffect)
             {
                 int crDamage = attackCurrentRoundEffect.Damage
@@ -497,13 +497,11 @@ namespace Ashlight.Battle.Core.Engine
                     commands.Add(new GrantOwnerBuffCommand("Morale", 1));
                     break;
                 case "Zhouzhou012": // 回锋：伤害已在表内，消费士气后再移动
-                    commands.Add(new MoveSelfIfMoraleSpentCommand(context?.MoraleConsumed == true));
+                    commands.Add(new GrantDefenseIfMoraleSpentCommand(context?.MoraleConsumed == true, 4));
                     break;
                 case "Zhouzhou013":
-                    commands.Add(new MoveSelfThenDrawIfMoraleCommand(3, 1));
-                    break;
-                case "Zhouzhou014":
-                    commands.Add(new MoveTwiceThenDodgeCommand());
+                    commands.Add(new RegisterMoveTriggerCommand(
+                        MoveTriggerState.TypeDraw, 1, null, 1, MoveTriggerState.ScopeOwner));
                     break;
                 case "Zhouzhou015":
                     commands.Add(new MoveSelfAndAllyDefenseCommand(4));
@@ -519,23 +517,25 @@ namespace Ashlight.Battle.Core.Engine
                 case "Zhouzhou018":
                     commands.Add(new RegisterMoveTriggerCommand(
                         MoveTriggerState.TypeDraw, 1, null, 2, MoveTriggerState.ScopeOwner));
-                    commands.Add(new MoveSelfCommand("Toggle"));
                     commands.Add(new AddToHandCommand("Extra001", 1));
                     break;
                 case "Zhouzhou019":
                     commands.Add(new GrantTeamArmorAndConsumeMoraleCommand(5, 2));
                     break;
                 case "Zhouzhou020":
-                    commands.Add(new CreateFlashbackOfLastMoveCommand(0));
+                    commands.Add(new RegisterMoveTriggerCommand(
+                        MoveTriggerState.TypeAddCard, 1, "Extra001", 1, MoveTriggerState.ScopeOwner));
                     break;
                 case "Zhouzhou021":
-                    commands.Add(new MakeMoveCardsFreeAndAddStepCommand(3));
+                    commands.Add(new MakeMoveCardsFreeAndAddStepCommand(0));
+                    commands.Add(new RegisterMoveTriggerCommand(
+                        MoveTriggerState.TypeAddCard, 1, "Extra001", 2, MoveTriggerState.ScopeOwner));
                     break;
                 case "Zhouzhou022":
                     commands.Add(new RepeatAttackByOwnMoveCommand(8 + (context?.DamageBonus ?? 0), 2));
                     break;
                 case "Zhouzhou023":
-                    commands.Add(new MoveSelectedAlliesAndGrantDodgeCommand(3, 1));
+                    commands.Add(new MoveSelectedAlliesAndGrantDodgeCommand(2, 1));
                     break;
             }
         }

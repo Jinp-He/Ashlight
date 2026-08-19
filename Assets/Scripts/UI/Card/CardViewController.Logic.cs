@@ -7,6 +7,7 @@ using TMPro;
 using DG.Tweening;
 using Ashlight.Common.Events;
 using Ashlight.Common.Utils;
+using Ashlight.Battle.Prototype;
 using Ashlight.State.Runtime;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,7 +30,7 @@ namespace Scripts.UI
         [Header("悬停设置")]
         [SerializeField]
         [Tooltip("悬停时的缩放比例")]
-        private float hoverScale = 2f;
+        private float hoverScale = 1.4f;
 
         /// <summary>外部设置悬停放大比例（如三选一选卡面板用 1.1，避免大卡 hover 放得过大）。</summary>
         public void SetHoverScale(float scale) => hoverScale = scale;
@@ -40,7 +41,7 @@ namespace Scripts.UI
 
         [SerializeField]
         [Tooltip("悬停时向上偏移距离（像素）")]
-        private float hoverLiftDistance = 80f;
+        private float hoverLiftDistance = 50f;
 
         [SerializeField]
         [Tooltip("描述面板相对于卡牌的偏移（像素）")]
@@ -128,6 +129,19 @@ namespace Scripts.UI
         private RectTransform _rectTransform;
         private Vector2 _hoverBaseAnchoredPosition;
 
+        /// <summary>
+        /// 手牌布局完成后同步悬停基准。布局系统是手牌坐标的唯一真相源，
+        /// 避免取消选择后把 Tween 中间位置继续当作下一次悬停基准。
+        /// </summary>
+        public void RefreshHandLayoutBaseline()
+        {
+            if (_rectTransform == null || _isDragging || _isClickTargeting || _isCastTargeting)
+                return;
+
+            _hoverMoveTween?.Kill();
+            _hoverBaseAnchoredPosition = _rectTransform.anchoredPosition;
+        }
+
         // 拖拽相关
         private bool _isDragging = false;
         private bool _isInTimeSlot = false; // 是否已切换到时间轴状态
@@ -141,6 +155,9 @@ namespace Scripts.UI
         // 使用本牌时被下移让位的其他手牌（记录其原始 anchoredPosition.y 以便恢复）
         private readonly System.Collections.Generic.List<RectTransform> _pushedSiblings = new System.Collections.Generic.List<RectTransform>();
         private readonly System.Collections.Generic.List<float> _pushedSiblingOriginalY = new System.Collections.Generic.List<float>();
+        private readonly System.Collections.Generic.List<RectTransform> _hoverShiftedSiblings = new System.Collections.Generic.List<RectTransform>();
+        private readonly System.Collections.Generic.List<float> _hoverShiftedSiblingOriginalX = new System.Collections.Generic.List<float>();
+        private readonly System.Collections.Generic.List<Tween> _hoverNeighborTweens = new System.Collections.Generic.List<Tween>();
         private readonly System.Collections.Generic.List<GameObject> _selectedMultiTargetObjects = new System.Collections.Generic.List<GameObject>();
         
         // Card 拖拽状态
@@ -450,6 +467,7 @@ namespace Scripts.UI
                 // CardTimeSlot / 预览等路径可能关闭完整卡面子节点；回到 OnHand 时必须一起恢复。
                 Card.gameObject.SetActive(true);
                 Card.alpha = 1f;
+                Card.transform.localScale = _originalCardScale;
             }
             if (CardTimeSlot != null)
             {
@@ -464,6 +482,22 @@ namespace Scripts.UI
             _isHovering = false;
             _isInTimeSlot = false;
             _isTargeting = false;
+            RestoreHoverNeighbors(true);
+        }
+
+        /// <summary>进入抽牌/打出流转层前，清除悬停、选牌和复用残留，但保留当前世界位置作为动画起点。</summary>
+        public void PrepareForCardFlowAnimation()
+        {
+            _scaleTween?.Kill();
+            _hoverMoveTween?.Kill();
+            _positionTween?.Kill();
+            RestoreHoverNeighbors(true);
+            RestoreOtherHandCards(true);
+            if (Card != null && Card.transform != null)
+                Card.transform.localScale = _originalCardScale;
+            SetCanvasGroupAlpha(1f);
+            RestoreCard();
+            HideDescription();
         }
 
         /// <summary>
@@ -840,6 +874,7 @@ namespace Scripts.UI
                     .SetEase(Ease.OutBack);
             }
             PlayHoverLift(true);
+            ShiftHoverNeighbors();
         }
 
         /// <summary>
@@ -877,6 +912,7 @@ namespace Scripts.UI
                     .SetEase(Ease.OutBack);
             }
             PlayHoverLift(false);
+            RestoreHoverNeighbors();
 
             // 隐藏描述面板
             HideDescription();
@@ -1016,6 +1052,67 @@ namespace Scripts.UI
             if (_rectTransform == null) return;
             _hoverMoveTween?.Kill();
             _rectTransform.anchoredPosition = _hoverBaseAnchoredPosition;
+            RestoreHoverNeighbors(true);
+        }
+
+        /// <summary>按当前手牌槽位给左右相邻牌让出放大后的半宽，避免悬停牌覆盖邻牌。</summary>
+        private void ShiftHoverNeighbors()
+        {
+            RestoreHoverNeighbors(true);
+            Transform parent = transform.parent;
+            RectTransform visualRect = Card != null ? Card.transform as RectTransform : null;
+            if (parent == null || visualRect == null || hoverScale <= 1f) return;
+
+            float overflow = visualRect.rect.width * Mathf.Abs(_originalCardScale.x) * (hoverScale - 1f) * 0.5f;
+            if (overflow <= 0f) return;
+
+            var handSiblings = new System.Collections.Generic.List<RectTransform>();
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (!child.gameObject.activeSelf || child.GetComponent<CardViewController>() == null) continue;
+                if (child is RectTransform siblingRect) handSiblings.Add(siblingRect);
+            }
+
+            int slot = handSiblings.IndexOf(_rectTransform);
+            if (slot < 0) return;
+            ShiftHoverNeighbor(slot > 0 ? handSiblings[slot - 1] : null, -overflow);
+            ShiftHoverNeighbor(slot + 1 < handSiblings.Count ? handSiblings[slot + 1] : null, overflow);
+        }
+
+        private void ShiftHoverNeighbor(RectTransform neighbor, float offset)
+        {
+            if (neighbor == null) return;
+            float originalX = neighbor.anchoredPosition.x;
+            _hoverShiftedSiblings.Add(neighbor);
+            _hoverShiftedSiblingOriginalX.Add(originalX);
+            _hoverNeighborTweens.Add(neighbor.DOAnchorPosX(originalX + offset, scaleDuration).SetEase(Ease.OutCubic));
+        }
+
+        private void RestoreHoverNeighbors(bool immediate = false)
+        {
+            foreach (Tween tween in _hoverNeighborTweens)
+                tween?.Kill();
+            _hoverNeighborTweens.Clear();
+
+            for (int i = 0; i < _hoverShiftedSiblings.Count; i++)
+            {
+                RectTransform neighbor = _hoverShiftedSiblings[i];
+                if (neighbor == null || i >= _hoverShiftedSiblingOriginalX.Count) continue;
+                float originalX = _hoverShiftedSiblingOriginalX[i];
+                if (immediate || scaleDuration <= 0f)
+                    neighbor.anchoredPosition = new Vector2(originalX, neighbor.anchoredPosition.y);
+                else
+                    _hoverNeighborTweens.Add(neighbor.DOAnchorPosX(originalX, scaleDuration).SetEase(Ease.OutCubic));
+            }
+
+            // 缓动回位期间保留原始槽位；若玩家快速切到另一张牌，下一次 immediate 恢复仍能
+            // 从真正的布局基准开始，避免把 Tween 中间值累计成新的偏移。
+            if (immediate || scaleDuration <= 0f)
+            {
+                _hoverShiftedSiblings.Clear();
+                _hoverShiftedSiblingOriginalX.Clear();
+            }
         }
 
         /// <summary>
@@ -1024,8 +1121,9 @@ namespace Scripts.UI
         /// </summary>
         private void PushDownOtherHandCards()
         {
-            // 先清理可能的残留，避免重复记录
-            RestoreOtherHandCards();
+            // 先立即完成上一轮回位。若在回位 Tween 尚未结束时再次选择，
+            // 直接记录当前中间位置会让整排手牌每次都继续向下累积偏移。
+            RestoreOtherHandCards(true);
 
             Transform parent = transform.parent;
             if (parent == null || otherCardsPushDownDistance <= 0f)
@@ -1060,7 +1158,7 @@ namespace Scripts.UI
         /// <summary>
         /// 恢复被 PushDownOtherHandCards 下移的其余手牌位置
         /// </summary>
-        private void RestoreOtherHandCards()
+        private void RestoreOtherHandCards(bool immediate = false)
         {
             for (int i = 0; i < _pushedSiblings.Count; i++)
             {
@@ -1069,8 +1167,15 @@ namespace Scripts.UI
                     continue;
 
                 rt.DOKill();
-                rt.DOAnchorPosY(_pushedSiblingOriginalY[i], positionRestoreDuration)
-                    .SetEase(Ease.OutCubic);
+                if (immediate || positionRestoreDuration <= 0f)
+                {
+                    rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, _pushedSiblingOriginalY[i]);
+                }
+                else
+                {
+                    rt.DOAnchorPosY(_pushedSiblingOriginalY[i], positionRestoreDuration)
+                        .SetEase(Ease.OutCubic);
+                }
             }
 
             _pushedSiblings.Clear();
@@ -3410,7 +3515,8 @@ namespace Scripts.UI
             }
 
             // Card 组件始终加载完整的 Sprite（MiniSprite 只在 CardTimeSlot 中使用）
-            string spritePath = AssetPath.GetCardSpriteAssetPath(cardId);
+            string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cardId);
+            string spritePath = AssetPath.GetCardSpriteAssetPath(visualCardId);
 
             // 从 Resources 加载 Sprite
             Sprite sprite = Resources.Load<Sprite>(spritePath);
@@ -3869,6 +3975,8 @@ namespace Scripts.UI
                 battleScene?.ApplyPendingScheduleChanges();
             }
 
+            battleScene?.OnTempoPrototypeCardPlayed(ownerUnitId);
+
             Debug.Log($"[CardViewController] 出牌完成: card={_currentCard?.Name}, ownerId={ownerUnitId}, targetId={targetId}, execution={isExecutionCard}");
         }
 
@@ -3996,6 +4104,9 @@ namespace Scripts.UI
         /// </summary>
         private void RestoreCardToHandState(string reason = null)
         {
+            // 取消目标选择时必须先回到布局记录的基准位置，不能保留悬停抬升或其 Tween 中间值。
+            ForceResetHoverLift();
+
             // 恢复缩放
             _scaleTween?.Kill();
             if (Card != null && Card.transform != null)

@@ -182,7 +182,7 @@ ENEMY_ROWS = [
     {
         "Id": "EnemyM01",
         "Name": "灰袍信徒",
-        "AlternativePath": "Grey",
+        "AlternativePath": "AshrobeDevotee",
         "Hp": 36,
         "Speed": 2,
         "IntentionSet": "A0,ESM01,1;A1,ESM02,2",
@@ -192,7 +192,7 @@ ENEMY_ROWS = [
     {
         "Id": "EnemyM02",
         "Name": "蒙眼侍僧",
-        "AlternativePath": "Tusk",
+        "AlternativePath": "VeiledAcolyte",
         "Hp": 54,
         "Speed": 3,
         "IntentionSet": "A0,ESM03,2;A1,ESM04,3",
@@ -202,7 +202,7 @@ ENEMY_ROWS = [
     {
         "Id": "EnemyM03",
         "Name": "戒律执事",
-        "AlternativePath": "Banner",
+        "AlternativePath": "TheDisciplinarian",
         "Hp": 72,
         "Speed": 4,
         "IntentionSet": "A0,ESM05,3;A1,ESM06,5",
@@ -254,14 +254,14 @@ ENEMY_ROWS = [
 
 ENCOUNTER_ROWS = [
     {"Id": "M101", "EnemySet": "EnemyM01", "StrategySet": ["A0;1.0"]},
-    {"Id": "M102", "EnemySet": "EnemyM01,EnemyM01,EnemyM01", "StrategySet": ["A0,A0,A0;1.0"]},
-    {"Id": "M103", "EnemySet": "EnemyM02,EnemyM02", "StrategySet": ["A0,A0;1.0"]},
-    {"Id": "M104", "EnemySet": "EnemyM03,EnemyM01", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "M102", "EnemySet": "EnemyM01,EnemyM02", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "M103", "EnemySet": "EnemyM01,EnemyM03", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "M104", "EnemySet": "EnemyM02,EnemyM03", "StrategySet": ["A0,A0;1.0"]},
     {"Id": "M105", "EnemySet": "EnemyM04,EnemyM01", "StrategySet": ["A0,A0;1.0"]},
     {"Id": "W101", "EnemySet": "EnemyW01,EnemyW01", "StrategySet": ["A0,A0;1.0"]},
-    {"Id": "W102", "EnemySet": "EnemyW01,EnemyW01,EnemyW01", "StrategySet": ["A0,A0,A0;1.0"]},
-    {"Id": "W103", "EnemySet": "EnemyW02,EnemyW02", "StrategySet": ["A0,A0;1.0"]},
-    {"Id": "W104", "EnemySet": "EnemyW03,EnemyW01", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "W102", "EnemySet": "EnemyW01,EnemyW02", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "W103", "EnemySet": "EnemyW01,EnemyW03", "StrategySet": ["A0,A0;1.0"]},
+    {"Id": "W104", "EnemySet": "EnemyW02,EnemyW03", "StrategySet": ["A0,A0;1.0"]},
     # Boundary intrusion templates: one same-tier slot has already been replaced.
     {"Id": "MW101", "EnemySet": "EnemyM03,EnemyW01", "StrategySet": ["A0,A0;1.0"]},
     {"Id": "WM101", "EnemySet": "EnemyW03,EnemyM01", "StrategySet": ["A0,A0;1.0"]},
