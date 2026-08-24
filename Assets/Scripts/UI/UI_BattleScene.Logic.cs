@@ -2325,6 +2325,7 @@ namespace Scripts.UI
                         // 结算执行牌可能打死敌人 → 战斗结束：停止推进，等结算面板。
                         if (_battleManager.CurrentState.IsBattleEnded)
                         {
+                            TurnOrderView?.CompleteCommittedActionPreview(currentTurnUnitId);
                             ATB.AutoAdvanceSuspended = true;
                             yield break;
                         }
@@ -2335,6 +2336,8 @@ namespace Scripts.UI
                             currentTurnUnit.Speed);
                         int appliedOverloadDelay = TempoPrototypeMode.IsActive ? 0 : overloadDelay;
                         ATB.Reschedule(currentTurnUnitId, actionDelay, appliedOverloadDelay);
+                        // 拖拽时已经完成插入预览；真实调度到位后让正式行动卡无缝接管预览卡。
+                        TurnOrderView?.CompleteCommittedActionPreview(currentTurnUnitId);
                         // 记录已落账的过载负债，供肾上腺素（ClearOverload）拉回
                         currentTurnUnit.AppliedOverloadRoundDelay = appliedOverloadDelay;
                         ATB.TriggerNextUnit();

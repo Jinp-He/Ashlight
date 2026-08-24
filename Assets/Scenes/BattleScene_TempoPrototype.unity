@@ -4045,6 +4045,8 @@ MonoBehaviour:
   cardsContainer: {fileID: 0}
   cardSpacing: 8
   windowSize: 10
+  actionPreviewDuration: 1
+  actionPreviewRiseDistance: 76
   atb: {fileID: 6409102427222875274}
   descriptionViewControllerPrefab: {fileID: 0}
 --- !u!114 &669032334

@@ -144,6 +144,7 @@ namespace Scripts.UI
 
         // 拖拽相关
         private bool _isDragging = false;
+        private bool _tempoActionPreviewStarted = false;
         private bool _isInTimeSlot = false; // 是否已切换到时间轴状态
         private bool _hasLoggedNoTimeSlot = false; // 避免日志刷屏
         private Vector3 _dragOffset;
@@ -479,6 +480,7 @@ namespace Scripts.UI
 
             // 重置其他状态
             _isDragging = false;
+            _tempoActionPreviewStarted = false;
             _isHovering = false;
             _isInTimeSlot = false;
             _isTargeting = false;
@@ -1560,6 +1562,21 @@ namespace Scripts.UI
             // 使用本牌时，把其余手牌向下让位，避免遮挡目标/箭头/信息
             PushDownOtherHandCards();
 
+            // 节奏原型：拖起非 0 费牌便预览该角色下次行动的插入位置。
+            // 此处只读印刷费用，不触碰真实 ATB；成功出牌后才会正式重排。
+            if (!_tempoActionPreviewStarted
+                && TempoPrototypeMode.IsActive
+                && _currentCard != null
+                && _currentCard.Energy > 0)
+            {
+                string previewOwnerId = ResolveOwnerUnitId(GetOwnerCharacterId().ToString());
+                if (!string.IsNullOrEmpty(previewOwnerId))
+                {
+                    _tempoActionPreviewStarted = true;
+                    FindObjectOfType<UI_BattleScene>()?.BeginTempoActionPreview(previewOwnerId, _currentCard.Energy);
+                }
+            }
+
             // 判断是否使用目标选择模式
             bool usesTargetSelection = UsesTargetSelection();
 
@@ -1939,6 +1956,9 @@ namespace Scripts.UI
             {
                 // 在手牌中：处理手牌拖拽结束
                 OnEndDragOnHand(eventData);
+                // 成功出牌会先把预览标记为 committed；其他结束路径在这里统一反向收起。
+                FindObjectOfType<UI_BattleScene>()?.EndTempoActionPreviewDrag();
+                _tempoActionPreviewStarted = false;
             }
         }
         
@@ -1949,6 +1969,29 @@ namespace Scripts.UI
         {
             // 拖拽结束（无论放置成功与否）先把让位的手牌复位
             RestoreOtherHandCards();
+
+            // 共用规则：只要松手点回到手牌区，就必须撤回，不能使用拖拽途中缓存的目标或时间槽。
+            // 该入口同时服务普通 BattleScene 与 TempoPrototype。
+            if (IsOverHandArea(eventData))
+            {
+                _isTargeting = false;
+                _isInTimeSlot = false;
+                _currentTargetObject = null;
+                _lastValidTargetObject = null;
+                _previousHoveredTarget = null;
+                _cachedSlotUnderPointer = null;
+                _lastRaycastFrame = -1;
+
+                if (_targetArrow != null) _targetArrow.Hide();
+                ClearAllTargetHighlighting();
+                RestoreAllTargetsColor();
+                ClearTimelineHighlight();
+                HideCardTimeSlot();
+                ShowCard();
+                RestoreDragPosition();
+                RestoreCardToHandState("在手牌区松手");
+                return;
+            }
 
             if (_isTargeting)
             {
@@ -1970,9 +2013,8 @@ namespace Scripts.UI
                 // 清除之前悬停的目标
                 _previousHoveredTarget = null;
 
-                // 验证并放置卡牌
-                // 优先使用当前帧检测到的目标，若为null则回退到拖拽过程中最后一次有效目标
-                GameObject resolvedTarget = _currentTargetObject ?? _lastValidTargetObject;
+                // 只认松手瞬间指针下的目标。若松手位置在手牌区，即使拖拽途中经过合法目标也必须返回手牌。
+                GameObject resolvedTarget = _currentTargetObject;
                 if (resolvedTarget != null)
                 {
                     CharacterEnum ownerCharacterId = GetOwnerCharacterId();
@@ -1993,7 +2035,7 @@ namespace Scripts.UI
                 }
                 else
                 {
-                    Debug.LogWarning("[CardViewController] 未选择目标，已恢复到手牌");
+                    Debug.LogWarning("[CardViewController] 松手位置不是合法目标，已恢复到手牌");
                     RestoreCardToHandState("拖拽结束时未检测到任何目标");
                 }
 
@@ -3956,6 +3998,7 @@ namespace Scripts.UI
             }
 
             var battleScene = FindObjectOfType<UI_BattleScene>();
+            battleScene?.CommitTempoActionPreview(ownerUnitId);
             if (isExecutionCard)
             {
                 battleScene?.OnPlayerPlayedExecutionCard(this, ownerUnitId);

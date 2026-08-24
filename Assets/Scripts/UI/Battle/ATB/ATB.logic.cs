@@ -666,6 +666,32 @@ namespace Scripts.UI
         /// </summary>
         public List<TurnOrderEntry> GetTurnOrderWithFuture(int count = 10)
         {
+            return BuildTurnOrderWithFuture(count, null, -1, -1);
+        }
+
+        /// <summary>
+        /// 返回不修改真实调度的行动顺序预览。把指定单位当前的 NextRound/Speed 临时替换为预计值，
+        /// 用于玩家拖拽主行动牌时预览其下次行动插入位置。
+        /// </summary>
+        public List<TurnOrderEntry> GetTurnOrderPreview(
+            string unitId,
+            int previewNextRound,
+            int previewSpeed,
+            int count = 10)
+        {
+            return BuildTurnOrderWithFuture(
+                count,
+                unitId,
+                Mathf.Max(CurrentRound + 1, previewNextRound),
+                Mathf.Max(1, previewSpeed));
+        }
+
+        private List<TurnOrderEntry> BuildTurnOrderWithFuture(
+            int count,
+            string previewUnitId,
+            int previewNextRound,
+            int previewSpeed)
+        {
             var result = new List<TurnOrderEntry>();
 
             // 拷贝一份可推进的模拟态
@@ -681,6 +707,11 @@ namespace Scripts.UI
                     UnitId = ic.UnitId, IsPlayer = ic.IsPlayer, IsWeather = ic.IsWeather, IsCast = ic.IsCast,
                     Speed = Mathf.Max(1, ic.Speed), NextRound = ic.NextRound
                 };
+                if (!string.IsNullOrEmpty(previewUnitId) && copy.UnitId == previewUnitId)
+                {
+                    copy.NextRound = previewNextRound;
+                    copy.Speed = previewSpeed;
+                }
                 idxOf[copy] = i;
                 work.Add(copy);
             }
