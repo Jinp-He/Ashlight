@@ -4909,6 +4909,8 @@ MonoBehaviour:
   enterCenterDuration: 0.2
   exitDuration: 0.2
   postAnimationHoldDuration: 0.15
+  characterYOffset: 0
+  shadowAnimationFps: 15
 --- !u!1 &816288353
 GameObject:
   m_ObjectHideFlags: 0

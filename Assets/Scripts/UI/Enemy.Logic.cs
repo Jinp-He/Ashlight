@@ -847,6 +847,16 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 中央战斗演出使用的静态视觉帧。只返回素材，不修改战场上的真实 EnemyImage。
+        /// </summary>
+        public Sprite GetBattlePresentationSprite(bool attack)
+        {
+            return attack
+                ? (_attackSprite != null ? _attackSprite : _idleSprite)
+                : (_hitSprite != null ? _hitSprite : _idleSprite);
+        }
+
+        /// <summary>
         /// 敌人命中区悬停时，在视觉脚底下方显示名称。
         /// </summary>
         public void OnPointerEnter(PointerEventData eventData)

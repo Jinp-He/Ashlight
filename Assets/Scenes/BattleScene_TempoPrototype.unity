@@ -4871,6 +4871,12 @@ MonoBehaviour:
   EnemyPosition: {fileID: 1265879503}
   skeletonGraphicPrefab: {fileID: 6019933993951995940, guid: 1ff39f35c0f2d524faaf1415cc5c7b0d, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
+  battleAnimationDuration: 0.55
+  enterCenterDuration: 0.2
+  exitDuration: 0.2
+  postAnimationHoldDuration: 0.15
+  characterYOffset: 0
+  shadowAnimationFps: 15
 --- !u!1 &816288353
 GameObject:
   m_ObjectHideFlags: 0
@@ -16707,6 +16713,8 @@ MonoBehaviour:
   cardSpacing: 10
   handCompressionThreshold: 7
   minimumCompressedHandSpacing: -100
+  cardDrawStartPoint: {fileID: 0}
+  cardRecycleEndPoint: {fileID: 0}
   cardDrawDuration: 0.35
   cardDiscardDuration: 0.35
   cardDrawStagger: 0.1
@@ -16716,6 +16724,8 @@ MonoBehaviour:
   handCompactDuration: 0.2
   characterPrefab: {fileID: 4643064549056291281, guid: cdb42e5bc4f8cb341b9e7eb1f80f5905, type: 3}
   enemyPrefab: {fileID: 7003494035819158781, guid: 6f7f211558b9c6642acf0ee8b90b2b74, type: 3}
+  enemyDeathHoldDuration: 0.55
+  enemyDeathFadeDuration: 0.2
   timelineTrackPrefab: {fileID: 1266222384735868427, guid: 8f3450fa82768d14589ce4cc4b7caf1f, type: 3}
   damageTextPrefab: {fileID: 3410614867355468474, guid: 734c63550759e18409374b6d6397aa48, type: 3}
   testCardCount: 3

@@ -583,8 +583,15 @@ namespace Ashlight.Battle
             // 初始化卡组系统
             CurrentState.DeckSystem.Initialize(allCards, characters);
 
-            // 抽取初始手牌
-            //CurrentState.DeckSystem.DrawCard(initialDrawCount);
+            // 全队在战斗开始时各自抽好下一手牌，供手牌区同时预览。
+            // initialDrawCount 是旧的共享手牌入口；分角色抽牌后以各自 BaseDrawCount 为准。
+            foreach (var playerUnit in CurrentState.PlayerUnits)
+            {
+                if (playerUnit != null && playerUnit.IsPlayerUnit && !playerUnit.IsDead)
+                {
+                    PrepareNextHandForPlayer(playerUnit);
+                }
+            }
         }
 
         /// <summary>
@@ -1380,10 +1387,12 @@ namespace Ashlight.Battle
             }
             if (CurrentState.DeckSystem != null)
             {
-                // 新玩家回合开始时替换手牌：避免战斗初始抽牌 + 本回合抽牌叠加，或多角色连续行动时手牌累加
-                DiscardCurrentHand();
-                DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
-                // 回合开始注入本角色的基础移动牌（虚无+消耗：打出/未用都自动清除，不污染牌库）
+                // 手牌在上一次行动结束时已预抽。这里仅做兼容兜底，避免异常路径让角色空手开始行动。
+                var characterId = playerUnit.GetCharacterId();
+                if (characterId.HasValue && CurrentState.DeckSystem.GetHandCountForCharacter(characterId.Value) == 0)
+                {
+                    DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
+                }
             }
 
             // 新行动的资源/标记与手牌准备完成后再结算蓄力：过载、能量、抽牌等完成效果会保留在本次行动中。
@@ -1603,8 +1612,8 @@ namespace Ashlight.Battle
 
             // 1. 执行牌不在此结算——已作为引线挂在 ATB 时钟上，到 ResolveRound 由 ResolvePendingCast 结算。
 
-            // 2. 弃掉剩余手牌
-            DiscardCurrentHand();
+            // 2. 仅替该角色换手牌；其他角色已经预抽的下一手必须保留在手牌区。
+            PrepareNextHandForPlayer(playerUnit);
 
             // 3. 清除回合标记
             CurrentState.CurrentTurnUnitId = null;
@@ -2587,6 +2596,27 @@ namespace Ashlight.Battle
             CurrentState.DeckSystem.DiscardAllHand();
         }
 
+        /// <summary>
+        /// 角色行动结束时立刻弃掉其剩余手牌并抽好下一手。
+        /// 全队手牌同时显示，因此绝不能清空其他角色的手牌。
+        /// </summary>
+        public void PrepareNextHandForPlayer(UnitState playerUnit)
+        {
+            if (CurrentState?.DeckSystem == null || playerUnit == null)
+            {
+                return;
+            }
+
+            var characterId = playerUnit.GetCharacterId();
+            if (!characterId.HasValue)
+            {
+                return;
+            }
+
+            CurrentState.DeckSystem.DiscardHandForCharacter(characterId.Value);
+            DrawCardsForPlayerUnit(playerUnit, Mathf.Max(0, playerUnit.BaseDrawCount));
+        }
+
         private void DrawCardsForPlayerUnit(UnitState playerUnit, int drawCount)
         {
             if (CurrentState?.DeckSystem == null || playerUnit == null || drawCount <= 0)
@@ -2768,23 +2798,27 @@ namespace Ashlight.Battle
                 return;
             }
 
-            // 1. 弃掉所有手牌
-            CurrentState.DeckSystem.DiscardAllHand();
-
-            // 2. 抽取固定5张新牌（按当前回合玩家所属角色牌堆）
+            // 仅替当前行动角色准备下一手；旧入口保留给非 ATB 流程。
             var turnUnitId = CurrentState.CurrentTurnUnitId;
             if (!string.IsNullOrEmpty(turnUnitId))
             {
                 var unit = CurrentState.GetUnitById(turnUnitId);
-                var cid = unit?.GetCharacterId();
-                if (cid.HasValue)
+                if (unit != null && unit.IsPlayerUnit)
                 {
-                    CurrentState.DeckSystem.DrawCardForCharacter(cid.Value, 5);
+                    PrepareNextHandForPlayer(unit);
                     return;
                 }
             }
 
-            CurrentState.DeckSystem.DrawCard(5);
+            // 无当前行动者的旧流程无法判定是谁刚结束行动；按旧「整批换手」语义，
+            // 为所有存活玩家重新准备各自的下一手，避免留下空手牌。
+            foreach (var playerUnit in CurrentState.PlayerUnits)
+            {
+                if (playerUnit != null && playerUnit.IsPlayerUnit && !playerUnit.IsDead)
+                {
+                    PrepareNextHandForPlayer(playerUnit);
+                }
+            }
         }
 
         /// <summary>

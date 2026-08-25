@@ -45,7 +45,8 @@ namespace Ashlight.Battle.Core.Data
     }
 
     /// <summary>
-    /// 战斗卡组系统：每名玩家角色独立抽/弃牌堆，开局按 BelongTo 分堆并各自洗牌；手牌区仍全局共享。
+    /// 战斗卡组系统：每名玩家角色独立抽/弃牌堆，开局按 BelongTo 分堆并各自洗牌。
+    /// 手牌数据仍放在同一个列表中，以便 UI 同时展示全队的下一手牌；每张牌通过动态归属区分主人。
     /// </summary>
     public class BattleDeckSystem
     {
@@ -149,6 +150,8 @@ namespace Ashlight.Battle.Core.Data
                     owner = _partyCharacterOrder[0];
                 }
 
+                // 初始牌也写入运行时归属。这样全队手牌同时存在时，弃牌/预览不会混淆角色。
+                c.OwnerCharacterId = owner;
                 PerCharacterDecks[owner].DrawPile.Add(c);
             }
 
@@ -274,6 +277,7 @@ namespace Ashlight.Battle.Core.Data
                 {
                     var card = split.DrawPile[0];
                     split.DrawPile.RemoveAt(0);
+                    card.OwnerCharacterId = characterId;
                     Hand.Add(card);
                     drawnCount++;
                     Debug.Log($"[BattleDeckSystem] 抽牌({characterId}): {card.CardId}");
@@ -345,6 +349,14 @@ namespace Ashlight.Battle.Core.Data
             if (card == null)
             {
                 return _partyCharacterOrder.Count > 0 ? _partyCharacterOrder[0] : default;
+            }
+
+            // 运行时归属优先：诅咒、衍生牌等可能与静态 CardInfo.BelongTo 不同。
+            if (card.OwnerCharacterId.HasValue
+                && PerCharacterDecks != null
+                && PerCharacterDecks.ContainsKey(card.OwnerCharacterId.Value))
+            {
+                return card.OwnerCharacterId.Value;
             }
 
             var info = ConfigLoader.Tables?.TbCardInfo?.GetOrDefault(card.CardId);
@@ -678,6 +690,46 @@ namespace Ashlight.Battle.Core.Data
 
             Hand.Clear();
             Debug.Log($"[BattleDeckSystem] 弃掉所有手牌: {count} 张（其中 [虚无] 自毁 {etherealCount} 张）");
+        }
+
+        /// <summary>
+        /// 仅弃掉指定角色的手牌。用于全队手牌同时展示时，在该角色行动结束后立刻准备下一手。
+        /// </summary>
+        public int DiscardHandForCharacter(CharacterEnum characterId)
+        {
+            var cardsToDiscard = Hand
+                .Where(card => card != null && ResolveCharacterForCard(card) == characterId)
+                .ToList();
+            int etherealCount = 0;
+
+            foreach (var card in cardsToDiscard)
+            {
+                Hand.Remove(card);
+                if (IsEtherealCard(card))
+                {
+                    RemovedPile.Add(card);
+                    etherealCount++;
+                    continue;
+                }
+
+                var split = GetSplitForDiscard(card);
+                if (split != null)
+                {
+                    split.DiscardPile.Add(card);
+                }
+                else
+                {
+                    DiscardPile.Add(card);
+                }
+            }
+
+            Debug.Log($"[BattleDeckSystem] 弃掉角色 {characterId} 的手牌: {cardsToDiscard.Count} 张（其中 [虚无] 自毁 {etherealCount} 张），全队剩余手牌: {Hand.Count}");
+            return cardsToDiscard.Count;
+        }
+
+        public int GetHandCountForCharacter(CharacterEnum characterId)
+        {
+            return Hand.Count(card => card != null && ResolveCharacterForCard(card) == characterId);
         }
 
         /// <summary>

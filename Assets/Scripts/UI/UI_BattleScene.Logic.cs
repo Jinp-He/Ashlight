@@ -1742,6 +1742,33 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 某名角色结束行动并预抽下一手后，同步手牌区而不回收其他角色的预览牌。
+        /// </summary>
+        private void RefreshHandPreviewAfterRedraw()
+        {
+            if (_battleManager?.CurrentState?.DeckSystem?.Hand == null)
+            {
+                return;
+            }
+
+            var liveInstanceIds = new HashSet<string>(_battleManager.CurrentState.DeckSystem.Hand
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+            var staleCards = _handCards
+                .Where(card => card != null && !liveInstanceIds.Contains(card.InstanceId))
+                .ToList();
+
+            foreach (var card in staleCards)
+            {
+                AnimateCardToDiscard(card);
+            }
+
+            // 已保留的其他角色手牌不会移动到弃牌堆；只补建刚抽出的新牌。
+            RefreshHandFromData();
+            UpdateHandLayout();
+        }
+
+        /// <summary>
         /// 提供一个脱离 LayoutGroup 的临时动画层。动画期间卡牌不参与手牌布局，
         /// 结束后才归入目标容器，因此不会被 HorizontalLayoutGroup 覆盖位移。
         /// </summary>
@@ -2307,8 +2334,9 @@ namespace Scripts.UI
                     if (currentTurnUnit != null && currentTurnUnit.IsPlayerUnit)
                     {
                         currentTurnUnit.CurrentEnergy = 0;
-                        _battleManager.DiscardCurrentHand();
-                        DisplayHandCards();
+                        // 当前角色弃牌后立刻补抽；其他角色的预览手牌保持不动。
+                        _battleManager.PrepareNextHandForPlayer(currentTurnUnit);
+                        RefreshHandPreviewAfterRedraw();
                         ClearHandExecutionSuppression();
 
                         // 过载次数要在 EndCurrentTurn 之前读取（= 下次行动的额外回合延迟）。
@@ -2457,7 +2485,8 @@ namespace Scripts.UI
                     ClearHandExecutionSuppression();
                     _battleManager.StartPlayerTurn(unitId, false);
                     ApplyPendingScheduleChanges();
-                    DisplayHandCards();
+                    // 全队下一手在上一次行动结束时已展示；开回合只需保留现有预览，不重播整手抽牌动画。
+                    RefreshHandFromData();
                     UpdateAllUnitsDisplay();
                     UpdateEnergyBarByUnitId(unitId);
                     Debug.Log($"[UI_BattleScene] 玩家回合开始: {unitId} (公共回合 {ATB?.CurrentRound})");

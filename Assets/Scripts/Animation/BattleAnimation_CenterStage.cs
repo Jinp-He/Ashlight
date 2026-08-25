@@ -11,8 +11,8 @@ using Sirenix.OdinInspector;
 
 /// <summary>
 /// 中央舞台式战斗演出动画组件。
-/// 不生成副本、不隐藏原单位，而是把"施法者"和"目标"两个真实单位 Tween 到屏幕中央对峙，
-/// 播放 attack/shouji 后再 Tween 回各自原位。其它单位不受影响。
+/// 从战场单位复制纯视觉图像，在独立演出层移动并播放 attack/shouji，结束后销毁副本。
+/// 战场上的真实单位不改父节点、不改位置，也不会被演出 Tween 操作。
 /// 普通（迅捷）打牌仍走原地播放版 <see cref="BattleAnimation"/>。
 /// </summary>
 public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
@@ -69,23 +69,17 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     private readonly Queue<Image> _effectPool = new Queue<Image>();
     private readonly List<CanvasGroupSnapshot> _hiddenBattleUi = new List<CanvasGroupSnapshot>();
     private readonly List<IntentionView> _hiddenIntentionViews = new List<IntentionView>();
+    private readonly HashSet<GameObject> _activeVisualCopies = new HashSet<GameObject>();
     private int _battleUiHideDepth;
 
-    private sealed class CanvasSortingSnapshot
+    private sealed class PresentationVisual
     {
-        public Canvas Canvas;
-        public bool WasAdded;
-        public bool OverrideSorting;
-        public int SortingOrder;
-    }
-
-    private sealed class LayoutSlotSnapshot
-    {
+        public GameObject Root;
         public RectTransform Rect;
-        public Transform Parent;
-        public Vector3 HomeWorldPosition;
-        public Vector3 HomeLocalScale;
-        public GameObject Placeholder;
+        public SkeletonGraphic Skeleton;
+        public Image Image;
+        public Sprite AttackSprite;
+        public Sprite HurtSprite;
     }
 
     private sealed class CanvasGroupSnapshot
@@ -108,6 +102,7 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
 
     private void OnDisable()
     {
+        DestroyAllVisualCopies();
         ForceRestoreBattleStatusUi();
     }
 
@@ -148,22 +143,25 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             yield break;
         }
 
-        RectTransform casterRect = casterUI.transform as RectTransform;
-        RectTransform targetRect = targetUI.transform as RectTransform;
-        if (casterRect == null || targetRect == null)
+        EnsurePresentationRoot();
+        if (_presentationRoot == null)
         {
             onHit?.Invoke();
             yield break;
         }
 
-        // SetAsLastSibling 只能解决同一排容器内的遮挡。前后排属于不同父节点，
-        // 因此演出期间还要用独立 Canvas 覆盖全局排序，结束后完整恢复。
-        CanvasSortingSnapshot casterSorting = ElevateForPresentation(casterRect, PRESENTATION_SORTING_ORDER + 1);
-        CanvasSortingSnapshot targetSorting = casterRect == targetRect
-            ? null
-            : ElevateForPresentation(targetRect, PRESENTATION_SORTING_ORDER);
-
-        EnsurePresentationRoot();
+        bool sameUnit = casterUI == targetUI;
+        PresentationVisual casterVisual = CreatePresentationVisual(casterUI, "Caster");
+        PresentationVisual targetVisual = sameUnit
+            ? casterVisual
+            : CreatePresentationVisual(targetUI, "Target");
+        if (casterVisual?.Rect == null || targetVisual?.Rect == null)
+        {
+            DestroyPresentationVisual(casterVisual);
+            if (!sameUnit) DestroyPresentationVisual(targetVisual);
+            onHit?.Invoke();
+            yield break;
+        }
 
         bool moveLeftToRight = casterState.IsPlayerUnit;
         bool casterOnLeft = casterState.IsPlayerUnit;
@@ -174,7 +172,6 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         Vector3 casterEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, casterOnLeft);
         Vector3 targetEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, !casterOnLeft);
 
-        bool sameUnit = casterRect == targetRect;
         if (sameUnit)
         {
             targetStart = casterStart;
@@ -182,29 +179,26 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             targetEnd = casterEnd;
         }
 
-        // 把真实单位临时挂到战场演出层：跨前后排时层级稳定，且震动只影响演出层，不影响手牌。
-        LayoutSlotSnapshot casterLayout = DetachToPresentationLayer(casterRect);
-        LayoutSlotSnapshot targetLayout = sameUnit ? null : DetachToPresentationLayer(targetRect);
         HideBattleStatusUi();
 
         try
         {
-            casterRect.position = casterStart;
-            if (!sameUnit) targetRect.position = targetStart;
+            casterVisual.Rect.position = casterStart;
+            if (!sameUnit) targetVisual.Rect.position = targetStart;
 
-            // 入场第一帧就切换战斗姿态，动作和位移同时进行。
-            PlayCasterAttack(casterUI);
+            // 所有动作只作用于视觉副本，战场上的真实角色始终留在原父节点和原位置。
+            PlayVisualAnimation(casterVisual, true);
             if (isAttackCard && !sameUnit)
             {
-                PlayTargetHurt(targetUI);
+                PlayVisualAnimation(targetVisual, false);
             }
 
             // 特效与角色进入必须在同一帧启动，形成一个完整的入场动作。
             StartCoroutine(PlayEffectFrames(!moveLeftToRight));
 
             // 单位直接快速进入中央位置，不再在慢速区持续横穿。
-            Tween entry = casterRect.DOMove(casterCenter, enterCenterDuration).SetEase(Ease.OutCubic);
-            if (!sameUnit) targetRect.DOMove(targetCenter, enterCenterDuration).SetEase(Ease.OutCubic);
+            Tween entry = casterVisual.Rect.DOMove(casterCenter, enterCenterDuration).SetEase(Ease.OutCubic);
+            if (!sameUnit) targetVisual.Rect.DOMove(targetCenter, enterCenterDuration).SetEase(Ease.OutCubic);
             yield return entry.WaitForCompletion();
 
             // 战斗动画时长从入场开始计时，扣除已经用于进入中央的时间。
@@ -219,7 +213,7 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
             // 动作结束后再显示伤害数字。
             if (damage > 0)
             {
-                Vector3 damagePos = GetUnitTopWorldPosition(targetUI);
+                Vector3 damagePos = GetVisualTopWorldPosition(targetVisual);
                 if (damagePos != Vector3.zero)
                 {
                     ShowDamageNumber(damagePos, damage);
@@ -231,18 +225,14 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
 
             yield return new WaitForSeconds(DAMAGE_BEFORE_EXIT_DELAY);
 
-            Tween exit = casterRect.DOMove(casterEnd, exitDuration).SetEase(Ease.InCubic);
-            if (!sameUnit) targetRect.DOMove(targetEnd, exitDuration).SetEase(Ease.InCubic);
+            Tween exit = casterVisual.Rect.DOMove(casterEnd, exitDuration).SetEase(Ease.InCubic);
+            if (!sameUnit) targetVisual.Rect.DOMove(targetEnd, exitDuration).SetEase(Ease.InCubic);
             yield return exit.WaitForCompletion();
         }
         finally
         {
-            casterRect.DOKill();
-            targetRect.DOKill();
-            RestoreLayoutSlot(casterLayout);
-            RestoreLayoutSlot(targetLayout);
-            RestorePresentationSorting(casterSorting);
-            RestorePresentationSorting(targetSorting);
+            DestroyPresentationVisual(casterVisual);
+            if (!sameUnit) DestroyPresentationVisual(targetVisual);
             RestoreBattleStatusUi();
         }
     }
@@ -251,40 +241,170 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
 
     #region 私有方法 - 位置计算
 
-    private static CanvasSortingSnapshot ElevateForPresentation(RectTransform rect, int sortingOrder)
+    private PresentationVisual CreatePresentationVisual(MonoBehaviour unitUI, string role)
     {
-        if (rect == null) return null;
+        if (unitUI == null || _presentationRoot == null) return null;
 
-        Canvas canvas = rect.GetComponent<Canvas>();
-        bool wasAdded = canvas == null;
-        if (wasAdded)
+        SkeletonGraphic sourceSkeleton = null;
+        Image sourceImage = null;
+        Sprite attackSprite = null;
+        Sprite hurtSprite = null;
+
+        Character character = unitUI as Character;
+        if (character != null)
         {
-            canvas = rect.gameObject.AddComponent<Canvas>();
+            sourceSkeleton = character.Skeleton_Unit;
+        }
+        else
+        {
+            Enemy enemy = unitUI as Enemy;
+            if (enemy != null)
+            {
+                if (enemy.Skeleton_Unit != null && enemy.Skeleton_Unit.gameObject.activeInHierarchy)
+                {
+                    sourceSkeleton = enemy.Skeleton_Unit;
+                }
+                else
+                {
+                    sourceImage = enemy.EnemyImage;
+                    attackSprite = enemy.GetBattlePresentationSprite(true);
+                    hurtSprite = enemy.GetBattlePresentationSprite(false);
+                }
+            }
         }
 
-        var snapshot = new CanvasSortingSnapshot
-        {
-            Canvas = canvas,
-            WasAdded = wasAdded,
-            OverrideSorting = canvas.overrideSorting,
-            SortingOrder = canvas.sortingOrder
-        };
+        RectTransform sourceRect = sourceSkeleton != null
+            ? sourceSkeleton.rectTransform
+            : sourceImage != null ? sourceImage.rectTransform : null;
+        if (sourceRect == null) return null;
 
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = sortingOrder;
-        return snapshot;
+        GameObject copy = Instantiate(sourceRect.gameObject, _presentationRoot, false);
+        copy.name = $"{unitUI.name}_{role}_VisualCopy";
+        copy.SetActive(true);
+
+        RectTransform copyRect = copy.transform as RectTransform;
+        if (copyRect == null)
+        {
+            Destroy(copy);
+            return null;
+        }
+
+        // 副本只保留原图像的尺寸、轴心、世界缩放和朝向；位置由中央演出单独控制。
+        copyRect.anchorMin = copyRect.anchorMax = new Vector2(0.5f, 0.5f);
+        copyRect.pivot = sourceRect.pivot;
+        copyRect.sizeDelta = sourceRect.rect.size;
+        copyRect.rotation = sourceRect.rotation;
+        copyRect.localScale = DivideScale(sourceRect.lossyScale, _presentationRoot.lossyScale);
+        copyRect.SetAsLastSibling();
+
+        SkeletonGraphic copySkeleton = copy.GetComponent<SkeletonGraphic>();
+        if (copySkeleton != null)
+        {
+            copySkeleton.raycastTarget = false;
+            copySkeleton.Initialize(true);
+            if (sourceSkeleton != null)
+                copySkeleton.color = sourceSkeleton.color;
+        }
+
+        Image copyImage = copy.GetComponent<Image>();
+        if (copyImage != null)
+        {
+            copyImage.raycastTarget = false;
+            copyImage.color = sourceImage != null ? sourceImage.color : Color.white;
+        }
+
+        _activeVisualCopies.Add(copy);
+        return new PresentationVisual
+        {
+            Root = copy,
+            Rect = copyRect,
+            Skeleton = copySkeleton,
+            Image = copyImage,
+            AttackSprite = attackSprite,
+            HurtSprite = hurtSprite
+        };
     }
 
-    private static void RestorePresentationSorting(CanvasSortingSnapshot snapshot)
+    private static Vector3 DivideScale(Vector3 worldScale, Vector3 parentWorldScale)
     {
-        if (snapshot?.Canvas == null) return;
+        return new Vector3(
+            Mathf.Approximately(parentWorldScale.x, 0f) ? worldScale.x : worldScale.x / parentWorldScale.x,
+            Mathf.Approximately(parentWorldScale.y, 0f) ? worldScale.y : worldScale.y / parentWorldScale.y,
+            Mathf.Approximately(parentWorldScale.z, 0f) ? worldScale.z : worldScale.z / parentWorldScale.z);
+    }
 
-        snapshot.Canvas.overrideSorting = snapshot.OverrideSorting;
-        snapshot.Canvas.sortingOrder = snapshot.SortingOrder;
-        if (snapshot.WasAdded)
+    private static void PlayVisualAnimation(PresentationVisual visual, bool attack)
+    {
+        if (visual == null) return;
+
+        if (visual.Skeleton?.AnimationState != null)
         {
-            Destroy(snapshot.Canvas);
+            var data = visual.Skeleton.AnimationState.Data?.SkeletonData;
+            string animation = attack
+                ? "attack1"
+                : data?.FindAnimation("shouji") != null ? "shouji" : "hit";
+            if (data?.FindAnimation(animation) != null)
+            {
+                visual.Skeleton.AnimationState.SetAnimation(0, animation, false);
+                if (data.FindAnimation("idle") != null)
+                    visual.Skeleton.AnimationState.AddAnimation(0, "idle", true, 0.5f);
+            }
+            return;
         }
+
+        if (visual.Image != null)
+        {
+            Sprite sprite = attack ? visual.AttackSprite : visual.HurtSprite;
+            if (sprite != null)
+            {
+                visual.Image.sprite = sprite;
+                visual.Image.preserveAspect = true;
+                visual.Image.SetNativeSize();
+            }
+        }
+    }
+
+    private static Vector3 GetVisualTopWorldPosition(PresentationVisual visual)
+    {
+        if (visual?.Rect == null) return Vector3.zero;
+
+        if (visual.Skeleton?.Skeleton != null)
+        {
+            visual.Skeleton.Skeleton.UpdateWorldTransform();
+            float[] vertices = null;
+            visual.Skeleton.Skeleton.GetBounds(
+                out float minX,
+                out float minY,
+                out float maxX,
+                out float maxY,
+                ref vertices);
+            return visual.Skeleton.transform.TransformPoint(new Vector3((minX + maxX) * 0.5f, maxY, 0f));
+        }
+
+        var corners = new Vector3[4];
+        visual.Rect.GetWorldCorners(corners);
+        return (corners[1] + corners[2]) * 0.5f;
+    }
+
+    private void DestroyPresentationVisual(PresentationVisual visual)
+    {
+        if (visual?.Root == null) return;
+        if (visual.Rect != null) visual.Rect.DOKill();
+        _activeVisualCopies.Remove(visual.Root);
+        visual.Root.SetActive(false);
+        Destroy(visual.Root);
+    }
+
+    private void DestroyAllVisualCopies()
+    {
+        foreach (GameObject copy in new List<GameObject>(_activeVisualCopies))
+        {
+            if (copy == null) continue;
+            copy.transform.DOKill();
+            copy.SetActive(false);
+            Destroy(copy);
+        }
+        _activeVisualCopies.Clear();
     }
 
     /// <summary>
@@ -318,66 +438,6 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         float x = centerX + (useLeftSlot ? -pairHalfGap : pairHalfGap);
         float y = canvasRect.rect.yMax - PAIR_SCREEN_Y + characterYOffset;
         return canvasRect.TransformPoint(new Vector3(x, y, 0f));
-    }
-
-    private LayoutSlotSnapshot DetachToPresentationLayer(RectTransform rect)
-    {
-        if (rect == null || rect.parent == null || _presentationRoot == null) return null;
-
-        var snapshot = new LayoutSlotSnapshot
-        {
-            Rect = rect,
-            Parent = rect.parent,
-            HomeWorldPosition = rect.position,
-            HomeLocalScale = rect.localScale
-        };
-
-        GameObject placeholder = new GameObject(rect.name + "_PresentationSlot", typeof(RectTransform), typeof(LayoutElement));
-        RectTransform slotRect = placeholder.GetComponent<RectTransform>();
-        slotRect.SetParent(snapshot.Parent, false);
-        slotRect.SetSiblingIndex(rect.GetSiblingIndex());
-        slotRect.sizeDelta = rect.sizeDelta;
-
-        LayoutElement sourceLayout = rect.GetComponent<LayoutElement>();
-        LayoutElement slotLayout = placeholder.GetComponent<LayoutElement>();
-        if (sourceLayout != null)
-        {
-            slotLayout.minWidth = sourceLayout.minWidth;
-            slotLayout.minHeight = sourceLayout.minHeight;
-            slotLayout.preferredWidth = sourceLayout.preferredWidth;
-            slotLayout.preferredHeight = sourceLayout.preferredHeight;
-            slotLayout.flexibleWidth = sourceLayout.flexibleWidth;
-            slotLayout.flexibleHeight = sourceLayout.flexibleHeight;
-        }
-        else
-        {
-            slotLayout.preferredWidth = rect.rect.width;
-            slotLayout.preferredHeight = rect.rect.height;
-        }
-
-        snapshot.Placeholder = placeholder;
-        rect.SetParent(_presentationRoot, true);
-        rect.SetAsLastSibling();
-        return snapshot;
-    }
-
-    private static void RestoreLayoutSlot(LayoutSlotSnapshot snapshot)
-    {
-        if (snapshot?.Rect == null || snapshot.Parent == null) return;
-
-        int slotIndex = snapshot.Placeholder != null
-            ? snapshot.Placeholder.transform.GetSiblingIndex()
-            : snapshot.Parent.childCount;
-        if (snapshot.Placeholder != null)
-        {
-            snapshot.Placeholder.transform.SetParent(null, false);
-            Destroy(snapshot.Placeholder);
-        }
-
-        snapshot.Rect.SetParent(snapshot.Parent, true);
-        snapshot.Rect.SetSiblingIndex(Mathf.Clamp(slotIndex, 0, snapshot.Parent.childCount - 1));
-        snapshot.Rect.position = snapshot.HomeWorldPosition;
-        snapshot.Rect.localScale = snapshot.HomeLocalScale;
     }
 
     private void HideBattleStatusUi()
@@ -602,84 +662,6 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
     #endregion
 
     #region 私有方法 - 动画驱动
-
-    private void PlayCasterAttack(MonoBehaviour casterUI)
-    {
-        if (casterUI == null) return;
-
-        var character = casterUI as Character;
-        if (character != null)
-        {
-            character.PlayAttackAnimation();
-            return;
-        }
-
-        var enemy = casterUI as Enemy;
-        if (enemy != null)
-        {
-            enemy.PlayAttackAnimation();
-        }
-    }
-
-    private void PlayTargetHurt(MonoBehaviour targetUI)
-    {
-        if (targetUI == null) return;
-
-        var character = targetUI as Character;
-        if (character != null)
-        {
-            character.PlayShoujiAnimation();
-            return;
-        }
-
-        var enemy = targetUI as Enemy;
-        if (enemy != null)
-        {
-            enemy.PlayShoujiAnimation();
-        }
-    }
-
-    /// <summary>
-    /// 取目标 Skeleton 的头顶世界坐标，用于伤害数字定位。
-    /// </summary>
-    private Vector3 GetUnitTopWorldPosition(MonoBehaviour unitUI)
-    {
-        if (unitUI == null) return Vector3.zero;
-
-        SkeletonGraphic skeleton = null;
-        var character = unitUI as Character;
-        if (character != null)
-        {
-            skeleton = character.Skeleton_Unit;
-        }
-        else
-        {
-            var enemy = unitUI as Enemy;
-            if (enemy != null)
-            {
-                skeleton = enemy.Skeleton_Unit;
-            }
-        }
-
-        if (skeleton == null)
-        {
-            return unitUI.transform.position + new Vector3(0, 200f, 0);
-        }
-
-        Vector3 worldPos = skeleton.transform.position;
-        if (skeleton.Skeleton != null)
-        {
-            float[] vertexBuffer = null;
-            skeleton.Skeleton.GetBounds(out float minX, out float minY, out float maxX, out float maxY, ref vertexBuffer);
-            float height = maxY - minY;
-            worldPos.y += height * skeleton.transform.lossyScale.y;
-        }
-        else
-        {
-            worldPos.y += 200f;
-        }
-        return worldPos;
-    }
 
     private void ShowDamageNumber(Vector3 targetPosition, int damage)
     {
