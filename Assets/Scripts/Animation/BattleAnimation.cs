@@ -2,6 +2,7 @@ using UnityEngine;
 using Spine.Unity;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using DG.Tweening;
 using Ashlight.Battle.Core.Data;
 using Scripts.UI;
@@ -119,6 +120,62 @@ public class BattleAnimation : MonoBehaviour, IBattleAnimationPlayer
             // 还原 TimeScale，避免后续 idle 一直 2 倍速
             SetSkeletonTimeScale(casterSkeleton, casterOriginalScale);
             SetSkeletonTimeScale(targetSkeleton, targetOriginalScale);
+        }
+    }
+
+    /// <summary>
+    /// 群体攻击的原地演出：施法者只播放一次攻击，所有目标同时受击。
+    /// </summary>
+    public IEnumerator PlayAoeBattleAnimation(
+        UnitState casterState,
+        MonoBehaviour casterUI,
+        IReadOnlyList<MonoBehaviour> targetUis,
+        IReadOnlyList<int> damages,
+        Action<int> onTargetHit)
+    {
+        if (casterState == null || casterUI == null)
+            yield break;
+
+        var skeletons = new List<SkeletonGraphic>();
+        var originalScales = new List<float>();
+        SkeletonGraphic casterSkeleton = GetUnitSkeleton(casterUI);
+        skeletons.Add(casterSkeleton);
+        originalScales.Add(SetSkeletonTimeScale(casterSkeleton, SPEED_MULTIPLIER));
+
+        if (targetUis != null)
+        {
+            foreach (var targetUI in targetUis)
+            {
+                var skeleton = GetUnitSkeleton(targetUI);
+                skeletons.Add(skeleton);
+                originalScales.Add(SetSkeletonTimeScale(skeleton, SPEED_MULTIPLIER));
+            }
+        }
+
+        try
+        {
+            PlayCasterAttack(casterUI);
+            for (int i = 0; i < targetUis.Count; i++)
+            {
+                var targetUI = targetUis[i];
+                PlayTargetHurt(targetUI);
+
+                int damage = damages != null && i < damages.Count ? damages[i] : 0;
+                if (damage > 0)
+                {
+                    Vector3 damagePos = GetUnitTopWorldPosition(targetUI);
+                    if (damagePos != Vector3.zero)
+                        ShowDamageNumber(damagePos, damage);
+                }
+                onTargetHit?.Invoke(i);
+            }
+
+            yield return new WaitForSeconds(BATTLE_DURATION);
+        }
+        finally
+        {
+            for (int i = 0; i < skeletons.Count; i++)
+                SetSkeletonTimeScale(skeletons[i], originalScales[i]);
         }
     }
 

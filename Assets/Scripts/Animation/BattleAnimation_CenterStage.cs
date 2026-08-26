@@ -237,9 +237,125 @@ public class BattleAnimation_CenterStage : MonoBehaviour, IBattleAnimationPlayer
         }
     }
 
+    /// <summary>
+    /// 群体攻击的中央舞台演出：施法者只入场一次，所有受击目标同时入场、受击与显示伤害。
+    /// </summary>
+    public IEnumerator PlayAoeBattleAnimation(
+        UnitState casterState,
+        MonoBehaviour casterUI,
+        IReadOnlyList<MonoBehaviour> targetUis,
+        IReadOnlyList<int> damages,
+        Action<int> onTargetHit)
+    {
+        if (casterState == null || casterUI == null || targetUis == null || targetUis.Count == 0)
+            yield break;
+
+        EnsurePresentationRoot();
+        if (_presentationRoot == null)
+            yield break;
+
+        PresentationVisual casterVisual = CreatePresentationVisual(casterUI, "Caster");
+        if (casterVisual?.Rect == null)
+        {
+            DestroyPresentationVisual(casterVisual);
+            yield break;
+        }
+
+        var targetVisuals = new List<PresentationVisual>();
+        for (int i = 0; i < targetUis.Count; i++)
+        {
+            var visual = CreatePresentationVisual(targetUis[i], $"AoeTarget_{i}");
+            if (visual?.Rect != null)
+                targetVisuals.Add(visual);
+            else
+                DestroyPresentationVisual(visual);
+        }
+
+        if (targetVisuals.Count == 0)
+        {
+            DestroyPresentationVisual(casterVisual);
+            yield break;
+        }
+
+        bool moveLeftToRight = casterState.IsPlayerUnit;
+        bool casterOnLeft = casterState.IsPlayerUnit;
+        Vector3 casterStart = ComputePairPosition(moveLeftToRight ? PairPoint.Start : PairPoint.End, casterOnLeft);
+        Vector3 casterCenter = ComputePairPosition(PairPoint.Center, casterOnLeft);
+        Vector3 casterEnd = ComputePairPosition(moveLeftToRight ? PairPoint.End : PairPoint.Start, casterOnLeft);
+
+        HideBattleStatusUi();
+        try
+        {
+            casterVisual.Rect.position = casterStart;
+            PlayVisualAnimation(casterVisual, true);
+            StartCoroutine(PlayEffectFrames(!moveLeftToRight));
+
+            var entry = DOTween.Sequence();
+            entry.Join(casterVisual.Rect.DOMove(casterCenter, enterCenterDuration).SetEase(Ease.OutCubic));
+            for (int i = 0; i < targetVisuals.Count; i++)
+            {
+                var targetVisual = targetVisuals[i];
+                Vector3 targetStart = GetAoeTargetPosition(
+                    moveLeftToRight ? PairPoint.Start : PairPoint.End,
+                    !casterOnLeft, i, targetVisuals.Count);
+                Vector3 targetCenter = GetAoeTargetPosition(PairPoint.Center, !casterOnLeft, i, targetVisuals.Count);
+                targetVisual.Rect.position = targetStart;
+                targetVisual.Rect.DOMove(targetCenter, enterCenterDuration).SetEase(Ease.OutCubic);
+                PlayVisualAnimation(targetVisual, false);
+            }
+            yield return entry.WaitForCompletion();
+
+            float remainingBattleDuration = Mathf.Max(0f, battleAnimationDuration - enterCenterDuration);
+            if (remainingBattleDuration > 0f)
+                yield return new WaitForSeconds(remainingBattleDuration);
+            if (postAnimationHoldDuration > 0f)
+                yield return new WaitForSeconds(postAnimationHoldDuration);
+
+            for (int i = 0; i < targetVisuals.Count; i++)
+            {
+                int damage = damages != null && i < damages.Count ? damages[i] : 0;
+                if (damage > 0)
+                {
+                    Vector3 damagePos = GetVisualTopWorldPosition(targetVisuals[i]);
+                    if (damagePos != Vector3.zero)
+                        ShowDamageNumber(damagePos, damage);
+                }
+                onTargetHit?.Invoke(i);
+            }
+
+            yield return new WaitForSeconds(DAMAGE_BEFORE_EXIT_DELAY);
+
+            var exit = DOTween.Sequence();
+            exit.Join(casterVisual.Rect.DOMove(casterEnd, exitDuration).SetEase(Ease.InCubic));
+            for (int i = 0; i < targetVisuals.Count; i++)
+            {
+                Vector3 targetEnd = GetAoeTargetPosition(
+                    moveLeftToRight ? PairPoint.End : PairPoint.Start,
+                    !casterOnLeft, i, targetVisuals.Count);
+                exit.Join(targetVisuals[i].Rect.DOMove(targetEnd, exitDuration).SetEase(Ease.InCubic));
+            }
+            yield return exit.WaitForCompletion();
+        }
+        finally
+        {
+            DestroyPresentationVisual(casterVisual);
+            foreach (var visual in targetVisuals)
+                DestroyPresentationVisual(visual);
+            RestoreBattleStatusUi();
+        }
+    }
+
     #endregion
 
     #region 私有方法 - 位置计算
+
+    private Vector3 GetAoeTargetPosition(PairPoint point, bool targetOnLeft, int index, int count)
+    {
+        Vector3 position = ComputePairPosition(point, targetOnLeft);
+        float centeredIndex = index - (count - 1) * 0.5f;
+        position.y -= centeredIndex * 145f;
+        return position;
+    }
 
     private PresentationVisual CreatePresentationVisual(MonoBehaviour unitUI, string role)
     {

@@ -34,6 +34,7 @@ namespace Scripts.UI
             public string TargetId;
             public int HealthDamage;
             public int ArmorDamage;
+            public bool IsAoe;
         }
 
         // 伤害事件必须逐次保留：同一技能的 AOE 会命中多个目标，多段攻击也可能连续命中同一目标。
@@ -116,7 +117,7 @@ namespace Scripts.UI
         /// <param name="attackerId">攻击者ID</param>
         /// <param name="targetId">目标ID</param>
         /// <param name="damage">伤害值</param>
-        public void CacheDamage(string attackerId, string targetId, int healthDamage, int armorDamage)
+        public void CacheDamage(string attackerId, string targetId, int healthDamage, int armorDamage, bool isAoe)
         {
             if (string.IsNullOrEmpty(attackerId) || string.IsNullOrEmpty(targetId))
             {
@@ -133,7 +134,8 @@ namespace Scripts.UI
             {
                 TargetId = targetId,
                 HealthDamage = healthDamage,
-                ArmorDamage = armorDamage
+                ArmorDamage = armorDamage,
+                IsAoe = isAoe
             });
             Debug.Log($"[BattleAnimationHandler] 缓存伤害: {attackerId} -> {targetId}, 血量: {healthDamage}, 护甲: {armorDamage}");
         }
@@ -183,7 +185,7 @@ namespace Scripts.UI
 
         #region 动画播放
 
-        /// <summary>正在播放的战斗演出数量。每个演出协程入口 +1、SignalAnimationComplete -1。</summary>
+        /// <summary>正在播放或已排队的战斗演出数量。入队即 +1、结束时 SignalAnimationComplete -1。</summary>
         private int _activeAnimations;
 
         /// <summary>
@@ -193,13 +195,24 @@ namespace Scripts.UI
         public bool IsAnimating => _activeAnimations > 0;
 
         /// <summary>
-        /// 播放战斗演出动画（使用BattleAnimation组件）
+        /// 立即占用演出闸门并启动演出。计数必须在 StartCoroutine 前递增，
+        /// 这样 ATB 在同一帧内绝不会把异步演出误判成“已结束”。
         /// </summary>
-        /// <param name="evt">卡片执行事件</param>
-        /// <returns>协程</returns>
+        public void QueueBattleAnimation(CardExecutedEvent evt)
+        {
+            _activeAnimations++;
+            StartCoroutine(PlayBattleAnimationRoutine(evt));
+        }
+
+        /// <summary>兼容需要 yield 等待的调用方。</summary>
         public IEnumerator PlayBattleAnimation(CardExecutedEvent evt)
         {
             _activeAnimations++;
+            yield return PlayBattleAnimationRoutine(evt);
+        }
+
+        private IEnumerator PlayBattleAnimationRoutine(CardExecutedEvent evt)
+        {
             Debug.Log($"[BattleAnimationHandler] ▶ 演出开始 {evt.CasterId} → {evt.TargetId} (卡/技能={evt.CardId}, 并发数={_activeAnimations}, t={Time.time:F2})");
 
             // 获取BattleAnimation组件
@@ -275,36 +288,97 @@ namespace Scripts.UI
                 hits.Add(new PendingDamage { TargetId = evt.TargetId });
             }
 
-            foreach (PendingDamage hit in hits)
+            bool isAoe = hits.Count > 1 && hits.TrueForAll(hit => hit.IsAoe);
+            if (isAoe)
             {
-                UnitState targetState = _unitUIManager.FindUnitState(hit.TargetId);
-                MonoBehaviour targetUI = _unitUIManager.FindUnitComponent(hit.TargetId);
-                if (targetState == null || targetUI == null)
+                // AOE 只播放一次施法演出；所有目标在同一击中时刻受击和显示数字。
+                // 伤害仍按目标逐个结算/缓存，合并的仅是视觉演出。
+                var targetUis = new List<MonoBehaviour>();
+                var damages = new List<int>();
+                var armorDamages = new List<int>();
+                foreach (var hit in hits)
                 {
-                    Debug.LogWarning($"[BattleAnimationHandler] 跳过找不到的受击目标: {hit.TargetId}");
-                    continue;
+                    var targetUI = _unitUIManager.FindUnitComponent(hit.TargetId);
+                    if (targetUI == null)
+                    {
+                        Debug.LogWarning($"[BattleAnimationHandler] 跳过找不到的 AOE 受击目标: {hit.TargetId}");
+                        continue;
+                    }
+
+                    UpdateUnitDisplay(targetUI);
+                    targetUis.Add(targetUI);
+                    damages.Add(hit.HealthDamage);
+                    armorDamages.Add(hit.ArmorDamage);
                 }
 
-                // 演出中的 AB 使用结算后的状态：先同步血量/护甲，再把真实 UI 抽到演出层。
                 UpdateUnitDisplay(casterUI);
-                UpdateUnitDisplay(targetUI);
-
-                yield return battleAnimComponent.PlayBattleAnimation(
-                    casterState,
-                    targetState,
-                    casterUI,
-                    targetUI,
-                    evt.IsAttackCard && hit.HealthDamage + hit.ArmorDamage > 0,
-                    hit.HealthDamage,
-                    () =>
+                if (battleAnimComponent is BattleAnimation_CenterStage centerStage)
+                {
+                    yield return centerStage.PlayAoeBattleAnimation(
+                        casterState, casterUI, targetUis, damages,
+                        index => HandleAoeImpact(targetUis, damages, armorDamages, index));
+                }
+                else if (battleAnimComponent is BattleAnimation inPlace)
+                {
+                    yield return inPlace.PlayAoeBattleAnimation(
+                        casterState, casterUI, targetUis, damages,
+                        index => HandleAoeImpact(targetUis, damages, armorDamages, index));
+                }
+                else
+                {
+                    // 新的播放器尚未实现 AOE 接口时，退化为一次施法 + 首目标演出，
+                    // 其余目标仍在同一时机受击，避免整段演出重复 N 次。
+                    foreach (var hit in hits)
                     {
-                        if (hit.ArmorDamage > 0)
-                        {
-                            ShowFloatingLabel(targetUI.transform.position + new Vector3(-0.35f, 0f, 0f), hit.ArmorDamage.ToString(), Color.gray);
-                        }
-                        PlayCardImpactShake(hit.HealthDamage, hit.ArmorDamage);
+                        var targetUI = _unitUIManager.FindUnitComponent(hit.TargetId);
+                        if (targetUI == null) continue;
+                        UpdateUnitDisplay(targetUI);
                     }
-                );
+                    if (targetUis.Count > 0)
+                    {
+                        yield return battleAnimComponent.PlayBattleAnimation(
+                            casterState, _unitUIManager.FindUnitState(hits[0].TargetId), casterUI, targetUis[0],
+                            true, damages[0], () =>
+                            {
+                                for (int i = 0; i < targetUis.Count; i++)
+                                    HandleAoeImpact(targetUis, damages, armorDamages, i);
+                            });
+                    }
+                }
+            }
+            else
+            {
+                foreach (PendingDamage hit in hits)
+                {
+                    UnitState targetState = _unitUIManager.FindUnitState(hit.TargetId);
+                    MonoBehaviour targetUI = _unitUIManager.FindUnitComponent(hit.TargetId);
+                    if (targetState == null || targetUI == null)
+                    {
+                        Debug.LogWarning($"[BattleAnimationHandler] 跳过找不到的受击目标: {hit.TargetId}");
+                        continue;
+                    }
+
+                    // 演出中的 AB 使用结算后的状态：先同步血量/护甲，再把真实 UI 抽到演出层。
+                    UpdateUnitDisplay(casterUI);
+                    UpdateUnitDisplay(targetUI);
+
+                    yield return battleAnimComponent.PlayBattleAnimation(
+                        casterState,
+                        targetState,
+                        casterUI,
+                        targetUI,
+                        evt.IsAttackCard && hit.HealthDamage + hit.ArmorDamage > 0,
+                        hit.HealthDamage,
+                        () =>
+                        {
+                            if (hit.ArmorDamage > 0)
+                            {
+                                ShowFloatingLabel(targetUI.transform.position + new Vector3(-0.35f, 0f, 0f), hit.ArmorDamage.ToString(), Color.gray);
+                            }
+                            PlayCardImpactShake(hit.HealthDamage, hit.ArmorDamage);
+                        }
+                    );
+                }
             }
 
             // 更新所有单位的UI显示
@@ -312,6 +386,24 @@ namespace Scripts.UI
 
             // 通知动画完成
             SignalAnimationComplete();
+        }
+
+        private void HandleAoeImpact(
+            IReadOnlyList<MonoBehaviour> targetUis,
+            IReadOnlyList<int> damages,
+            IReadOnlyList<int> armorDamages,
+            int index)
+        {
+            if (index < 0 || index >= targetUis.Count || targetUis[index] == null)
+                return;
+
+            if (armorDamages[index] > 0)
+            {
+                ShowFloatingLabel(
+                    targetUis[index].transform.position + new Vector3(-0.35f, 0f, 0f),
+                    armorDamages[index].ToString(), Color.gray);
+            }
+            PlayCardImpactShake(damages[index], armorDamages[index]);
         }
 
         /// <summary>

@@ -50,6 +50,18 @@ namespace Scripts.UI
         [Tooltip("大量手牌重叠时允许的最小 Layout spacing")]
         private float minimumCompressedHandSpacing = -100f;
 
+        [SerializeField]
+        [Tooltip("非当前行动角色手牌的紧凑间距（负值会使卡牌重叠）")]
+        private float inactiveHandSpacing = -85f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("非当前行动角色手牌区与当前角色手牌区之间保留的间隔")]
+        private float inactiveHandSideGap = 20f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("不同角色的侧边手牌组之间保留的间隔")]
+        private float inactiveHandOwnerGap = 20f;
+
         [Header("卡牌流转动画")]
         [SerializeField, LabelText("抽牌起始点")]
         [Tooltip("抽牌动画的独立起始锚点；未配置时回退到 CardDeck")]
@@ -220,6 +232,7 @@ namespace Scripts.UI
         private Coroutine _displayHandAfterRecycleCoroutine;
         private bool _handLayoutSpacingCaptured;
         private float _defaultHandLayoutSpacing;
+        private string _lastHandLayoutTurnUnitId;
         private RectTransform _cardAnimationLayer;
         private readonly Dictionary<CardViewController, Tween> _cardFlowTweens = new Dictionary<CardViewController, Tween>();
         private readonly HashSet<string> _retiringEnemyIds = new HashSet<string>();
@@ -277,7 +290,8 @@ namespace Scripts.UI
                 ATB.OnUnitTurn += HandleAtbUnitTurn;
                 ATB.OnObjectiveRoundAdvanced += HandleObjectiveRoundAdvanced;
                 // 演出闸门：上一个单位的战斗演出没播完，ATB 不开下一个单位的回合
-                ATB.AnimationBusyPredicate = () => _animationHandler != null && _animationHandler.IsAnimating;
+                ATB.AnimationBusyPredicate = () =>
+                    (_animationHandler != null && _animationHandler.IsAnimating) || IsCardFlowAnimating();
                 // ATB 节点在场景里是隐藏的（旧图标条已弃用），协程借本组件跑——
                 // 否则 TriggerNextUnit 退化为同步一帧跑完，节奏/闸门全部失效。
                 ATB.CoroutineHost = this;
@@ -341,6 +355,14 @@ namespace Scripts.UI
             if (!string.IsNullOrEmpty(currentTurnUnitId))
             {
                 UpdateEnergyBarByUnitId(currentTurnUnitId);
+            }
+
+            // 手牌会同时预览全队下一手；轮到新角色时，把该角色的牌恢复到主区域，
+            // 其余角色的牌收拢到侧边。只在实际切换时重排，避免每帧触发布局重建。
+            if (_lastHandLayoutTurnUnitId != currentTurnUnitId)
+            {
+                _lastHandLayoutTurnUnitId = currentTurnUnitId;
+                UpdateHandLayout();
             }
 
             // 监听空格键触发时间轴前进
@@ -1659,7 +1681,14 @@ namespace Scripts.UI
             if (CardContainer == null || _handCards.Count == 0)
                 return;
 
-            var sortedCards = _handCards.OrderBy(GetHandSortKey).ToList();
+            // 抽牌/弃牌动画中的卡会暂时移动到独立动画层；此时不能改写它们的局部坐标，
+            // 只布局已经回到 CardContainer 的卡牌。
+            var sortedCards = _handCards
+                .Where(card => card != null && card.transform.parent == CardContainer.transform)
+                .OrderBy(GetHandSortKey)
+                .ToList();
+            if (sortedCards.Count == 0)
+                return;
 
             // BattleScene 的 CardContainer 自带 HorizontalLayoutGroup；优先调整它的 spacing，
             // 否则 LayoutGroup 会在本帧末覆盖下面手动设置的 anchoredPosition。
@@ -1671,6 +1700,15 @@ namespace Scripts.UI
                     _defaultHandLayoutSpacing = layout.spacing;
                     _handLayoutSpacingCaptured = true;
                 }
+
+                if (TryGetTurnFocusedHandGroups(sortedCards, out var currentTurnCards, out var inactiveCards))
+                {
+                    LayoutTurnFocusedHand(layout, currentTurnCards, inactiveCards);
+                    return;
+                }
+
+                // 没有其他角色的预览牌时继续使用场景原本的 LayoutGroup 排版。
+                layout.enabled = true;
 
                 for (int i = 0; i < sortedCards.Count; i++)
                 {
@@ -1742,6 +1780,197 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 当手牌中同时存在当前行动角色和其他角色的牌时，拆成主区与侧边预览区。
+        /// 当前角色的牌保留正常间距并居中；其他角色的牌紧凑排列在右侧。
+        /// </summary>
+        private bool TryGetTurnFocusedHandGroups(
+            List<CardViewController> sortedCards,
+            out List<CardViewController> currentTurnCards,
+            out List<CardViewController> inactiveCards)
+        {
+            currentTurnCards = new List<CardViewController>();
+            inactiveCards = new List<CardViewController>();
+
+            var currentUnit = _battleManager?.CurrentState?.GetUnitById(
+                _battleManager.CurrentState.CurrentTurnUnitId);
+            var currentCharacterId = currentUnit?.GetCharacterId();
+            // 战斗尚未开始时沿用原始总手牌布局；敌人/天气行动时则没有玩家主手牌，
+            // 所有玩家牌都以侧边预览形式收起。
+            if (string.IsNullOrEmpty(_battleManager?.CurrentState?.CurrentTurnUnitId))
+                return false;
+
+            foreach (var card in sortedCards)
+            {
+                if (card == null)
+                    continue;
+
+                if (currentCharacterId.HasValue && GetCardOwnerCharacterId(card) == currentCharacterId.Value)
+                    currentTurnCards.Add(card);
+                else
+                    inactiveCards.Add(card);
+            }
+
+            return inactiveCards.Count > 0;
+        }
+
+        private CharacterEnum GetCardOwnerCharacterId(CardViewController card)
+        {
+            var runtimeCard = _battleManager?.CurrentState?.DeckSystem?.Hand?
+                .FirstOrDefault(state => state != null && state.InstanceId == card.InstanceId);
+            if (runtimeCard != null && runtimeCard.OwnerCharacterId.HasValue)
+                return runtimeCard.OwnerCharacterId.Value;
+
+            return card.GetCurrentCard()?.BelongTo ?? default;
+        }
+
+        private void LayoutTurnFocusedHand(
+            HorizontalLayoutGroup layout,
+            List<CardViewController> currentTurnCards,
+            List<CardViewController> inactiveCards)
+        {
+            // 不同分组需要不同间距，HorizontalLayoutGroup 无法表达，改由此处统一定位。
+            layout.enabled = false;
+
+            var container = CardContainer.rectTransform;
+            float containerWidth = container.rect.width;
+            float normalSpacing = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
+            var inactiveOwnerGroups = BuildHandOwnerGroups(inactiveCards);
+
+            // 当前角色手牌从左侧主区域开始排。主区会根据侧边预览所需宽度收缩，
+            // 不再强制以整个 CardContainer 为中心，避免两组在卡多时互相覆盖。
+            float currentLeftOverflow = currentTurnCards.Count > 0
+                ? GetHandCardVisualOverflow(currentTurnCards[0], true)
+                : 0f;
+            float inactiveRightOverflow = inactiveCards.Count > 0
+                ? GetHandCardVisualOverflow(inactiveOwnerGroups[inactiveOwnerGroups.Count - 1].Last(), false)
+                : 0f;
+            float inactiveRightLimit = containerWidth - layout.padding.right - inactiveRightOverflow;
+            float minimumInactiveWidth = GetMinimumOwnerGroupWidth(inactiveOwnerGroups);
+            float maxCurrentWidth = Mathf.Max(
+                GetCardWidth(currentTurnCards.FirstOrDefault()),
+                inactiveRightLimit - layout.padding.left - currentLeftOverflow -
+                inactiveHandSideGap - minimumInactiveWidth);
+            if (currentTurnCards.Count > 1)
+            {
+                float fitSpacing =
+                    (maxCurrentWidth - currentTurnCards.Sum(GetCardWidth)) /
+                    (currentTurnCards.Count - 1);
+                normalSpacing = Mathf.Min(normalSpacing, fitSpacing);
+            }
+            float currentWidth = GetHandGroupWidth(currentTurnCards, normalSpacing);
+            float currentStart = layout.padding.left + currentLeftOverflow;
+            PositionHandGroup(currentTurnCards, currentStart, normalSpacing);
+
+            // CardViewController 根节点是左上 anchor。anchoredPosition.x=0 对应容器左边缘，
+            // 因此这里全部在 [0, CardContainer.width] 的局部坐标内计算，避免负 x 越界。
+            // 其他角色手牌贴右侧，按角色拆组；组内紧凑，角色之间保留 ownerGap。
+            float inactiveSpacing = inactiveHandSpacing;
+            int inactiveInnerGapCount = inactiveCards.Count - inactiveOwnerGroups.Count;
+            if (inactiveInnerGapCount > 0)
+            {
+                float currentEnd = currentStart + currentWidth;
+                float availableInactiveWidth = Mathf.Max(
+                    minimumInactiveWidth,
+                    inactiveRightLimit - currentEnd - inactiveHandSideGap);
+                float fitSpacing =
+                    (availableInactiveWidth - inactiveCards.Sum(GetCardWidth) -
+                    Mathf.Max(0, inactiveOwnerGroups.Count - 1) * inactiveHandOwnerGap) /
+                    inactiveInnerGapCount;
+                inactiveSpacing = Mathf.Min(inactiveSpacing, fitSpacing);
+            }
+            float inactiveWidth = GetOwnerGroupsWidth(inactiveOwnerGroups, inactiveSpacing);
+            float inactiveStart = Mathf.Max(
+                layout.padding.left,
+                inactiveRightLimit - inactiveWidth);
+            PositionOwnerGroups(inactiveOwnerGroups, inactiveStart, inactiveSpacing);
+
+            // 让当前角色的牌在层级上位于预览牌之上，交互与阅读均优先于当前回合。
+            foreach (var card in inactiveCards)
+                card.transform.SetSiblingIndex(0);
+            foreach (var card in currentTurnCards)
+                card.transform.SetAsLastSibling();
+
+            foreach (var card in inactiveCards)
+                card.RefreshHandLayoutBaseline();
+            foreach (var card in currentTurnCards)
+                card.RefreshHandLayoutBaseline();
+        }
+
+        private static float GetHandGroupWidth(List<CardViewController> cards, float spacing)
+        {
+            if (cards == null || cards.Count == 0)
+                return 0f;
+
+            return cards.Sum(GetCardWidth) + Mathf.Max(0, cards.Count - 1) * spacing;
+        }
+
+        private List<List<CardViewController>> BuildHandOwnerGroups(List<CardViewController> cards)
+        {
+            return cards
+                .Where(card => card != null)
+                .GroupBy(GetCardOwnerCharacterId)
+                .Select(group => group.ToList())
+                .ToList();
+        }
+
+        private float GetMinimumOwnerGroupWidth(List<List<CardViewController>> ownerGroups)
+        {
+            if (ownerGroups == null || ownerGroups.Count == 0)
+                return 0f;
+
+            // 组内卡牌允许完全重叠时，每个角色至少需要露出一张卡的宽度。
+            return ownerGroups.Sum(group => group.Max(GetCardWidth)) +
+                Mathf.Max(0, ownerGroups.Count - 1) * inactiveHandOwnerGap;
+        }
+
+        private float GetOwnerGroupsWidth(List<List<CardViewController>> ownerGroups, float cardSpacing)
+        {
+            if (ownerGroups == null || ownerGroups.Count == 0)
+                return 0f;
+
+            return ownerGroups.Sum(group => GetHandGroupWidth(group, cardSpacing)) +
+                Mathf.Max(0, ownerGroups.Count - 1) * inactiveHandOwnerGap;
+        }
+
+        private void PositionOwnerGroups(
+            List<List<CardViewController>> ownerGroups,
+            float startX,
+            float cardSpacing)
+        {
+            float x = startX;
+            foreach (var group in ownerGroups)
+            {
+                PositionHandGroup(group, x, cardSpacing);
+                x += GetHandGroupWidth(group, cardSpacing) + inactiveHandOwnerGap;
+            }
+        }
+
+        private static float GetCardWidth(CardViewController card)
+        {
+            var rect = card != null ? card.transform as RectTransform : null;
+            return rect != null ? rect.rect.width : 0f;
+        }
+
+        private static void PositionHandGroup(List<CardViewController> cards, float startX, float spacing)
+        {
+            float x = startX;
+            foreach (var card in cards)
+            {
+                if (card == null)
+                    continue;
+
+                var rect = card.transform as RectTransform;
+                if (rect == null)
+                    continue;
+
+                float width = rect.rect.width;
+                // 根节点的 anchor 在容器左上；x 使用距左边缘的距离，并由 pivot 换算到锚点坐标。
+                rect.anchoredPosition = new Vector2(x + width * rect.pivot.x, rect.anchoredPosition.y);
+                x += width + spacing;
+            }
+        }
+
+        /// <summary>
         /// 某名角色结束行动并预抽下一手后，同步手牌区而不回收其他角色的预览牌。
         /// </summary>
         private void RefreshHandPreviewAfterRedraw()
@@ -1790,6 +2019,21 @@ namespace Scripts.UI
             group.blocksRaycasts = false;
             group.interactable = false;
             return _cardAnimationLayer;
+        }
+
+        private bool IsCardFlowAnimating()
+        {
+            return _pendingDrawAnimations > 0 ||
+                _cardFlowTweens.Count > 0 ||
+                _displayHandAfterRecycleCoroutine != null;
+        }
+
+        private IEnumerator WaitForCardFlowAnimations()
+        {
+            while (IsCardFlowAnimating())
+            {
+                yield return null;
+            }
         }
 
         private void StopCardFlow(CardViewController card)
@@ -1895,7 +2139,7 @@ namespace Scripts.UI
                 return;
             _isDealingHand = false;
             var layout = CardContainer != null ? CardContainer.GetComponent<HorizontalLayoutGroup>() : null;
-            if (layout == null || handCompactDuration <= 0f)
+            if (layout == null || !layout.enabled || handCompactDuration <= 0f)
             {
                 UpdateHandLayout();
                 return;
@@ -2337,6 +2581,10 @@ namespace Scripts.UI
                         // 当前角色弃牌后立刻补抽；其他角色的预览手牌保持不动。
                         _battleManager.PrepareNextHandForPlayer(currentTurnUnit);
                         RefreshHandPreviewAfterRedraw();
+
+                        // 新牌飞入、旧牌回收完成前保留当前回合，不能让 ATB 切到下一单位。
+                        // 否则动画层中的牌会跨回合悬在界面上。
+                        yield return WaitForCardFlowAnimations();
                         ClearHandExecutionSuppression();
 
                         // 过载次数要在 EndCurrentTurn 之前读取（= 下次行动的额外回合延迟）。
@@ -2893,7 +3141,12 @@ namespace Scripts.UI
             }
 
             // 委托给动画处理器缓存伤害
-            _animationHandler.CacheDamage(evt.AttackerId, evt.TargetId, evt.ActualDamage, evt.ArmorDamage);
+            _animationHandler.CacheDamage(
+                evt.AttackerId,
+                evt.TargetId,
+                evt.ActualDamage,
+                evt.ArmorDamage,
+                evt.IsAoe);
         }
 
         /// <summary>
@@ -2915,8 +3168,8 @@ namespace Scripts.UI
 
             Debug.Log($"[UI_BattleScene] 卡片执行: {evt.CasterId} -> {evt.TargetId}, 攻击卡片={evt.IsAttackCard}");
 
-            // 委托给动画处理器播放动画
-            StartCoroutine(_animationHandler.PlayBattleAnimation(evt));
+            // 同步占用 ATB 演出闸门，再启动协程；不能让下一回合抢在协程首帧前推进。
+            _animationHandler.QueueBattleAnimation(evt);
         }
 
         /// <summary>
