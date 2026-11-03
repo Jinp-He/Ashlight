@@ -1,3 +1,4 @@
+@tool
 class_name CardRoot
 extends Node2D
 
@@ -38,8 +39,8 @@ const TEXT_BLACK: Color = Color(0.0, 0.0, 0.0, 1.0)            # 效果
 const TEXT_GREY: Color = Color(0.502, 0.502, 0.502, 1.0)       # 808080 说明
 const CARD_TYPES: Array[String] = ["攻击", "状态", "防御"]
 
-## 效果文字分类常量
-const KEYVAL_FONT_SIZE: int = 30   # 关键数值放大字号（默认效果字号 23）
+## 数值与正文同步缩放。
+var _effect_font_size: int = 23
 
 ## 特殊特效动画（帧序列，平时不播放，触发特殊条件时循环播放；居中覆盖于卡牌、受卡牌整体 scale 影响）
 const SPECIAL_EFFECT_DIR: String = "special_effect/"                       # 相对 CARD_ART_DIR
@@ -408,15 +409,19 @@ func _build() -> void:
 	_text_group.add_child(_type_label)
 
 	# 效果：RichTextLabel，DouyinSansBold 黑，词条/数字加粗，居中
-	# 自动换行：autowrap_mode + fit_content=true（宽度锁卡牌宽、高度随内容增长，便于虚线框贴合）
+	# 自动换行，宽度锁定；高度按 get_content_height 显式同步，避免重排残留旧高度。
 	_effect_label = RichTextLabel.new()
 	_effect_label.name = "EffectLabel"
 	_effect_label.bbcode_enabled = true
-	_effect_label.fit_content = true
+	_effect_label.fit_content = false
+	_effect_label.scroll_active = false
 	_effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_effect_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_effect_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_effect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Inspector 会继承编辑器的深色 RichTextLabel 底板；始终透出卡牌自带的浅色文字区。
+	_effect_label.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	_effect_label.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_effect_label.add_theme_color_override("default_color", TEXT_BLACK)   # 默认黑；关键数值仅换字体/放大、不再上色（词条/目标词均黑，见 _format_effect）
 	_effect_label.add_theme_font_override("default_font", _font_name)
 	_effect_label.add_theme_font_override("bold_font", _font_name)   # 加粗用同族字体（合成粗体），避免回退到其它字体变样
@@ -456,7 +461,7 @@ func _apply_all() -> void:
 func set_effect_text(s: String) -> void:
 	card_effect = s
 	if is_instance_valid(_effect_label):
-		_effect_label.text = _format_effect(card_effect)
+		_render_effect_text()
 	_on_effect_resized()   # 文字变化后按最新 size.y 重居中，消除异步偏移
 
 
@@ -726,7 +731,7 @@ func _apply_layout() -> void:
 ## 打击面编码（+ 后缀）：scope=群体 时数字后追加 "+"（含全场 ⏳A+）；单体不追加。
 
 
-## 外部设置打击面（HandManager 从 CardData.scope 灌入；切换空心/实心沙漏）。
+## 当前卡牌目标规则存放于 CardEffect。
 
 ## 文字：名字/类型/效果/说明（效果中词条与数字加粗）
 func _apply_text() -> void:
@@ -736,7 +741,7 @@ func _apply_text() -> void:
 		var idx := clampi(card_type, 0, CARD_TYPES.size() - 1)
 		_type_label.text = CARD_TYPES[idx]
 	if is_instance_valid(_effect_label):
-		_effect_label.text = _format_effect(card_effect)
+		_render_effect_text()
 	if is_instance_valid(_desc_label):
 		_desc_label.text = card_desc
 
@@ -787,7 +792,7 @@ func _format_key_number(s: String) -> String:
 	if mm != null:
 		num = mm.get_string(1)
 		arrow = mm.get_string(2)
-	return EffectTextFormat.key_number(num, arrow, KEYVAL_FONT_SIZE)
+	return EffectTextFormat.key_number(num, arrow, _effect_font_size + 5)
 
 ## 将文字控件按「卡牌宽居中 + 偏移」定位（X 居中于卡牌，Y 居中于偏移点）
 func _position_text(ctrl: Control, offset: Vector2, card_w: float, size: Vector2) -> void:
@@ -796,25 +801,45 @@ func _position_text(ctrl: Control, offset: Vector2, card_w: float, size: Vector2
 	ctrl.size = size
 	ctrl.position = Vector2(-card_w * 0.5 + offset.x, offset.y - size.y * 0.5)
 
-## 效果：RichTextLabel 自动换行（宽度 = 卡牌宽 - 2*wrap_inset，高度随内容），水平居中、垂直以内容高居中。
-## 关键坑：fit_content=true 下 size.y（换行高度）由引擎在下一帧绘制阶段才重算，
-## 同步读 size.y 做垂直居中会在随机/改文字后读到旧高度 → 文字偏移。
-## 修法：仅在 _effect_label 发出 resized 信号（尺寸已刷新）时由 _on_effect_resized 重居中。
+## 效果区锁定宽度，内容变更后同步实际高度。多效果使用较宽的文字区域并自适应字号。
 func _position_effect(offset: Vector2, card_w: float) -> void:
 	if not is_instance_valid(_effect_label):
 		return
-	var w := card_w - 2.0 * wrap_inset
+	var w := card_w - 2.0 * _effect_inset()
 	_effect_label.custom_minimum_size = Vector2(w, 0.0)
+	_effect_label.size.x = w
 	# 先用当前 size.y 给一个近似位置；精确居中由 _on_effect_resized 在尺寸刷新后完成。
-	_effect_label.position = Vector2(-w * 0.5 + offset.x, offset.y - _effect_label.size.y * 0.5)
+	_effect_label.position = Vector2(-w * 0.5 + offset.x, _effect_center_y() - _effect_label.size.y * 0.5)
 
 ## 引擎刷新效果文字换行高度(size.y)后回调：用最新尺寸重新垂直居中（消除异步导致的偏移）。
 ## 连接于 _build（_effect_label.resized）；触发条件：初始布局 / 改文字 / 窗口/换行重算等 size 变化时。
 func _on_effect_resized() -> void:
 	if not is_instance_valid(_effect_label):
 		return
-	var w := _card_w - 2.0 * wrap_inset
-	_effect_label.position = Vector2(-w * 0.5 + effect_offset.x, effect_offset.y - _effect_label.size.y * 0.5)
+	var multi: bool = card_effect.contains("\n")
+	var available: float = desc_offset.y - type_offset.y - 38.0
+	if multi and _effect_label.get_content_height() > available and _effect_font_size > 12:
+		_effect_font_size -= 1
+		_update_effect_fonts()
+	var w := _card_w - 2.0 * _effect_inset()
+	_effect_label.size.y = maxf(1.0, float(_effect_label.get_content_height()))
+	_effect_label.position = Vector2(-w * 0.5 + effect_offset.x, _effect_center_y() - _effect_label.size.y * 0.5)
+
+func _effect_inset() -> float:
+	return 30.0 if card_effect.contains("\n") else wrap_inset
+
+func _effect_center_y() -> float:
+	return (type_offset.y + 24.0 + desc_offset.y - 14.0) * 0.5 if card_effect.contains("\n") else effect_offset.y
+
+func _render_effect_text() -> void:
+	_effect_font_size = 18 if card_effect.contains("\n") else 23
+	_update_effect_fonts()
+
+func _update_effect_fonts() -> void:
+	_effect_label.add_theme_font_size_override("normal_font_size", _effect_font_size)
+	_effect_label.add_theme_font_size_override("bold_font_size", _effect_font_size)
+	_effect_label.text = _format_effect(card_effect)
+	_on_effect_resized.call_deferred()
 
 ## 费用着色：由 cost_color 索引 COST_COLORS（蓝/橙/绿），越界回退蓝。
 func _cost_color() -> Color:
@@ -946,3 +971,19 @@ func _detach_dim() -> void:
 ## 与 09-09 旧版的关键区别：旧版是「一条扫光线横穿卡面」（方向不对被否）；新版让高光带沿卡框「环游一圈」，
 ## 并以 card_frame 的 alpha 作蒙版 → 流光严格限制在边框形状内（中间透明区不上色）。render_mode blend_add 纯提亮。
 ## flash_border_boost（闪白）保留不删，可与流光叠加（在 hand_manager 触发点两行都调即可）。──
+
+## 编辑器预览和真实手牌使用同一个数据绑定入口。
+func apply_data(data: CardData, number: int, morale_bonus: int = 0) -> void:
+	card_name = data.card_name
+	card_type = data.card_type
+	cost_color = data.uno_color
+	cost_value = number
+	rarity = data.rarity
+	enhanced = data.enhanced
+	card_effect = data.effect_text(number, morale_bonus)
+	card_desc = data.description if not data.description.is_empty() else data.rules_text()
+	card_face = load(data.art_path) as Texture2D if ResourceLoader.exists(data.art_path) else null
+	if is_node_ready():
+		_face.texture = card_face
+		_face.visible = card_face != null
+		_apply_all()

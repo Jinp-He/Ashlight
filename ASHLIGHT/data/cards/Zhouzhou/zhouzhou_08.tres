@@ -1,6 +1,15 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_7ta63"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "shield"
+target = "选中友方"
+amount = 2
+scales_with_number = true
+hits = 1
 
 [resource]
 script = ExtResource("1_7ta63")
@@ -8,10 +17,7 @@ id = "zhouzhou_08"
 card_name = "回旋"
 belong_to = "Zhouzhou"
 card_type = 2
-cost_value = 4
-target_faction = "我方"
-effect_id = "shield"
-art_id = "Zhouzhou001.png"
-description = "效果值 = 点数 × 2"
 uno_color = 3
 base_number = 4
+art_path = "res://assets/cards/faces/Zhouzhou001.png"
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

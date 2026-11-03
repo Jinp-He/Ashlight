@@ -1,6 +1,16 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_rrgyw"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "apply_status"
+target = "选中敌人"
+amount = 1
+scales_with_number = true
+hits = 1
+status_id = "bleed"
 
 [resource]
 script = ExtResource("1_rrgyw")
@@ -8,10 +18,7 @@ id = "irene_02"
 card_name = "血刃"
 belong_to = "Irene"
 card_type = 1
-cost_value = 3
-effect_id = "bleed"
-key_value = 1
-art_id = "Irene001.png"
-description = "效果值 = 点数 × 1"
 uno_color = 1
 base_number = 3
+art_path = "res://assets/cards/faces/Irene001.png"
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

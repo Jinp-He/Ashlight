@@ -1,6 +1,15 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_21sdp"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "draw"
+target = "自身"
+amount = 2
+scales_with_number = false
+hits = 1
 
 [resource]
 script = ExtResource("1_21sdp")
@@ -8,13 +17,7 @@ id = "zhouzhou_04"
 card_name = "整理"
 belong_to = "Zhouzhou"
 card_type = 1
-cost_value = 3
-target_type = "Self"
-target_faction = "我方"
-effect_id = "draw"
-art_id = "Zhouzhou001.png"
-target_self = true
-description = "效果值固定"
 uno_color = 3
 base_number = 3
-scales_with_number = false
+art_path = "res://assets/cards/faces/Zhouzhou001.png"
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

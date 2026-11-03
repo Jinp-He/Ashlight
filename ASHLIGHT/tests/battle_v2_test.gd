@@ -49,6 +49,29 @@ func set_top(color: int, number: int) -> void:
 
 func run() -> void:
 	seed(22)
+	# 初始卡组是独立资源；牌库里的卡必须显式列入才能成为初始牌。
+	var starting_decks: Array[StartingDeckData] = []
+	for role in ["zhouzhou", "irene", "rocket"]:
+		var config := load("res://data/starting_decks/%s.tres" % role) as StartingDeckData
+		check(config != null and config.validation_errors().is_empty() and config.cards.size() == 8, role + " starter tres contains 8 valid cards")
+		starting_decks.append(config)
+	var solo := DeckManager.new()
+	check(solo.init_decks(["Irene", "Irene"]) and solo.draw_pile.size() == 8 and not solo.has_role("Rocket"), "only present roles contribute their starting deck; duplicate roles do not double cards")
+	var custom := starting_decks[0].duplicate() as StartingDeckData
+	custom.cards = [starting_decks[0].cards[0], starting_decks[0].cards[0]]
+	var custom_deck := DeckManager.new()
+	check(custom_deck.init_from_starting_decks([custom]) and custom_deck.draw_pile.size() == 2, "custom starter uses explicit list instead of all role cards")
+	var copies := custom_deck.draw_common(2)
+	check(copies.size() == 2 and copies[0] == copies[1], "repeated CardData references produce multiple drawable copies")
+	custom_deck.discard_card("Zhouzhou", copies[0])
+	check(custom.cards.size() == 2 and starting_decks[0].cards.size() == 8, "drawing and discarding never mutate starter resource arrays")
+	check(custom_deck.init_decks(["Rocket"]) and custom_deck.draw_pile.size() == 8 and custom_deck.discard_pile.is_empty() and not custom_deck.has_role("Zhouzhou"), "reinitializing replaces roles and clears old discard pile")
+	var invalid := StartingDeckData.new()
+	check(not invalid.validation_errors().is_empty(), "empty starter config is rejected")
+	invalid.cards = [null]
+	check(not invalid.validation_errors().is_empty(), "empty card slots are rejected")
+	invalid.cards = [starting_decks[1].cards[0]]
+	check(not invalid.validation_errors().is_empty(), "cards belonging to a different role are rejected")
 	var scene := load("res://battle/Battle.tscn") as PackedScene
 	br = scene.instantiate() as BattleRoot
 	get_tree().root.add_child(br)
@@ -73,13 +96,18 @@ func run() -> void:
 	check(not r.can_play(2, 2) and r.can_play(2, 3), "combo does not change card numbers")
 	r.combo_up(); r.combo_up(); r.combo_up()
 	check(r.combo == ChainRules.MAX_COMBO, "combo caps at ×4")
+	r.combo_down()
+	check(r.combo == 3, "damage penalty lowers combo by one")
+	r.combo = 1
+	r.combo_down()
+	check(r.combo == 1, "damage penalty never reduces combo below ×1")
 	var cd := card_named("重拳")
 	var rolls: Dictionary = {}
 	for i in 200:
 		rolls[cd.roll_number()] = true
 	check(rolls.keys().all(func(n: int) -> bool: return n >= 2 and n <= 4) and rolls.size() == 3, "drawn number floats within base ±1")
 	check(card_named("爆破").roll_number() <= CardData.NUMBER_MAX, "floating number clamps to 1-5")
-	check(cd.effect_value(4) == 8 and not card_named("整理").scales_with_number, "effect value = current number × per-point factor")
+	check(cd.effects[0].value(4) == 8 and not card_named("整理").effects[0].scales_with_number, "effect value = current number × per-point factor")
 
 	# --- 出牌：推进倒计时、升级连锁、更新牌堆顶 ---
 	var remy := br._find_unit("Remy")
@@ -110,12 +138,12 @@ func run() -> void:
 	await play(illegal, "Remy")
 	check(rules.ticks == ticks and rules.combo == 2, "illegal card is refused without advancing time")
 
-	# --- 摸牌：倒计时 -1、抽 1、连锁保留 ---
+	# --- 摸牌：倒计时 -1、抽 1、Combo 回到 ×1 ---
 	var count: int = hm._hand_count()
 	await br.draw_action()
 	check(hm._hand_count() == count + 1 and rules.ticks == ticks + 1 and rules.combo == 1, "draw: +1 card, countdown -1, combo cleared")
 
-	# --- 敌人归零当场出手：攻击立即命中，掉血清空 Combo，倒计时从头开始 ---
+	# --- 敌人归零当场出手：攻击立即命中，掉血使 Combo -1，倒计时从头开始 ---
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
 	rules.enemies.Remy = 1
@@ -130,7 +158,7 @@ func run() -> void:
 	await play(make_card("重拳", 0, 3), "Grey")
 	check(rules.top.source == "enemy" and rules.top.uid == "Remy", "enemy at zero plays its card onto the pile top")
 	check(target.get_current_hp() == before - intent.value, "enemy attack lands immediately when its countdown hits 0")
-	check(rules.combo == 1, "actual HP damage resets the combo to ×1")
+	check(rules.combo == 3, "actual HP damage reduces combo from ×4 to ×3 after the play")
 	check(rules.enemies.Remy == 3 and br._countdown_labels.Remy.text == "3", "countdown restarts in full right after acting")
 
 	# --- 护盾完全吸收不清空 Combo ---
@@ -143,7 +171,7 @@ func run() -> void:
 	check(rules.combo == 4, "attack fully absorbed by shield keeps the combo")
 
 	# --- 反制牌：敌人的下一个动作是指定颜色攻击 → 反制并造成伤害 ---
-	check(card_named("截击").derived_effect_text(5, -1, 0, 5).contains("红色攻击"), "counter card text names the color it counters")
+	check(card_named("截击").effect_text(2).contains("红色攻击"), "counter card text names the color it counters")
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
 	rules.enemies.Remy = 2
@@ -245,11 +273,37 @@ func run() -> void:
 	check(br._find_unit("Irene").get_shield() == irene_shield, "reward refill keeps player shields")
 	check(rules.ticks == ticks + 1, "reward refill does not cost a countdown")
 
-	# --- 手牌上限与满手重抽 ---
-	hm._draw_common_pool(20)
-	check(hm._hand_count() == ChainRules.HAND_CAP, "draw effects stop at the hand cap")
+	# --- 超过十张仍可抽牌，不弃手、不重抽、不清护盾 ---
+	hm._draw_common_pool(7)
+	check(hm._hand_count() == 12, "draw effects allow hands larger than ten cards")
+	var original_hand := hm._cards.duplicate()
+	var original_discard_count: int = hm.deck.discard_pile.size()
+	irene_shield = br._find_unit("Irene").get_shield()
+	ticks = rules.ticks
+	rules.combo = 4
 	await br.draw_action()
-	check(hm._hand_count() == ChainRules.HAND_START and rules.combo == 1, "draw at full hand discards and refills to 5")
+	check(hm._hand_count() == 13 and rules.combo == 1 and rules.ticks == ticks + 1, "draw above ten adds one card and advances one action without redrawing")
+	check(original_hand.all(func(hc: HandCard) -> bool: return is_instance_valid(hc) and hm._cards.has(hc)), "drawing above ten keeps every original hand card")
+	check(hm.deck.discard_pile.size() == original_discard_count, "drawing above ten does not discard the hand")
+	check(br._find_unit("Irene").get_shield() == irene_shield, "drawing above ten does not clear shields")
+	check(not br._draw_button.tooltip_text.contains("重抽"), "draw button no longer advertises full-hand redraw")
+
+	# --- 每次敌人攻击按实际掉血扣一级，部分护盾仍扣，最低 ×1 ---
+	var victim := br._find_unit("Irene")
+	victim.reduce_shield(victim.get_shield())
+	victim.gain_shield(1)
+	var victim_hp: float = victim.get_current_hp()
+	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
+	rules.combo = 4
+	await br._enemy_play("Remy")
+	check(victim.get_current_hp() == victim_hp - 1 and rules.combo == 3, "partially absorbed enemy attack still lowers combo by exactly one")
+	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
+	await br._enemy_play("Remy")
+	check(rules.combo == 2, "successive damaging enemy attacks each lower combo once")
+	rules.combo = 1
+	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
+	await br._enemy_play("Remy")
+	check(rules.combo == 1, "actual enemy attack cannot lower combo below ×1")
 
 	# --- 角色倒下：牌仍可接，没有效果 ---
 	var rocket := br._find_unit("Rocket")

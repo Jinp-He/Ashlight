@@ -1,16 +1,22 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_qf6lj"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "damage"
+target = "选中敌人"
+amount = 1
+scales_with_number = true
+hits = 1
 
 [resource]
 script = ExtResource("1_qf6lj")
 id = "irene_06"
 card_name = "刺击"
 belong_to = "Irene"
-cost_value = 5
-effect_id = "damage_single"
-key_value = 1
-art_id = "Irene001.png"
-description = "效果值 = 点数 × 1"
 uno_color = 1
 base_number = 5
+art_path = "res://assets/cards/faces/Irene001.png"
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

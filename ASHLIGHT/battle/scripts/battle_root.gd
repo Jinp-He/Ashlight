@@ -360,51 +360,63 @@ func _enrich_units_fx(units: Array[Dictionary], stat: String, value: int, hits: 
 				u["buff_name"] = "出血"
 				u["buff_tone"] = 2
 
+## 每个原子效果独立索敌。只有手选效果使用玩家点击的目标；自身、群体不受它影响。
+func _effect_targets(effect: CardEffect, caster: UnitRoot, selected: UnitRoot = null) -> Array[UnitRoot]:
+	var targets: Array[UnitRoot] = []
+	if effect.target == "自身" or effect.kind in ["draw", "counter"]:
+		targets.append(caster)
+	else:
+		targets = resolve_targets(caster, effect.faction())
+	if effect.exclude_self:
+		targets.erase(caster)
+	if effect.needs_selection() and selected != null:
+		var valid: bool = targets.has(selected)
+		targets.clear()
+		if valid: targets.append(selected)
+	return targets
+
 func v2_targets(cd: CardData, caster: UnitRoot) -> Array[UnitRoot]:
-	# 角色已倒下：这张牌只能用来接牌，点任意存活单位即可打出，没有效果。
+	# 倒下角色的牌仍可点击任意存活单位接牌。
 	if not is_instance_valid(caster) or caster.get_current_hp() <= 0:
 		var anyone: Array[UnitRoot] = []
 		for unit in _get_units():
-			if unit.get_current_hp() > 0:
-				anyone.append(unit)
+			if unit.get_current_hp() > 0: anyone.append(unit)
 		return anyone
-	var targets := resolve_targets(caster, cd.target_faction)
-	if cd.target_self:
-		var self_targets: Array[UnitRoot] = []
-		self_targets.append(caster)
-		return self_targets
-	if cd.exclude_self:
-		targets.erase(caster)
-	return targets
+	var candidates: Array[UnitRoot] = []
+	var selecting: bool = false
+	for effect in cd.effects:
+		if effect == null or not effect.needs_selection(): continue
+		var targets := _effect_targets(effect, caster)
+		if not selecting:
+			candidates = targets
+		else:
+			for unit in candidates.duplicate():
+				if not targets.has(unit): candidates.erase(unit)
+		selecting = true
+	if selecting:
+		return candidates
+	# 无手选效果时允许点击任意实际作用单位；抽牌、反制可点击施法者。
+	for effect in cd.effects:
+		if effect == null: continue
+		for unit in _effect_targets(effect, caster):
+			if not candidates.has(unit): candidates.append(unit)
+	return candidates
 
 func v2_payload(card: HandCard, target: UnitRoot) -> Dictionary:
-	var cd: CardData = card.data
-	var caster := _find_unit(card.owner_group)
-	var targets := v2_targets(cd, caster)
-	if cd.scope != "群体" and cd.scope != "全场":
-		var valid_target: bool = targets.has(target)
-		targets.clear()
-		if valid_target:
-			targets.append(target)
-	var ids: Array[String] = []
-	for unit in targets:
-		ids.append(unit.unit_id)
-	return {"uid": card.owner_group, "targets": ids, "cd": cd,
-		"color": card.cost_color, "base": card.base_number}
+	return {"uid": card.owner_group, "selected": target.unit_id if is_instance_valid(target) else "",
+		"cd": card.data, "color": card.cost_color, "base": card.base_number}
 
-func _v2_resolve_payload(payload: Dictionary, number: int) -> Dictionary:
+func _v2_resolve_effect(payload: Dictionary, atom: CardEffect, number: int, morale_bonus: int) -> Dictionary:
 	var caster := _find_unit(payload.uid)
-	var cd: CardData = payload.cd
+	var selected := _find_unit(payload.get("selected", ""))
 	var targets: Array[UnitRoot] = []
-	for uid in payload.targets:
-		var target := _find_unit(uid)
-		if is_instance_valid(target) and target.get_current_hp() > 0:
-			targets.append(target)
-	var value: int = cd.effect_value(number)
-	if cd.card_type == 0:
-		value += _morale_bonus(caster)
-	return {"caster": caster, "targets": targets, "value": value,
-		"stat": cd.archetype_stat(), "hits": cd.hits, "cd": cd}
+	if atom.needs_selection() and (not is_instance_valid(selected) or selected.get_current_hp() <= 0):
+		return {}
+	for unit in _effect_targets(atom, caster, selected):
+		if is_instance_valid(unit) and unit.get_current_hp() > 0: targets.append(unit)
+	return {"caster": caster, "targets": targets, "value": atom.value(number, morale_bonus),
+		"stat": atom.status_id if atom.kind == "apply_status" else atom.kind,
+		"hits": atom.hits, "atom": atom, "cd": payload.cd}
 
 func _v2_apply_resolved(effect: Dictionary) -> void:
 	var caster: UnitRoot = effect.caster
@@ -412,16 +424,24 @@ func _v2_apply_resolved(effect: Dictionary) -> void:
 		return
 	var value: int = effect.value
 	match effect.stat:
-		"shield":
+		"shield", "heal":
 			for target in effect.targets:
-				if is_instance_valid(target) and target.get_current_hp() > 0:
-					target.gain_shield(value)
+				if not is_instance_valid(target) or target.get_current_hp() <= 0: continue
+				for hit in effect.hits:
+					if effect.stat == "shield": target.gain_shield(value)
+					else: target.heal(value)
 		"draw":
 			var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
-			hm._draw_common_pool(value)
+			if is_instance_valid(hm): hm._draw_common_pool(value * effect.hits)
 		"counter":
 			var cd: CardData = effect.cd
-			rules.counters.append({"uid": caster.unit_id, "color": cd.counter_color, "value": value, "name": cd.card_name})
+			var atom: CardEffect = effect.atom
+			for hit in effect.hits:
+				rules.counters.append({"uid": caster.unit_id, "color": atom.counter_color, "value": value, "name": cd.card_name})
+		"haste", "slow":
+			for target in effect.targets:
+				if rules.enemies.has(target.unit_id):
+					rules.enemies[target.unit_id] = maxi(0, int(rules.enemies[target.unit_id]) + value * effect.hits * (-1 if effect.stat == "haste" else 1))
 		_:
 			_apply_stat(effect.stat, value, effect.hits, effect.targets, caster)
 	_check_battle_end()
@@ -440,11 +460,11 @@ func _v2_animate(effect: Dictionary, enemy: bool = false) -> void:
 		if is_instance_valid(target) and target != caster:
 			units.append({"id": target.unit_id, "faction": target.unit_faction,
 				"state": UnitRoot.UnitArtState.HIT if effect.stat == "damage" else UnitRoot.UnitArtState.IDLE})
-	if effect.stat == "shield":
+	if effect.stat in ["shield", "heal"]:
 		for item in units:
 			for target in effect.targets:
 				if item.id == target.unit_id:
-					item["dmg_payload"] = {"type": "shield", "value": effect.value}
+					item["dmg_payload"] = {"type": effect.stat, "value": effect.value}
 	else:
 		_enrich_units_fx(units, effect.stat, effect.value, effect.hits, caster.unit_id)
 	var completed: Array[bool] = [false]
@@ -459,20 +479,29 @@ func _v2_animate(effect: Dictionary, enemy: bool = false) -> void:
 	while not completed[0]:
 		await get_tree().process_frame
 
-## 卡牌效果按 Combo 触发 times 次：演出只播一次并显示合计，结算逐次执行。
+## Combo 重复整个有序效果列表。伤害加成沿用出牌时的士气快照；演出只在首次触发时播放。
 func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
-	var effect := _v2_resolve_payload(payload, number)
-	var caster: UnitRoot = effect.caster
-	if not is_instance_valid(caster) or caster.get_current_hp() <= 0 or effect.targets.is_empty():
+	var caster := _find_unit(payload.uid)
+	if not is_instance_valid(caster) or caster.get_current_hp() <= 0:
 		return
-	var display := effect.duplicate()
-	if effect.stat == "damage":
-		display.hits = effect.hits * times
-	elif effect.stat == "shield":
-		display.value = effect.value * times
-	await _v2_animate(display)
-	for i in times:
-		_v2_apply_resolved(effect)
+	var cd: CardData = payload.cd
+	var errors := cd.validation_errors()
+	if not errors.is_empty():
+		push_error("CardData %s：%s" % [cd.id, "；".join(errors)])
+		return
+	var morale_bonus: int = _morale_bonus(caster)
+	for trigger in times:
+		for atom in cd.effects:
+			if _battle_ended or caster.get_current_hp() <= 0: break
+			var effect := _v2_resolve_effect(payload, atom, number, morale_bonus)
+			# 无目标只跳过当前效果，后续自身、抽牌等效果仍继续。
+			if effect.is_empty() or effect.targets.is_empty(): continue
+			if trigger == 0:
+				var display := effect.duplicate()
+				if effect.stat == "damage": display.hits = effect.hits * times
+				elif effect.stat in ["shield", "heal"]: display.value = effect.value * effect.hits * times
+				await _v2_animate(display)
+			_v2_apply_resolved(effect)
 	_tick_poison(caster)
 
 ## 出牌：接牌判定 → 卡牌效果 × Combo → Combo +1 → 倒计时 -1 → 归零敌人出牌 → 手牌打空则奖励补牌。
@@ -498,34 +527,19 @@ func play_card(payload: Dictionary) -> void:
 	await _v2_finish()
 
 ## 摸牌：抽 1 张，倒计时 -1，Combo 清空（回到 ×1）。
-## 手牌已满时改为弃掉整手重抽，避免满手接不上时卡死。
+## 手牌不设十张上限，不因张数触发弃牌、重抽或清护盾。
 func draw_action() -> void:
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	if clock_busy or _battle_ended or hm._cutscene_playing or hm._hand_locked or hm._redrawing:
 		return
 	hm.clear_selection()
 	_v2_set_busy(true)
-	if hm._hand_count() >= ChainRules.HAND_CAP:
-		hm.discard_hand()
-		await _refill()
-	else:
-		rules.reset_combo()
-		hm._draw_common_pool(1)
-		await _after_action()
+	rules.reset_combo()
+	hm._draw_common_pool(1)
+	await _after_action()
 	await _v2_finish()
 
-## 满手重抽：Combo 回到 ×1、清空我方护盾、补到 5 张、倒计时 -1。
-func _refill() -> void:
-	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
-	rules.reset_combo()
-	for unit in _get_units():
-		if unit.unit_faction == "player" and unit.get_shield() > 0:
-			unit.reduce_shield(unit.get_shield())
-	hm._draw_common_pool(ChainRules.HAND_START - hm._hand_count())
-	for step in ChainRules.REFILL_TICKS:
-		await _after_action()
-
-## 敌方攻击当场结算。返回是否造成了实际生命值伤害（= Combo 清空）。
+## 敌方攻击当场结算。返回是否造成了实际生命值伤害（= Combo -1，最低 ×1）。
 func _enemy_attack(caster: UnitRoot, card: Dictionary) -> bool:
 	var target := _find_unit(card.target)
 	if not is_instance_valid(target) or target.get_current_hp() <= 0:
@@ -619,7 +633,7 @@ func _enemy_play(uid: String) -> void:
 		await _counter_attack(caster, countered)
 	elif card.stat == "damage":
 		if await _enemy_attack(caster, card):
-			rules.reset_combo()
+			rules.combo_down()
 	else:
 		var targets: Array[UnitRoot] = [caster]
 		var effect: Dictionary = {"caster": caster, "targets": targets, "stat": "shield", "value": card.value, "hits": 1}
@@ -680,8 +694,7 @@ func _v2_refresh_hud() -> void:
 			lines.append("反制：%s色攻击 → %d伤" % [ChainRules.color_name(counter.color), counter.value])
 		_counter_label.text = "\n".join(lines)
 	if is_instance_valid(_draw_button):
-		var full: bool = is_instance_valid(hm) and hm._hand_count() >= ChainRules.HAND_CAP
-		_draw_button.tooltip_text = "弃手重抽：补到5张 / 倒计时-1" if full else "摸牌：抽1张 / 倒计时-1"
+		_draw_button.tooltip_text = "摸牌：抽1张 / 倒计时-1 / Combo回到×1"
 		_draw_button.disabled = clock_busy or _battle_ended
 	if is_instance_valid(_v2_log):
 		_v2_log.text = "动作：%d 次" % rules.ticks
@@ -795,12 +808,14 @@ func _apply_stat(stat: String, value: int, hits: int, targets: Array[UnitRoot], 
 			continue
 		match stat:
 			"damage":
-				target.damage(value * maxi(hits, 1))
+				for hit in maxi(hits, 1):
+					if target.get_current_hp() <= 0: break
+					target.damage(value)
 				if target.get_current_hp() <= 0:
 					target.die()
 			"morale":
-				target.add_buff("morale", value, 1)
+				target.add_buff("morale", value * maxi(hits, 1), 1)
 			"bleed", "poison":
-				target.add_buff(stat, value, 2)
+				target.add_buff(stat, value * maxi(hits, 1), 2)
 	if stat == "damage" and is_instance_valid(caster):
 		caster.remove_buff("morale")

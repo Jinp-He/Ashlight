@@ -1,6 +1,16 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_ci17q"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "apply_status"
+target = "选中敌人"
+amount = 2
+scales_with_number = true
+hits = 1
+status_id = "bleed"
 
 [resource]
 script = ExtResource("1_ci17q")
@@ -8,7 +18,6 @@ id = "irene_03"
 card_name = "放血"
 belong_to = "Irene"
 card_type = 1
-effect_id = "bleed"
-art_id = "Irene001.png"
-description = "效果值 = 点数 × 2"
 uno_color = 2
+art_path = "res://assets/cards/faces/Irene001.png"
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])
