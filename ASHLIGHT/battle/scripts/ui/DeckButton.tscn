@@ -1,0 +1,20 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/ui/DeckButton.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/Unit UI/DeckButton.png" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/Unit UI/DeckButtonIcon.png" id="1_icon"]
+[ext_resource type="Script" path="res://battle/scripts/ui/PileBadge.gd" id="1_badge"]
+
+[node name="DeckButton" type="TextureButton"]
+texture_normal = ExtResource("1_bg")
+script = ExtResource("1_script")
+z_index = 100
+pile_group = &"deck_pile"
+
+[node name="Icon" type="TextureRect" parent="."]
+texture = ExtResource("1_icon")
+mouse_filter = 2
+
+[node name="Badge" type="Control" parent="."]
+script = ExtResource("1_badge")
+position = Vector2(74.5, -12.5)

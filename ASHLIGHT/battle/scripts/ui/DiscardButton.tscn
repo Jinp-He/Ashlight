@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/ui/DeckButton.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/Unit UI/DiscardButton.png" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/Unit UI/DiscardButtonIcon.png" id="1_icon"]
+
+[node name="DiscardButton" type="TextureButton"]
+texture_normal = ExtResource("1_bg")
+script = ExtResource("1_script")
+z_index = 100
+pile_group = &"discard_pile"
+
+[node name="Icon" type="TextureRect" parent="."]
+texture = ExtResource("1_icon")
+mouse_filter = 2

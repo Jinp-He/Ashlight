@@ -1,0 +1,19 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://FX/BeamBurst/BeamBurst.gd" id="1_beam"]
+
+[node name="BeamBurst" type="Node2D"]
+script = ExtResource("1_beam")
+pixel_size = 5
+angle_deg = 0.0
+length = 100.0
+thickness = 25.0
+burst = 10.0
+duration_ms = 800.0
+alpha = 1.0
+core = 0.29
+particle_count = 10
+particle_speed = 0.6
+particle_bias = 0.0
+loop = true
+autoplay = false

@@ -1,0 +1,4 @@
+# Godot 本地缓存与导出产物
+.godot/
+dist/
+.DS_Store

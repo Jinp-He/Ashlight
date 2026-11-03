@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cutscene/cutscene_test_scene.gd" id="1_scene"]
+
+[node name="CutsceneTestScene" type="Node2D"]
+script = ExtResource("1_scene")
+
+[node name="BtnA" type="Button" parent="."]
+offset_left = 40.0
+offset_top = 40.0
+offset_right = 260.0
+offset_bottom = 84.0
+text = "随机演出·形变A"
+
+[node name="BtnClear" type="Button" parent="."]
+offset_left = 40.0
+offset_top = 96.0
+offset_right = 260.0
+offset_bottom = 140.0
+text = "清除演出"
