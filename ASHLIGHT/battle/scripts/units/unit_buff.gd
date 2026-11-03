@@ -99,6 +99,12 @@ var _icon_container: Node2D
 var _toast_root: Node2D
 var _tooltip: UnitBuffTooltip
 var _font: Font
+var _toast_layout_compensation: float = 0.0
+
+func set_toast_layout_compensation(shift_y: float) -> void:
+	_toast_layout_compensation = shift_y
+	if is_instance_valid(_toast_root):
+		_toast_root.position.y = toast_offset_y - shift_y
 
 func _ready() -> void:
 	_icon_container = Node2D.new()
@@ -108,7 +114,7 @@ func _ready() -> void:
 	_toast_root = Node2D.new()
 	_toast_root.name = "ToastContainer"
 	_toast_root.z_index = 21
-	_toast_root.position = Vector2(0.0, toast_offset_y)
+	_toast_root.position = Vector2(0.0, toast_offset_y - _toast_layout_compensation)
 	add_child(_toast_root)
 	_tooltip = UnitBuffTooltip.new()
 	_tooltip.name = "BuffTooltip"
@@ -123,6 +129,9 @@ func _ready() -> void:
 ## 文案统一来源：display_name / description 留空时，由 KeywordGlossary 按 buff_id 解析，
 ## 与卡牌快照词条面板共用同一份文字，避免双份真源日后分叉。
 func add_buff(buff_id: String, stack: int, tone: int, display_name: String = "", description: String = "") -> void:
+	# 完全抵消/未实际获得时，不创建图标或名称提示。
+	if stack <= 0:
+		return
 	var resolved_name := display_name if display_name != "" else KeywordGlossary.name_of(buff_id)
 	var resolved_desc := description if description != "" else KeywordGlossary.desc_of(buff_id)
 	for e in _entries:
@@ -282,10 +291,14 @@ func _draw_dashed_segment(a: Vector2, b: Vector2, color: Color, dash: float, gap
 
 ## 获取新 buff：提示从上方滑入(淡入) → 停留 → 原地淡出，播放一次后销毁（独立于框体开关）
 func _play_toast(entry: BuffInstance) -> void:
+	show_gain_toast(entry.display_name if entry.display_name != "" else entry.buff_id, entry.buff_id)
+
+## 共用获得提示：仅显示名称，不显示层数/数值；护盾无需创建Buff图标。
+func show_gain_toast(display_name: String, effect_id: String = "") -> void:
 	if not is_instance_valid(_toast_root):
 		return
 	var toast := Node2D.new()
-	toast.name = "Toast_" + entry.buff_id
+	toast.name = "Toast_" + (effect_id if effect_id != "" else display_name)
 	var bg := TextureRect.new()
 	var bg_tex := load(BUFF_TOAST_PATH) as Texture2D
 	if bg_tex != null:
@@ -297,7 +310,7 @@ func _play_toast(entry: BuffInstance) -> void:
 	toast.add_child(bg)
 	# 名称文字（居中于 toast 图，抖音美好体/20/白/无描边）
 	var name_lbl := Label.new()
-	name_lbl.text = entry.display_name if entry.display_name != "" else entry.buff_id
+	name_lbl.text = display_name
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	if _font != null:

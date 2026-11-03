@@ -11,10 +11,15 @@ const MORALE_PER_LAYER: int = 1
 const COUNTDOWN_SLIDE_TIME: float = 0.35
 const SLOT_X: Dictionary = {1: 310.0, 2: 480.0, 3: 650.0, 4: 950.0, 5: 1120.0, 6: 1290.0}
 const DISPLAY_NAMES: Dictionary = {"Zhouzhou": "周周", "Irene": "艾琳", "Rocket": "火炮"}
-const CUTSCENE_GROUP_SCRIPT := preload("res://battle/scripts/cutscene/cutscene_group.gd")
+const CUTSCENE_GROUP2_SCRIPT := preload("res://battle/scripts/cutscene2/cutscene_group2.gd")
 const CUTSCENE_DIRECTOR_SCRIPT := preload("res://battle/scripts/cutscene/cutscene_director.gd")
 const TRIGGER_PROMPT_SCRIPT := preload("res://battle/scripts/units/trigger_prompt.gd")
 const TRIGGER_LAYER: int = 70
+
+@export_group("演出组2")
+@export_range(0.1, 3.0, 0.05) var group2_duration_multiplier: float = 1.0
+@export var group2_friendly_wait: float = 0.5
+@export var group2_transition_duration: float = 0.3
 
 var rules := ChainRules.new()
 var clock_busy: bool = false
@@ -23,10 +28,10 @@ var _battle_ended: bool = false
 ## 敌人 uid → 预告牌（MonsterDatabase 卡牌 + 锁定目标 target）。
 var _v2_intents: Dictionary = {}
 var _countdown_labels: Dictionary = {}
-var _countdown_art_tops: Dictionary = {}
+
 var _intent_target_labels: Dictionary = {}
 var _combo_label: Label
-var _top_diamond: ColorRect
+var _top_flame: PileFlame
 var _top_number: Label
 var _counter_label: Label
 var _draw_button: BaseButton
@@ -58,23 +63,10 @@ func _ready() -> void:
 			unit.set_max_hp(float(data.get("max_hp", 60)))
 			rules.enemies[unit.unit_id] = int(data.get("countdown", 4))
 			_v2_next_intent(unit)
-		var label := Label.new()
-		label.name = "OverheadCountdown"
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.size = Vector2(220, 0)
-		label.add_theme_font_override("font", preload("res://assets/fonts/Biantao.ttf"))
-		label.z_as_relative = false
-		label.z_index = 60
-		label.add_theme_color_override("font_outline_color", Color.BLACK)
-		label.add_theme_constant_override("outline_size", 4)
-		label.add_theme_font_size_override("font_size", 32)
-		if unit.unit_faction == "player":
-			label.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
-		unit.add_child(label)
-		_countdown_labels[unit.unit_id] = label
+		_countdown_labels[unit.unit_id] = unit._countdown_component.text_label
 		# 敌人身下：下一张牌；友方身下：技能与冷却。
 		var target_label := Label.new()
+		target_label.visible = unit.unit_faction != "enemy"
 		target_label.position = Vector2(-82, 65)
 		target_label.size.x = 164
 		target_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -133,8 +125,9 @@ func _spawn_card_played_prompt(unit_id: String, card_name: String, faction: Stri
 ## HUD 节点摆放在 Battle.tscn 的 HUD 层里，可在编辑器中直接拖动；这里只取引用并接线。
 ## 摸牌由右下角弃牌堆按钮触发。
 func _bind_hud() -> void:
-	_top_diamond = $HUD/PileTop/Diamond
+	_top_flame = $HUD/PileTop/Flame
 	_top_number = $HUD/PileTop/Number
+	_float_pile_number(_top_number.position)
 	_combo_label = $HUD/InfoPanel/ComboLabel
 	_counter_label = $HUD/InfoPanel/CounterLabel
 	_v2_log = $HUD/InfoPanel/ActionLog
@@ -213,8 +206,9 @@ func _tick_bleed(unit: UnitRoot) -> void:
 	var stacks: int = unit.get_buff_stacks("bleed")
 	if stacks <= 0:
 		return
+	var invalid: int = mini(stacks, int(unit.get_shield()))
 	var dealt := unit.damage(stacks)               # 护盾优先吸收，返回真实掉血量
-	unit.spawn_tick_damage("出血", int(dealt))
+	unit.spawn_tick_damage("出血", int(dealt), invalid)
 	print("[BR-bleed] %s 出血结算：受到 %d 点伤害（层数=%d → 本 tick 后 -1）" % [unit.unit_id, int(dealt), stacks])
 	# 出血触发提示组：单位前进(进高亮框)时按出血量受伤 → 弹出「出血！」（按阵营决定滑入方向）。
 	_spawn_trigger_prompt(unit.unit_id, TriggerPrompt.TriggerType.BLEED, unit.unit_faction)
@@ -235,10 +229,12 @@ func _tick_poison(unit: UnitRoot) -> void:
 		unit.remove_buff_stacks("poison", absorbed)   # 中毒 -absorbed（1:1 抵消层数）
 		stacks -= absorbed
 		print("[BR-poison] %s 中毒结算：护盾抵消 %d 层（剩余层数=%d，护盾=%d）" % [unit.unit_id, absorbed, stacks, int(shield) - absorbed])
+	var tick_dealt: int = 0
 	if stacks > 0:
 		var dealt := unit.damage(stacks)              # 护盾优先吸收，返回真实掉血量
-		unit.spawn_tick_damage("中毒", int(dealt))
+		tick_dealt = int(dealt)
 		print("[BR-poison] %s 中毒结算：受到 %d 点血量伤害（层数=%d）" % [unit.unit_id, int(dealt), stacks])
+	unit.spawn_tick_damage("中毒", tick_dealt, absorbed)
 	# 中毒触发提示组：单位行动后中毒发作 → 弹出「中毒！」（按阵营决定滑入方向）。
 	_spawn_trigger_prompt(unit.unit_id, TriggerPrompt.TriggerType.POISON, unit.unit_faction)
 	if unit.get_current_hp() <= 0.0:
@@ -404,7 +400,7 @@ func _v2_resolve_payload(payload: Dictionary, number: int) -> Dictionary:
 	if cd.card_type == 0:
 		value += _morale_bonus(caster)
 	return {"caster": caster, "targets": targets, "value": value,
-		"stat": cd.archetype_stat(), "hits": cd.hits, "cd": cd}
+		"stat": cd.archetype_stat(), "hits": cd.hits, "kind": cd.card_type, "cd": cd}
 
 func _v2_apply_resolved(effect: Dictionary) -> void:
 	var caster: UnitRoot = effect.caster
@@ -426,39 +422,19 @@ func _v2_apply_resolved(effect: Dictionary) -> void:
 			_apply_stat(effect.stat, value, effect.hits, effect.targets, caster)
 	_check_battle_end()
 
-func _v2_animate(effect: Dictionary, enemy: bool = false) -> void:
-	if skip_battle_animations:
+func _v2_animate(effect: Dictionary, _enemy: bool = false) -> void:
+	if skip_battle_animations or not is_instance_valid(effect.caster):
 		return
-	var caster: UnitRoot = effect.caster
-	if not is_instance_valid(caster):
-		return
-	var cast_state: int = UnitRoot.UnitArtState.ATTACK if effect.stat == "damage" else UnitRoot.UnitArtState.CAST
-	if effect.stat == "shield":
-		cast_state = UnitRoot.UnitArtState.CHARGE
-	var units: Array[Dictionary] = [{"id": caster.unit_id, "faction": caster.unit_faction, "state": cast_state}]
-	for target in effect.targets:
-		if is_instance_valid(target) and target != caster:
-			units.append({"id": target.unit_id, "faction": target.unit_faction,
-				"state": UnitRoot.UnitArtState.HIT if effect.stat == "damage" else UnitRoot.UnitArtState.IDLE})
-	if effect.stat == "shield":
-		for item in units:
-			for target in effect.targets:
-				if item.id == target.unit_id:
-					item["dmg_payload"] = {"type": "shield", "value": effect.value}
-	else:
-		_enrich_units_fx(units, effect.stat, effect.value, effect.hits, caster.unit_id)
-	var completed: Array[bool] = [false]
-	cutscene_director.enqueue(
-		func() -> CutsceneGroup:
-			var group := CUTSCENE_GROUP_SCRIPT.new() as CutsceneGroup
-			group.z_index = 46
-			add_child(group)
-			group.play_units(units, "enemy" if enemy else "player", 0)
-			return group,
-		func() -> void: completed[0] = true)
-	while not completed[0]:
-		await get_tree().process_frame
-
+	var group := CUTSCENE_GROUP2_SCRIPT.new() as CutsceneGroup2
+	group.name = "演出组2"
+	group.z_index = 46
+	group.duration_multiplier = group2_duration_multiplier
+	group.friendly_wait = group2_friendly_wait
+	group.transition_duration = group2_transition_duration
+	group.defense_fade = 0.2
+	add_child(group)
+	group.play(effect)
+	await group.finished
 ## 卡牌效果按 Combo 触发 times 次：演出只播一次并显示合计，结算逐次执行。
 func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 	var effect := _v2_resolve_payload(payload, number)
@@ -466,6 +442,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 	if not is_instance_valid(caster) or caster.get_current_hp() <= 0 or effect.targets.is_empty():
 		return
 	var display := effect.duplicate()
+	display.chain = times
 	if effect.stat == "damage":
 		display.hits = effect.hits * times
 	elif effect.stat == "shield":
@@ -485,10 +462,12 @@ func play_card(payload: Dictionary) -> void:
 	_v2_set_busy(true)
 	var number: int = payload.base
 	var times: int = rules.combo
+	# 合法牌打出时即更新牌堆顶，使火焰和点数与演出同步。
+	rules.place_player_card(payload.color, number, payload.uid, cd.card_name)
+	_v2_refresh_hud()
 	if times > 1:
 		_spawn_card_played_prompt(payload.uid, "COMBO ×%d" % times, "player")
 	await _v2_play_effect(payload, number, times)
-	rules.place_player_card(payload.color, number, payload.uid, cd.card_name)
 	rules.combo_up()
 	await _after_action()
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
@@ -569,9 +548,10 @@ func _after_action() -> void:
 		if unit.get_current_hp() > 0:
 			_tick_bleed(unit)
 	_v2_refresh()
-	if not skip_battle_animations:
-		await get_tree().create_timer(COUNTDOWN_SLIDE_TIME).timeout
 	var ready := rules.ready_enemies()
+	if not ready.is_empty() and not skip_battle_animations:
+		await get_tree().create_timer(COUNTDOWN_SLIDE_TIME).timeout
+		await _wait_number_popups()
 	ready.sort_custom(func(a: String, b: String) -> bool: return _v2_slot_priority(a) < _v2_slot_priority(b))
 	for uid in ready:
 		if _battle_ended:
@@ -600,8 +580,7 @@ func _v2_next_intent(caster: UnitRoot) -> void:
 	_v2_intents[caster.unit_id] = card
 	var shield: bool = card.stat == "shield"
 	caster.set_intent("shield" if shield else "att", str(card.value), "我方" if shield else "敌方", "单体", "",
-		"%s %d · %s：%s %d" % [ChainRules.color_name(card.color), card.number, _display_name(target.unit_id),
-		"护盾" if shield else "伤害", card.value])
+		"%s：%s %%VALUE%% 点%s" % [card.name, "获得" if shield else "造成", "护盾" if shield else "伤害"], card.color, card.number)
 
 ## 敌人出牌：预告牌压到牌堆顶。待命的反制在此刻结算；攻击未被反制则当场命中，护盾立即生效。
 func _enemy_play(uid: String) -> void:
@@ -613,6 +592,7 @@ func _enemy_play(uid: String) -> void:
 	if card.is_empty():
 		return
 	rules.place_enemy_card(card, uid)
+	_v2_refresh_hud()
 	_spawn_card_played_prompt(uid, "%s %s%d" % [card.name, ChainRules.color_name(card.color), card.number], "enemy")
 	var countered := rules.take_counters(card)
 	if not countered.is_empty():
@@ -651,12 +631,25 @@ func _v2_finish() -> void:
 	hm.refresh_numbers()
 	_v2_refresh()
 	_update_battle_positions()
-	if not skip_battle_animations:
-		await get_tree().create_timer(COUNTDOWN_SLIDE_TIME).timeout
+	await _wait_number_popups()
 	_v2_set_busy(false)
+
+func _wait_number_popups() -> void:
+	# 只等待数字弹起与回弹；逗留及淡出不再占用操作锁。
+	if skip_battle_animations:
+		return
+	while not get_tree().get_nodes_in_group("blocking_damage_numbers").is_empty():
+		await get_tree().process_frame
 
 func _display_name(uid: String) -> String:
 	return DISPLAY_NAMES.get(uid, uid)
+
+## 随机落点始终以初始位置为基准。
+func _float_pile_number(anchor: Vector2) -> void:
+	var offset := Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
+	var motion := _top_number.create_tween()
+	motion.tween_property(_top_number, "position", anchor + offset, randf_range(0.55, 0.95)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	motion.tween_callback(_float_pile_number.bind(anchor))
 
 func _v2_refresh_hud() -> void:
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
@@ -667,12 +660,12 @@ func _v2_refresh_hud() -> void:
 				var badge := pile.get_node_or_null("Badge") as PileBadge
 				if is_instance_valid(badge):
 					badge.set_count(hm.deck.draw_pile.size() if group == "deck_pile" else hm.deck.discard_pile.size())
-	if is_instance_valid(_top_diamond):
+	if is_instance_valid(_top_flame):
 		if rules.top.is_empty():
-			_top_diamond.color = Color(0.3, 0.3, 0.3)
+			_top_flame.set_color_index(-1)
 			_top_number.text = "?"
 		else:
-			_top_diamond.color = CardRoot.COST_COLORS[clampi(int(rules.top.color), 0, CardRoot.COST_COLORS.size() - 1)]
+			_top_flame.set_color_index(int(rules.top.color))
 			_top_number.text = str(rules.top.number)
 		_combo_label.text = "COMBO ×%d" % rules.combo
 		var lines: Array[String] = []
@@ -705,47 +698,13 @@ func _v2_refresh(_animated: bool = true) -> void:
 		elif unit.get_current_hp() > 0 and rules.skill_cooldowns.has(unit.unit_id):
 			var skill := AllySkills.get_skill(unit.unit_id)
 			var cooldown: int = rules.skill_cooldowns[unit.unit_id]
-			# 头顶：技能冷却（蓝色，与敌人白色的行动倒计时区分）。
+			# 血条上方：技能冷却/就绪，与敌方行动倒计时共用图标组。
 			text = "就绪" if cooldown == 0 else str(cooldown)
-			_intent_target_labels[unit.unit_id].text = "技能「%s」%s\n%s" % [skill.name,
-				"就绪" if cooldown == 0 else "冷却 %d" % cooldown, skill.desc]
+			_intent_target_labels[unit.unit_id].text = "技能「%s」\n%s" % [skill.name, skill.desc]
 		elif _intent_target_labels.has(unit.unit_id):
 			_intent_target_labels[unit.unit_id].text = ""
-		if _countdown_labels.has(unit.unit_id):
-			var label: Label = _countdown_labels[unit.unit_id]
-			label.text = text
-			_position_overhead_countdown(unit, label)
+		unit._countdown_component.set_value(text, unit.unit_faction == "player")
 	_v2_refresh_hud()
-
-func _position_overhead_countdown(unit: UnitRoot, label: Label) -> void:
-	var sprite: Sprite2D = unit._art_sprite
-	if not is_instance_valid(sprite) or sprite.texture == null:
-		return
-	var texture_key: String = sprite.texture.resource_path
-	if not _countdown_art_tops.has(texture_key):
-		var image := sprite.texture.get_image()
-		var top: float = 0.0
-		if image != null and not image.is_empty():
-			# 部分原贴图有近透明噪点；只把明显可见的像素算作人物边缘。
-			if image.is_compressed():
-				image.decompress()
-			image.convert(Image.FORMAT_RGBA8)
-			var pixels: PackedByteArray = image.get_data()
-			var width: int = image.get_width()
-			var found: bool = false
-			for y in image.get_height():
-				for x in width:
-					if pixels[(y * width + x) * 4 + 3] > 128:
-						top = y
-						found = true
-						break
-				if found:
-					break
-		_countdown_art_tops[texture_key] = top
-	var local_top := Vector2(0, sprite.get_rect().position.y + float(_countdown_art_tops[texture_key]))
-	var head: Vector2 = unit.to_local(sprite.to_global(local_top))
-	label.size = Vector2(220, label.get_minimum_size().y)
-	label.position = Vector2(head.x - label.size.x * 0.5, head.y - label.size.y - 6)
 
 func resolve_targets(caster: UnitRoot, target_faction: String) -> Array[UnitRoot]:
 	var result: Array[UnitRoot] = []
@@ -763,8 +722,6 @@ func _process(_delta: float) -> void:
 	var point := get_global_mouse_position()
 	var hovered_uid: String = ""
 	for unit in _get_units():
-		if _countdown_labels.has(unit.unit_id):
-			_position_overhead_countdown(unit, _countdown_labels[unit.unit_id])
 		if unit.get_current_hp() > 0 and unit.is_point_inside(point):
 			hovered_uid = unit.unit_id
 	if hovered_uid != _spot_uid:

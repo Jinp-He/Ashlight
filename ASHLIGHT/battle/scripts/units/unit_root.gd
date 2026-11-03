@@ -59,6 +59,21 @@ extends Node2D
 @export var max_hp: float = 10.0
 @export var current_hp: float = 10.0
 @export var shield: float = 0.0
+## 血条/Buff框体整体下移；不影响美术、判定框或Buff获得提示条。
+@export var unit_hud_shift_y: float = 15.0 :
+	set(value):
+		unit_hud_shift_y = value
+		_apply_layout()
+## 倒计时独立于血条位移；当前比上一版下移5px。
+@export var countdown_offset_y: float = 33.0 :
+	set(value):
+		countdown_offset_y = value
+		_apply_layout()
+## 血条独立微调，避免带动Buff框体与提示条。
+@export var hp_group_offset_y: float = 3.0 :
+	set(value):
+		hp_group_offset_y = value
+		_apply_layout()
 ## 血条顶边相对单位组锚点(UnitRoot.position)的向下偏移。
 ## 锚点即「血条靠上居中」：默认 0.0 时血条顶边中心正好落在锚点上；
 ## 设为正数可在锚点与血条之间留出间隙。该偏移不依赖美术高度，故敌我单位组同 Y 时血条严格对齐。
@@ -75,7 +90,7 @@ extends Node2D
 	set(value):
 		intent_offset_y = value
 		if is_instance_valid(_intent_component):
-			_intent_component.position = Vector2(0.0, value)
+			_intent_component.set_anchor_position(Vector2(0.0, value))
 ## 单位阵营：player=玩家, enemy=敌人。意图组仅敌人(enemy)显示（转发给 IntentRoot.set_faction）。
 @export var unit_faction: String = "player" :
 	set(value):
@@ -125,6 +140,17 @@ const ART_BAR_GAP: float = 10.0
 
 enum UnitArtState { IDLE, ATTACK, CAST, HIT, CHARGE }
 
+@export_group("美术呼吸")
+@export var breathing_enabled: bool = true
+@export var breathing_period: float = 3.0
+@export var breathing_height: float = 0.015
+@export var breathing_width: float = 0.005
+var _breath_root: Node2D
+var _breath_phase: float = 0.0
+var _breath_weight: float = 0.0
+var _breath_foot_y: float = 0.0
+var _breathing_paused: bool = false
+
 @export var current_art_state: UnitArtState = UnitArtState.IDLE :
 	set(value):
 		current_art_state = value
@@ -142,12 +168,20 @@ var _dimmed: bool = false
 var _dead: bool = false
 ## 选靶黑幕剪影叠加层：独立 Sprite2D，z 高于美术 Sprite，绘制于「前后排渐变遮罩」之上，避免被渐变材质覆盖（back_row 也能看到黑幕）。
 var _dim_overlay: Sprite2D
+var _dim_gradient_material: ShaderMaterial
 ## 黑幕淡入淡出 tween 引用，每次开关前先 kill，避免与本次动画抢 modulate.a。
 var _dim_tween: Tween
 var _externally_highlighted: bool = false
 var _activation_area: Area2D
 var _hp_component: UnitHp
 var _buff_component: UnitBuff
+var _countdown_component: UnitCountdown
+@export var intent_arrow_anchor_offset: Vector2 = Vector2(0.0, -125.0) :
+	set(value):
+		intent_arrow_anchor_offset = value
+		if is_instance_valid(_intent_arrow_anchor):
+			_intent_arrow_anchor.position = value
+var _intent_arrow_anchor: Marker2D
 var _intent_component: IntentRoot
 var _xp_component: UnitXp
 var _upgrade_anim: AnimatedSprite2D
@@ -163,6 +197,7 @@ signal buffs_changed(unit_id: String)
 
 func _ready() -> void:
 	_build_node_tree()
+	_breath_phase = float(posmod(unit_id.hash(), 1000)) / 1000.0 * TAU
 	if unit_id != "":
 		set_unit_art(unit_id)
 	# 监听全局升级参数：只负责「参数→播放」，与生产者（按钮/其他情境）完全解耦。
@@ -176,7 +211,15 @@ func _exit_tree() -> void:
 		_event_bus.disconnect("upgrade_triggered", _on_upgrade_triggered)
 
 func _build_node_tree() -> void:
+	_intent_arrow_anchor = Marker2D.new()
+	_intent_arrow_anchor.name = "IntentArrowAnchor"
+	_intent_arrow_anchor.position = intent_arrow_anchor_offset
+	add_child(_intent_arrow_anchor)
 	_body = Node2D.new(); _body.name = "BodyRoot"; _body.z_index = 0; add_child(_body)
+	# 仅美术和剪影进入此容器；血条、Buff、提示与判定框均不参与拉伸。
+	_breath_root = Node2D.new()
+	_breath_root.name = "BreathingArt"
+	_body.add_child(_breath_root)
 
 	# 悬停描边：着色器沿角色剪影外缘绘白边（§4.4 美术级，非方块/非放大剪影）
 	_outline_material = ShaderMaterial.new()
@@ -197,11 +240,14 @@ func _build_node_tree() -> void:
 	else:
 		push_warning("UnitRoot: 后排遮罩 Shader 加载失败 %s" % BACK_MASK_SHADER_PATH)
 
-	_art_sprite = Sprite2D.new(); _art_sprite.name = "ArtSprite"; _art_sprite.centered = true; _body.add_child(_art_sprite)
+	_art_sprite = Sprite2D.new(); _art_sprite.name = "ArtSprite"; _art_sprite.centered = true; _breath_root.add_child(_art_sprite)
 	# 选靶黑幕剪影叠加层：与美术同纹理、同位置，z 更高，绘制于渐变遮罩之上（修复 back_row 渐变吃黑幕问题）。
 	_dim_overlay = Sprite2D.new(); _dim_overlay.name = "DimOverlay"; _dim_overlay.centered = true
+	_dim_gradient_material = ShaderMaterial.new()
+	_dim_gradient_material.shader = preload("res://battle/scripts/units/selection_dim.gdshader")
+	_dim_overlay.material = _dim_gradient_material
 	_dim_overlay.z_index = 10; _dim_overlay.modulate = Color(0.0, 0.0, 0.0, 0.0); _dim_overlay.visible = false
-	_body.add_child(_dim_overlay)
+	_breath_root.add_child(_dim_overlay)
 
 	# 升级序列帧特效（LVup）：仅非敌方(player)单位启用。enemy 阵营关闭升级组 → 不创建 UpgradeFX。
 	if unit_faction != "enemy":
@@ -218,6 +264,10 @@ func _build_node_tree() -> void:
 	var hp := UnitHp.new(); hp.name = "HpRoot"; hp.z_index = 20; add_child(hp)
 	hp.setup_stats(max_hp, current_hp, shield)
 	_hp_component = hp
+	_countdown_component = UnitCountdown.new()
+	_countdown_component.name = "CountdownRoot"
+	_countdown_component.z_index = 20
+	add_child(_countdown_component)
 
 	# 经验条组件（UnitXp）：仅非敌方(player)单位启用。enemy 阵营关闭升级组 → 不创建经验条。
 	if unit_faction != "enemy":
@@ -231,7 +281,7 @@ func _build_node_tree() -> void:
 	_buff_component = buff_root
 	_buff_component.buffs_changed.connect(_on_buffs_changed)
 	var intent_root := IntentRoot.new(); intent_root.name = "IntentRoot"; intent_root.z_index = 20; add_child(intent_root)
-	intent_root.position = Vector2(0.0, intent_offset_y)
+	intent_root.set_anchor_position(Vector2(0.0, intent_offset_y))
 	intent_root.set_faction(unit_faction)   # 阵营转发：决定意图组是否显示
 	_intent_component = intent_root
 	# 敌方阵营：常态下意图即打开（显示默认攻击意图），无需手动触发「显示意图」按钮。
@@ -261,6 +311,30 @@ func set_unit_art(id: String) -> void:
 
 func set_art_state(state: UnitArtState) -> void:
 	current_art_state = state
+	if state not in [UnitArtState.IDLE, UnitArtState.CHARGE]:
+		_reset_breathing_transform()
+
+func set_breathing_paused(paused: bool) -> void:
+	_breathing_paused = paused
+	if paused:
+		_reset_breathing_transform()
+
+func _reset_breathing_transform() -> void:
+	_breath_weight = 0.0
+	if is_instance_valid(_breath_root):
+		_breath_root.scale = Vector2.ONE
+		_breath_root.position = Vector2.ZERO
+
+func _process(delta: float) -> void:
+	if not breathing_enabled or _breathing_paused or _dead or current_art_state not in [UnitArtState.IDLE, UnitArtState.CHARGE]:
+		_reset_breathing_transform()
+		return
+	_breath_phase = fposmod(_breath_phase + delta * TAU / maxf(breathing_period, 0.1), TAU)
+	_breath_weight = move_toward(_breath_weight, 1.0, delta / 0.2)
+	var wave: float = (1.0 - cos(_breath_phase)) * 0.5 * _breath_weight
+	_breath_root.scale = Vector2(1.0 - breathing_width * wave, 1.0 + breathing_height * wave)
+	# 补偿拉伸后的底边位移，保持脚底中心固定。
+	_breath_root.position = Vector2(0.0, _breath_foot_y * (1.0 - _breath_root.scale.y))
 
 ## 新增 buff（委托给 BuffRoot 组件）。tone: 0未定/1有益/2有害；display_name 取自数据表名称；description 取自数据表说明文字
 func add_buff(buff_id: String, stack: int = 1, tone: int = 0, display_name: String = "", description: String = "") -> void:
@@ -289,7 +363,11 @@ func damage(amount: float) -> float:
 ## 获得 amount 点护盾（委托给 HpRoot，实时刷新护盾叠层）。
 func gain_shield(amount: float) -> void:
 	if is_instance_valid(_hp_component):
+		var before: float = _hp_component.get_shield()
 		_hp_component.apply_shield(amount)
+		# 仅实际新增护盾时提示名称；护盾数值仍由伤害数字组件显示。
+		if _hp_component.get_shield() > before and is_instance_valid(_buff_component):
+			_buff_component.show_gain_toast("护盾", "shield")
 
 ## 当前护盾值（委托给 HpRoot，供【中毒】护盾 1:1 抵消层数结算）。
 func get_shield() -> float:
@@ -321,6 +399,11 @@ func get_current_hp() -> float:
 
 ## 单位美术中心的世界坐标（意图抛物线预警 / 卡牌虚线等取起点终点用）。
 ## 美术容器 _body 的 position 即美术中心相对单位锚点(UnitRoot.position)的偏移。
+func get_intent_arrow_anchor_global() -> Vector2:
+	if is_instance_valid(_intent_arrow_anchor):
+		return _intent_arrow_anchor.global_position
+	return to_global(intent_arrow_anchor_offset)
+
 func get_art_center_global() -> Vector2:
 	if is_instance_valid(_body):
 		return global_position + _body.position
@@ -346,6 +429,9 @@ func die(death_fade_time: float = 0.2) -> void:
 	if _dead:
 		return
 	_dead = true
+	_reset_breathing_transform()
+	if is_instance_valid(_dim_gradient_material):
+		_dim_gradient_material.set_shader_parameter("solid_black", true)
 	# 立即使美术变纯黑剪影（盖黑幕、保持），不参与后续角色 / 选靶。
 	if is_instance_valid(_dim_overlay):
 		if is_instance_valid(_dim_tween):
@@ -360,51 +446,26 @@ func die(death_fade_time: float = 0.2) -> void:
 		queue_free())
 
 ## 持续伤害(DoT)结算飘字（出血/中毒 共用）：在单位美术上方生成紫色结算伤害飘字（标签=source_label + 数字），
-## 弹性放大→回缩一小点→停留 0.5s→淡出 0.3s 后自毁。仅使用结算伤害紫色款(C_TICK #C79BFF)。
+## 与演出组2共用数字动画；仅使用结算伤害紫色款(C_TICK #C79BFF)。
 ## 由 BattleRoot._tick_bleed / _tick_poison 调用；amount = 本次实际造成的伤害值（被护盾抵消部分不计入）。
-func spawn_tick_damage(source_label: String, amount: int) -> void:
-	if amount <= 0:
+func spawn_tick_damage(source_label: String, amount: int, invalid_amount: int = 0) -> void:
+	if amount <= 0 and invalid_amount <= 0:
 		return
 	var dmg := DamageNumber.new()
 	dmg.name = "TickDamage"
-	dmg.z_index = 30                       # 高于血条/Buff(20)，确保飘字压在最上层
-	add_child(dmg)                         # 入树触发 _ready 加载字体
-	dmg.spawn({"type": "tick", "source": source_label, "value": amount})
-	# 定位：锚点 = 单位美术中心底边。美术中心在 _body 局部(0,0)，故底边 = _body.position.y + art_h*0.5。
-	# 向上 up 偏移（与编排器 damage_base_up=150 + 抖动 0..50 一致）。
-	var art_h: float = _current_art_size().y
-	var art_bottom_y: float = _body.position.y + art_h * 0.5
-	var up: float = 150.0 + randf_range(0.0, 50.0)
-	# 水平：我方(player)偏左、敌方(enemy)偏右（与编排器 damage_faction_offset=50 ± spread/2=25 一致）。
-	var dx: float = (50.0 if unit_faction == "enemy" else -50.0) + randf_range(-25.0, 25.0)
-	dmg.position = Vector2(dx, art_bottom_y - up)
-	_play_tick_damage_anim(dmg)
+	dmg.z_index = 47
+	get_parent().add_child(dmg)  # 数字独立于单位死亡淡出，播放到自身结束。
+	dmg.spawn({"type": "tick", "source": source_label, "value": amount, "invalid_amount": invalid_amount})
+	# 与其他数字共用判定框随机锚点及弹起/停留/淡出时序。
+	dmg.play_on_unit(self)
 
 ## 出血结算伤害数字：转发到通用 DoT 飘字（标签"出血"）。
 func spawn_bleed_damage(amount: int) -> void:
 	spawn_tick_damage("出血", amount)
 
-## 持续伤害(DoT)飘字动画（出血/中毒 共用）：弹性放大(0.3→1.0, ELASTIC 过冲后回落) → 回缩一小点(→0.95) →
-## 停留 0.5s → 淡出 0.3s → 自毁。缩放/淡出作用于整个 DamageNumber 节点。
-func _play_tick_damage_anim(dmg: Node2D) -> void:
-	dmg.modulate.a = 1.0
-	dmg.scale = Vector2(0.3, 0.3)
-	var tw := create_tween()
-	# 弹性放大：从 0.3 弹到 1.0，ELASTIC 自然过冲再回落到目标（"弹性放大"）。
-	tw.tween_property(dmg, "scale", Vector2(1.0, 1.0), 0.40) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_ELASTIC)
-	# 回缩一小点并稳定（落定到略小于原尺寸）。
-	tw.tween_property(dmg, "scale", Vector2(0.95, 0.95), 0.15) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	# 停留 0.5s。
-	tw.tween_interval(0.5)
-	# 淡出 0.3s 后自毁。
-	tw.tween_property(dmg, "modulate:a", 0.0, 0.3)
-	tw.tween_callback(dmg.queue_free)
-
-func set_intent(type_id: String, value: String = "", target_faction: String = "", scope: String = "单体", value_base: String = "", display_text: String = "") -> void:
+func set_intent(type_id: String, value: String = "", target_faction: String = "", scope: String = "单体", value_base: String = "", display_text: String = "", card_color: int = -1, card_number: int = 0) -> void:
 	if is_instance_valid(_intent_component):
-		_intent_component.set_intent(type_id, value, target_faction, scope, value_base, display_text)
+		_intent_component.set_intent(type_id, value, target_faction, scope, value_base, display_text, card_color, card_number)
 	intent_changed.emit(unit_id, type_id, value, target_faction, scope)
 
 func get_intent() -> Dictionary:
@@ -424,12 +485,50 @@ func _load_state(state: UnitArtState) -> void:
 	if tex == null:
 		_show_pink_placeholder(); return
 	_art_sprite.texture = tex
+	var image := tex.get_image()
+	_breath_foot_y = tex.get_height() * 0.5
+	if image != null and not image.is_empty():
+		if image.is_compressed():
+			image.decompress()
+		var used: Rect2i = image.get_used_rect()
+		if used.has_area():
+			_breath_foot_y = float(used.end.y) - tex.get_height() * 0.5
+			# 以可见美术高度计算渐变，避免不同贴图透明留白影响黑幕分布。
+			if is_instance_valid(_dim_gradient_material):
+				_update_dim_gradient_bounds(image)
 	# 同步黑幕叠加层纹理与变换（保持剪影与当前美术态一致）
 	if is_instance_valid(_dim_overlay):
 		_dim_overlay.texture = tex
 		_dim_overlay.position = _art_sprite.position
 		_dim_overlay.scale = _art_sprite.scale
 		_dim_overlay.flip_h = _art_sprite.flip_h
+
+func _update_dim_gradient_bounds(image: Image) -> void:
+	# 排除原图近透明噪点，让“顶部/60%高度”对应实际人物，而非透明画布。
+	image.convert(Image.FORMAT_RGBA8)
+	var pixels: PackedByteArray = image.get_data()
+	var width: int = image.get_width()
+	var height: int = image.get_height()
+	var top: int = -1
+	var bottom: int = height
+	for y in height:
+		for x in width:
+			if pixels[(y * width + x) * 4 + 3] > 128:
+				top = y
+				break
+		if top >= 0:
+			break
+	for y in range(height - 1, -1, -1):
+		var found: bool = false
+		for x in width:
+			if pixels[(y * width + x) * 4 + 3] > 128:
+				bottom = y + 1
+				found = true
+				break
+		if found:
+			break
+	_dim_gradient_material.set_shader_parameter("art_top", float(maxi(0, top)) / height)
+	_dim_gradient_material.set_shader_parameter("art_bottom", float(bottom) / height)
 
 func _state_suffix(state: UnitArtState) -> String:
 	match state:
@@ -490,10 +589,12 @@ func flash(duration: float = 0.5) -> void:
 	await get_tree().create_timer(duration).timeout
 	set_external_highlight(false)
 
-## 选靶黑幕：将单位美术变为纯黑剪影，带淡入/淡出过渡（dim_fade_time）。
+## 选靶黑幕：顶部10%高度保留20%深灰遮罩，再渐变到75%高度完全覆盖#222222；沿用淡入/淡出时长。
 ## 实现为独立叠加 Sprite（z 高于美术 Sprite 与其渐变遮罩 next_pass），绘制于「前后排渐变遮罩」之上，后排单位也能正常显示黑幕。
 ## 仅覆盖美术，不影响血条/意图条（后者位于更高 z 的同级节点）。
 func set_dimmed(on: bool) -> void:
+	if _dead:
+		return
 	_dimmed = on
 	if not is_instance_valid(_dim_overlay):
 		return
@@ -545,16 +646,20 @@ func _apply_layout() -> void:
 	# 锚点(UnitRoot.position) 即「血条靠上居中」：血条顶边中心落在锚点上（hp_offset_y 为锚点→血条顶的微调间隙）。
 	# 关键：血条位置不再依赖美术高度 art_h，因此不同美术尺寸的单位组放到同一场景 Y 时，血条严格对齐（敌我同步）。
 	var bar_top_y := visual_offset_y + hp_offset_y
+	var hud_top_y: float = bar_top_y + unit_hud_shift_y
 	if is_instance_valid(_hp_component):
-		_hp_component.position = Vector2(0.0, bar_top_y)
+		_hp_component.position = Vector2(0.0, hud_top_y + hp_group_offset_y)
 	if is_instance_valid(_xp_component):
-		_xp_component.position = Vector2(0.0, bar_top_y)
+		_xp_component.position = Vector2(0.0, hud_top_y + hp_group_offset_y)
+	if is_instance_valid(_countdown_component):
+		_countdown_component.position = Vector2(0.0, bar_top_y + countdown_offset_y)
 	if is_instance_valid(_body):
 		# 美术整体置于血条上方：美术中心 = 锚点 - (art_h/2 + 间隙)，使美术底边悬于血条顶之上、互不重叠。
 		_body.position = Vector2(0.0, bar_top_y - ART_BAR_GAP - art_h * 0.5 + 20.0)  # 美术下移20px，更靠近血条组
 	if is_instance_valid(_buff_component):
 		# Buff 框体排在血条正下方（BAR_HEIGHT 为整条高度，旧 30.0 半条近似已替换）。
-		_buff_component.position = Vector2(0.0, bar_top_y + BAR_HEIGHT + buff_offset_y - 15.0)  # Buff框上移15px，更靠近血条组
+		_buff_component.position = Vector2(0.0, hud_top_y + BAR_HEIGHT + buff_offset_y - 15.0)
+		_buff_component.set_toast_layout_compensation(unit_hud_shift_y)
 
 ## 收到升级参数：仅当目标 id 与本单位匹配时才播放一次升级动画（无淡入淡出）。
 ## 与生产者解耦 —— 谁 emit 的无关紧要，本函数只认 unit_id 是否命中自己。

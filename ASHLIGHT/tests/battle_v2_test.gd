@@ -227,8 +227,8 @@ func run() -> void:
 	check(br.use_skill("Zhouzhou", tint) and tint.cost_color != 1 and tint.card.cost_color == tint.cost_color, "Zhouzhou recolors the card to a different color")
 	await br.draw_action()
 	check(rules.skill_cooldowns.Rocket == 2 and rules.skill_cooldowns.Irene == 2, "skill cooldowns tick down once per player action")
-	check(br._intent_target_labels.Rocket.text.contains("冷却 2") and br._intent_target_labels.Zhouzhou.text.contains("冷却 3"), "allies show skill name and cooldown")
-	check(br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Irene.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally overhead shows skill cooldown")
+	check(br._intent_target_labels.Rocket.text.contains("技能") and not br._intent_target_labels.Rocket.text.contains("冷却") and br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally skill description and countdown group show separate information")
+	check(br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Irene.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally countdown group shows skill cooldown")
 
 	# --- 手牌打空：奖励补到 5，Combo 保留、护盾保留、不额外推进倒计时 ---
 	clear_hand()

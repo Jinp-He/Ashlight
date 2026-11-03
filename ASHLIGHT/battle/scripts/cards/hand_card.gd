@@ -25,6 +25,7 @@ var is_flashback: bool = false
 ## 悬停时临时抬升 z/位移，离开后恢复到这两个值。
 var base_z: int = 0
 var home_pos: Vector2 = Vector2.ZERO
+var home_rotation: float = 0.0
 ## 飞入锁定：爆发抽牌/开局发牌等「从牌库飞入」期间为 true，禁止 layout(false) 非动画分支
 ## 由 layout 动画分支在飞入 tween 完成时解锁。
 var flyin_lock: bool = false
@@ -100,6 +101,10 @@ func is_point_inside(global_pos: Vector2) -> bool:
 		var top: float = cy - (hh + _hit_lift * 0.5)
 		var bottom: float = cy + (hh + _hit_lift * 0.5)
 		var lp := (get_parent() as Node2D).to_local(global_pos)
+		# 常态扇形的角落也能选中；悬停仍用固定逻辑区域，避免动画导致反复进出。
+		var fan_point: Vector2 = (lp - home_pos).rotated(-home_rotation)
+		if absf(fan_point.x) <= hw and absf(fan_point.y) <= hh:
+			return true
 		return lp.x >= cx - hw and lp.x <= cx + hw and lp.y >= top and lp.y <= bottom
 	# 兜底：未注入参数时回退到实时几何（避免开局前命中全失效），但此路径不参与悬停稳定性。
 	var center := global_position

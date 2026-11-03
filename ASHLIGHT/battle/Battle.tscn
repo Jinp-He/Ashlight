@@ -12,6 +12,8 @@
 [ext_resource type="Script" uid="uid://car3vfygao2hd" path="res://battle/scripts/wind_particles.gd" id="wind_particles"]
 [ext_resource type="FontFile" path="res://assets/fonts/Biantao.ttf" id="biantao_font"]
 
+[ext_resource type="Script" path="res://battle/scripts/ui/pile_flame.gd" id="pile_flame_script"]
+
 [node name="BattleRoot" type="Node2D" unique_id=1472562332]
 script = ExtResource("1_battle")
 
@@ -123,28 +125,14 @@ offset_right = 800.0
 offset_bottom = 70.0
 mouse_filter = 2
 
-[node name="Outline" type="ColorRect" parent="HUD/PileTop"]
+[node name="Flame" type="Control" parent="HUD/PileTop"]
 layout_mode = 0
-offset_left = -39.0
-offset_top = -39.0
-offset_right = 39.0
-offset_bottom = 39.0
-rotation = 0.785398
-pivot_offset = Vector2(39, 39)
+offset_left = -161.0
+offset_top = -70.0
+offset_right = 161.0
+offset_bottom = 20.0
 mouse_filter = 2
-color = Color(0, 0, 0, 1)
-
-[node name="Diamond" type="ColorRect" parent="HUD/PileTop"]
-layout_mode = 0
-offset_left = -35.0
-offset_top = -35.0
-offset_right = 35.0
-offset_bottom = 35.0
-rotation = 0.785398
-pivot_offset = Vector2(35, 35)
-mouse_filter = 2
-color = Color(0.3, 0.3, 0.3, 1)
-
+script = ExtResource("pile_flame_script")
 [node name="Number" type="Label" parent="HUD/PileTop"]
 layout_mode = 0
 offset_left = -50.0
@@ -152,7 +140,7 @@ offset_top = -32.0
 offset_right = 50.0
 offset_bottom = 28.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
+theme_override_constants/outline_size = 0
 theme_override_fonts/font = ExtResource("biantao_font")
 theme_override_font_sizes/font_size = 44
 text = "?"

@@ -1,14 +1,14 @@
 class_name IntentTelegraph
 extends Node2D
 
-## 敌人意图抛物线预警：从施法者（敌人）美术中心，向「意图攻击范围内」各目标美术中心，
+## 敌人意图抛物线预警：从敌方单位的固定锚点，向已锁定目标的同名锚点，
 ## 画一条二次贝塞尔抛物线弧（向上拱起）+ 运动箭头 + 渐隐拖尾。
 ## 两种播放模式（触发条件由 IntentRoot 控制）：
-##   · play_once() —— 单次：施法者→目标 飞一次，到达后整条收束越过目标并淡出，播完自隐藏。
+##   · play_once() —— 单次：施法者→目标 飞一次，到达目标后拖尾收束并淡出，播完自隐藏。
 ##                    用于「新生成意图播放一次」。
 ##   · play_loop() —— 循环：同上单次流程，淡出后无缝重开（淡入）持续飞行，用于「悬停查看时持续播放」。
 ##   · stop()      —— 隐藏并停止。
-## 动画三阶段：① 飞行 (caster→target) ② 收束消散（箭头停在目标、整条沿末段切线继续前移 overshoot、
+## 动画三阶段：① 飞行 (caster→target) ② 收束消散（箭头停在目标、
 ##            拖尾收拢、整体淡出）③ 循环时从 ① 无缝重开（首段 fade-in 避免突跳重生）。
 ## 坐标：本节点作为 IntentRoot 子节点，绘制用世界坐标经 to_local 转换；每帧从 caster/targets 的
 
@@ -17,9 +17,8 @@ extends Node2D
 @export var trail_span: float = 0.38          # 拖尾占整段比例 (0..1)
 @export var arrow_size: float = 18.0          # 箭头（三角）大小
 @export var flight_duration_single: float = 0.55   # 单次飞行时长（秒）
-@export var flight_duration_loop: float = 1.1      # 循环飞行时长（秒）
-@export var exit_duration: float = 0.42       # 收束消散时长（秒）—— 到达目标后「持续位移 + 淡出」的过程
-@export var overshoot_distance: float = 70.0   # 收束阶段整条越过目标的前移像素距离（固定、与弧长无关）
+@export var flight_duration_loop: float = 0.75      # 循环飞行时长（秒）
+@export var exit_duration: float = 0.42       # 抵达目标后的收束淡出时长（秒）
 @export var fade_in_span: float = 0.15         # 飞行首段淡入比例（仅用于循环重开时平滑出现，避免突跳）
 @export var color: Color = Color(1.0, 0.35, 0.25, 1.0)   # 预警色（attack 默认红）
 
@@ -42,7 +41,7 @@ func setup(caster: UnitRoot, targets: Array[UnitRoot], col: Color = Color(1.0, 0
 	color = col
 	_valid = is_instance_valid(_caster)
 
-## 单次：施法者→目标 飞一次，到达后收束越过目标并淡出，播完自隐藏。无有效施法者/目标则无效。
+## 单次：施法者→目标 飞一次，到达目标后拖尾收束并淡出，播完自隐藏。无有效施法者/目标则无效。
 func play_once() -> void:
 	if not _valid or _targets.is_empty():
 		return
@@ -95,11 +94,11 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _phase == Phase.IDLE or not _valid or not is_instance_valid(_caster):
 		return
-	var p0w: Vector2 = _caster.get_art_center_global()
+	var p0w: Vector2 = _caster.get_intent_arrow_anchor_global()
 	for tgt in _targets:
-		if not is_instance_valid(tgt):
+		if not is_instance_valid(tgt) or tgt.get_current_hp() <= 0.0:
 			continue
-		var p2w: Vector2 = tgt.get_art_center_global()
+		var p2w: Vector2 = tgt.get_intent_arrow_anchor_global()
 		_draw_arc(p0w, p2w)
 
 ## 单条抛物线的拖尾 + 箭头。根据当前阶段决定 head/tail 区间与整体 alpha。
@@ -116,23 +115,20 @@ func _draw_arc(p0w: Vector2, p2w: Vector2) -> void:
 	var g_alpha: float            # 整体 alpha（淡入/淡出）
 	var head_t: float             # 箭头所在弧参数
 	var tail_t0: float            # 拖尾尾端弧参数
-	var offset := Vector2.ZERO    # 收束阶段整条前移偏移（沿末段切线越过目标）
 
 	if _phase == Phase.FLIGHT:
 		head_t = _t
 		tail_t0 = maxf(0.0, _t - trail_span)
 		g_alpha = clampf(_t / fade_in_span, 0.0, 1.0)   # 首段淡入（循环重开平滑）
-	else:   # Phase.EXIT：箭头停在目标，拖尾收拢，整条沿切线越过目标并淡出
+	else:   # Phase.EXIT：箭头停在目标，拖尾收拢并淡出
 		var p := 1.0 - _ec                       # 收拢系数：1→0（拖尾向箭头收拢）
 		head_t = 1.0
 		tail_t0 = 1.0 - trail_span * p
-		var tangent: Vector2 = (p2 - p1).normalized()   # 抵达目标时的切线方向
-		offset = tangent * (overshoot_distance * _ec)    # 随消散进度前移越过目标
 		g_alpha = 1.0 - _ec                            # 整体淡出
 
-	var q0: Vector2 = p0 + offset
-	var q1: Vector2 = p1 + offset
-	var q2: Vector2 = p2 + offset
+	var q0: Vector2 = p0
+	var q1: Vector2 = p1
+	var q2: Vector2 = p2
 
 	# 拖尾：从 tail_t0 到 head_t 分段画，越靠近 head 越亮（彗星尾）。
 	var steps: int = 16
@@ -145,18 +141,15 @@ func _draw_arc(p0w: Vector2, p2w: Vector2) -> void:
 		draw_line(a0, b0, Color(color.r, color.g, color.b, color.a * a), line_width, true)
 	# 箭头：head_t 处朝向切线方向。
 	var head: Vector2 = _bez(q0, q1, q2, head_t)
-	var ahead: Vector2 = _bez(q0, q1, q2, minf(head_t + 0.012, 1.0))
-	var dir: Vector2 = (ahead - head).normalized()
-	if dir == Vector2.ZERO:
-		dir = (q2 - q0).normalized()
+	var dir: Vector2 = ((1.0 - head_t) * (p1 - p0) + head_t * (p2 - p1)).normalized()
 	_draw_arrow(head, dir, g_alpha)
 
 ## 朝 dir 的三角箭头。
 func _draw_arrow(pos: Vector2, dir: Vector2, a: float) -> void:
 	var c := Color(color.r, color.g, color.b, color.a * a)
-	var tip: Vector2 = pos + dir * arrow_size
-	var wing_l: Vector2 = pos + dir * (-arrow_size * 0.3) + dir.rotated(PI / 2.0) * arrow_size * 0.55
-	var wing_r: Vector2 = pos + dir * (-arrow_size * 0.3) + dir.rotated(-PI / 2.0) * arrow_size * 0.55
+	var tip: Vector2 = pos
+	var wing_l: Vector2 = pos + dir * (-arrow_size) + dir.rotated(PI / 2.0) * arrow_size * 0.55
+	var wing_r: Vector2 = pos + dir * (-arrow_size) + dir.rotated(-PI / 2.0) * arrow_size * 0.55
 	var poly: PackedVector2Array = [tip, wing_l, wing_r]
 	draw_colored_polygon(poly, c)
 

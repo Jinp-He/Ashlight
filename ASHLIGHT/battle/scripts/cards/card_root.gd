@@ -21,7 +21,7 @@ const COST_EXECUTE: Color = Color(1.0, 0.549, 0.2, 1.0)       # ff8c33 执行
 const COST_COLORS: Array[Color] = [
 	Color(0.890, 0.231, 0.231, 1.0), # 0 红 e33b3b
 	Color(0.0, 0.631, 1.0, 1.0),     # 1 蓝 00a1ff
-	Color(0.957, 0.769, 0.098, 1.0), # 2 黄 f4c419
+	Color("#d09633"),              # 2 黄 d09633，牌面与牌堆顶火焰共用
 	Color(0.439, 0.671, 0.231, 1.0)  # 3 绿 70ab3b
 ]
 const OUTLINE_BLACK: Color = Color(0.0, 0.0, 0.0, 1.0)

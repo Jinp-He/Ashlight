@@ -23,9 +23,8 @@ const TYPE_IDS: Array[String] = ["att", "shield", "state", "think"]
 ## 不随单体/群体切换；群体(scope=群体)时数字后追加 +(含全场 ⏳A+)，+ 后缀语义 = 打击面。
 
 
-## 意图抛物线预警（敌人→目标 弧线+箭头+拖尾）总开关。默认 false = 隐藏。
-## 判为范围内目标，导致箭头乱指全部我方单位；待重做目标/范围可视化后再于 inspector 勾选开启。
-@export var telegraph_enabled: bool = false
+## 悬停敌方单位时，指向它当前锁定的目标。
+@export var telegraph_enabled: bool = true
 
 ## 意图类型图标 / 目标激活元素统一色（9c660a = 0.61176, 0.4, 0.03922）。
 const COLOR_INTENT: Color = Color(0.61176, 0.4, 0.03922)
@@ -35,7 +34,7 @@ const COLOR_INACTIVE: Color = Color(0.24706, 0.26667, 0.27843)
 const CARD_HAND_SCALE: float = 0.42
 
 ## 三组定位偏移：均以 IntentRoot 局部原点为中心对齐。
-@export var base_offset: Vector2 = Vector2.ZERO :
+@export var base_offset: Vector2 = Vector2(0, 5) :
 	set(v):
 		base_offset = v
 		_rebuild_layout()
@@ -83,12 +82,7 @@ const CARD_HAND_SCALE: float = 0.42
 	set(v):
 		hover_panel_bg = v
 		_apply_hover_style()
-@export var hover_panel_top_offset: float = 8.0     # 面板顶边相对缩略图顶边的微调（默认下偏 8px）
-## 缩略图在面板下沿之外「露出」的高度（像素）。源图底部倒三角高 10px：
-## 取 10 → 恰好只露尖角、不露圆角矩形主体；调大则圆角矩形下缘也会露出来。
-@export var hover_tail_poke: float = 10.0
-@export var bubble_hover_half_w: float = 40.0       # 触发悬停的气泡半宽
-@export var bubble_hover_half_h: float = 48.0       # 触发悬停的气泡半高
+@export var hover_panel_top_offset: float = 0.0     # 面板顶边相对缩略图顶边的微调（默认对齐）
 
 ## 类型图标在 62x88 源图内的实际字形区域（用于悬停面板左侧紧凑显示；ArtSource 尺寸变化时回退整图）。
 const TYPE_GLYPH_REGION: Dictionary = {
@@ -97,6 +91,15 @@ const TYPE_GLYPH_REGION: Dictionary = {
 	"state": Rect2(12, 17, 39, 27),
 	"think": Rect2(19, 24, 25, 40),
 }
+
+## 菱形中心相对气泡上沿的微调。
+@export var card_badge_offset: Vector2 = Vector2(0, -9):
+	set(value):
+		card_badge_offset = value
+		_rebuild_layout()
+var _card_badge: Node2D
+var _card_badge_fill: ColorRect
+var _card_badge_number: Label
 
 var _base: NinePatchRect
 var _type_group: Node2D
@@ -125,9 +128,13 @@ var _base_native_size: Vector2 = Vector2(62.0, 88.0)  # 缩略图原始尺寸（
 ## 意图抛物线预警（攻击范围可视化）：敌人→范围内各目标的弧线 + 箭头 + 拖尾。
 var _telegraph: IntentTelegraph
 var _is_hovering: bool = false      # 鼠标是否正悬停意图区域（持续循环播放）
-var _pending_refresh: bool = false  # battle_root 未就绪时延迟重算目标集
 
 func _ready() -> void:
+	_anchor_position = position
+	var owner_unit := get_parent() as UnitRoot
+	if is_instance_valid(owner_unit):
+		var phase: float = float(posmod(owner_unit.unit_id.hash(), 997)) / 997.0
+		_float_elapsed = phase * float_period
 	_build()
 	visible = false  # 默认隐藏，set_intent + 阵营为敌人后显示
 
@@ -175,10 +182,38 @@ func _build() -> void:
 	_telegraph.visible = false
 	add_child(_telegraph)
 	# ⑤ 悬停展开详情面板（代码绘制黑圆角矩形 + 左图标 + 右换行文字）—— 最后加入以绘制在缩略图之上
+	_build_card_badge()
 	_build_hover_panel()
 	_rebuild_layout()
 
 ## 构建悬停详情面板节点（Panel + StyleBoxFlat 圆角 + 左图标 + 右文字）。
+func _build_card_badge() -> void:
+	_card_badge = Node2D.new()
+	_card_badge.name = "预色组"
+	_card_badge.z_index = 11
+	_card_badge.scale = Vector2.ONE * CARD_HAND_SCALE * 0.8
+	_card_badge.visible = false
+	add_child(_card_badge)
+	for side in [CardRoot.COST_SIZE + CardRoot.COST_OUTLINE_SIZE * 2.0, CardRoot.COST_SIZE]:
+		var layer := ColorRect.new()
+		layer.size = Vector2.ONE * side
+		layer.position = -layer.size * 0.5
+		layer.pivot_offset = layer.size * 0.5
+		layer.rotation = PI * 0.25
+		layer.color = Color.BLACK
+		layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_card_badge.add_child(layer)
+		_card_badge_fill = layer
+	_card_badge_number = Label.new()
+	_card_badge_number.size = Vector2(90, 63)
+	_card_badge_number.position = -_card_badge_number.size * 0.5
+	_card_badge_number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_card_badge_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_card_badge_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_badge_number.add_theme_font_override("font", preload(CardRoot.FONT_PATH))
+	_card_badge_number.add_theme_font_size_override("font_size", 54)
+	_card_badge.add_child(_card_badge_number)
+
 func _build_hover_panel() -> void:
 	_hover_panel = Panel.new()
 	_hover_panel.name = "IntentHoverPanel"
@@ -244,11 +279,16 @@ func set_faction(faction: String) -> void:
 	_apply_visibility()
 
 ## 类型组仅显示活动类型图标（着色 COLOR_INTENT，居中于底图），数值文字(NxM)位于类型图标下方并上移40px、同样居中于底图（字体色同 COLOR_INTENT）。
-func set_intent(type_id: String, value: String = "", target_faction: String = "", scope: String = "单体", value_base: String = "", display_text: String = "") -> void:
+func set_intent(type_id: String, value: String = "", target_faction: String = "", scope: String = "单体", value_base: String = "", display_text: String = "", card_color: int = -1, card_number: int = 0) -> void:
 	_active_type = type_id
 	_active_value = value
 	_active_value_base = value_base
 	_active_display = display_text
+	if is_instance_valid(_card_badge):
+		_card_badge.visible = card_color >= 0 and card_color < CardRoot.COST_COLORS.size()
+		if _card_badge.visible:
+			_card_badge_fill.color = CardRoot.COST_COLORS[card_color]
+			_card_badge_number.text = str(card_number)
 	_active_target_faction = target_faction
 	_active_scope = scope
 	for id in TYPE_IDS:
@@ -273,31 +313,24 @@ func get_intent() -> Dictionary:
 	return {"type": _active_type, "value": _active_value,
 		"target_faction": _active_target_faction, "scope": _active_scope}
 
-## battle_root 可能尚未就绪（初始构建期），此时置 _pending_refresh，交由 _process 延迟重试。
-## 完成后若未处于悬停查看态，触发一次扫过（新意图播放一次）。
+## 用战斗已经锁定的单个目标，悬停期间循环预览。
 func _refresh_telegraph() -> void:
 	if not is_instance_valid(_telegraph):
 		return
-	if not telegraph_enabled:
-		_telegraph.setup(null, [])
-		_telegraph.visible = false
-		_pending_refresh = false
+	_telegraph.stop()
+	if not telegraph_enabled or not _is_hovering or not visible:
 		return
-	if _faction != "enemy" or _active_target_faction == "":
-		_telegraph.setup(null, [])
-		_pending_refresh = false
+	var br := get_tree().get_first_node_in_group("battle_root")
+	var caster := get_parent() as UnitRoot
+	if not is_instance_valid(br) or not is_instance_valid(caster):
 		return
-	var br := get_tree().get_first_node_in_group("battle_root") as Node
-	if br == null:
-		_pending_refresh = true   # 延迟重试（初始构建期 battle_root 组未注册）
+	var card: Dictionary = br._v2_intents.get(caster.unit_id, {})
+	var target: UnitRoot = br._find_unit(str(card.get("target", "")))
+	if not is_instance_valid(target) or target == caster or target.get_current_hp() <= 0.0:
 		return
-	var caster: UnitRoot = get_parent()
-	var targets: Array[UnitRoot] = br.resolve_targets(caster, _active_target_faction)
+	var targets: Array[UnitRoot] = [target]
 	_telegraph.setup(caster, targets, _telegraph_color())
-	_pending_refresh = false
-	if not _is_hovering:
-		_telegraph.play_once()
-
+	_telegraph.play_loop()
 ## 预警弧颜色按意图类型区分（att 红 / shield 蓝 / state 紫；无目标类兜底暖黄）。
 func _telegraph_color() -> Color:
 	match _active_type:
@@ -309,9 +342,20 @@ func _telegraph_color() -> Color:
 ##   ① 意图图标区域（to_global(group_offset) 矩形）
 ##   ② 所属单位组（战场 UnitRoot 激活区，160x330）
 ## 仅敌人且意图可见时生效。
-func _process(_delta: float) -> void:
-	if _pending_refresh and _faction == "enemy":
-		_refresh_telegraph()
+@export var float_amplitude: float = 3.0
+@export var float_period: float = 2.0
+var _float_elapsed: float = 0.0
+var _anchor_position: Vector2 = Vector2.ZERO
+
+func set_anchor_position(anchor: Vector2) -> void:
+	_anchor_position = anchor
+	position = anchor
+
+func _process(delta: float) -> void:
+	if visible and _faction == "enemy":
+		var period: float = maxf(float_period, 0.01)
+		_float_elapsed = fposmod(_float_elapsed + delta, period)
+		position = _anchor_position + Vector2(0.0, sin(_float_elapsed / period * TAU) * float_amplitude)
 	if _faction != "enemy" or not visible:
 		if _is_hovering:
 			_is_hovering = false
@@ -320,21 +364,11 @@ func _process(_delta: float) -> void:
 		_set_hover_panel(false)
 		return
 	var m: Vector2 = get_global_mouse_position()
-	var center: Vector2 = to_global(group_offset)   # 意图视觉中心（世界系）
-	var hover_intent: bool = abs(m.x - center.x) <= 110.0 and abs(m.y - center.y) <= 80.0
 	var hover_unit: bool = _is_mouse_over_owner_unit(m)
-	var hover: bool = hover_intent or hover_unit
-	if hover and not _is_hovering:
-		_is_hovering = true
-		if telegraph_enabled:
-			_telegraph.play_loop()
-	elif not hover and _is_hovering:
-		_is_hovering = false
-		if telegraph_enabled:
-			_telegraph.stop()
-	# 详情面板：仅当鼠标直接落在意图气泡（或已展开的面板）上时展开（与预警的宽判定相互独立）。
-	var over_bubble: bool = _is_mouse_over_intent_bubble(m) or _is_mouse_over_hover_panel(m)
-	_set_hover_panel(over_bubble)
+	if hover_unit != _is_hovering:
+		_is_hovering = hover_unit
+		_refresh_telegraph()
+	_set_hover_panel(hover_unit)
 
 ## 鼠标是否落在所属单位组（战场 UnitRoot 激活区 160x330）内。
 func _is_mouse_over_owner_unit(m: Vector2) -> bool:
@@ -392,6 +426,8 @@ func _refresh_value_font() -> void:
 
 ## 布局：三组均以各自 offset 为原点居中。
 func _rebuild_layout() -> void:
+	if is_instance_valid(_card_badge):
+		_card_badge.position = base_offset + group_offset + Vector2(0, -_base_native_size.y * 0.5) + card_badge_offset
 	if is_instance_valid(_base):
 		if not _hover_panel_open:
 			_base.size = _base_native_size   # 非悬停：恢复原始尺寸
@@ -481,19 +517,12 @@ func _prepare_hover_content() -> void:
 	var min_h: float = maxf(hover_panel_min_height, box + pad * 2.0)
 	var text_w: float = maxf(20.0, hover_panel_width - pad * 2.0 - box - hover_icon_gap)
 	_hover_text_w = text_w
-	# 量测换行高度：以正文(抖音体)量测换行行数，每行高度取「正文 / 数字(扁桃体放大)」较大者，
-	# 避免含关键数值的行被撑高后文本溢出面板（bbcode 标签不参与量测，先剥离）。
-	var plain: String = _strip_bbcode(_hover_text.text)
-	var body_font: Font = load(FONT_DOUYIN_PATH) as Font
-	var num_font: Font = load(FONT_PATH) as Font
-	var flags: int = TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_GRAPHEME_BOUND
-	var body_lh: float = body_font.get_string_size("测", HORIZONTAL_ALIGNMENT_LEFT, -1.0, hover_text_font_size).y if body_font != null else float(hover_text_font_size)
-	var num_lh: float = num_font.get_string_size("0", HORIZONTAL_ALIGNMENT_LEFT, -1.0, hover_keyval_font_size).y if num_font != null else float(hover_keyval_font_size)
-	var line_h: float = maxf(body_lh, num_lh)
-	var body_h: float = body_font.get_multiline_string_size(plain, HORIZONTAL_ALIGNMENT_LEFT, text_w, hover_text_font_size, -1, flags).y if body_font != null else float(hover_text_font_size)
-	var lines: int = maxi(1, ceili(body_h / maxf(body_lh, 1.0)))
-	var text_h: float = lines * line_h
-	_hover_panel_h = maxf(min_h, text_h + pad * 2.0)
+	# 使用实际富文本换行高度，短说明保留气泡原始高度。
+	_hover_text.size.x = text_w
+	var text_h: float = float(_hover_text.get_content_height())
+	var left_h: float = box + hover_name_gap + hover_name_font_size + 4.0
+	var resting_h: float = _base_native_size.y - hover_panel_top_offset
+	_hover_panel_h = maxf(maxf(resting_h, min_h), maxf(left_h, text_h + pad * 2.0))
 
 ## 按给定宽度套用面板几何：面板宽度=width（左右对称展开）、缩略图纵向拉伸随展开进度 t 过渡。
 ## 注意：缩略图(_base)顶边固定在原缩略图顶边（悬停时不移动），仅展开面板顶边叠加 hover_panel_top_offset（相对缩略图下偏）。
@@ -502,15 +531,15 @@ func _apply_hover_layout(width: float) -> void:
 		return
 	var cx := _hover_center_x()
 	var thumb_top: float = base_offset.y + group_offset.y - _base_native_size.y * 0.5   # 缩略图顶边（悬停时保持不动）
-	var panel_top: float = thumb_top + hover_panel_top_offset   # 展开组顶边（默认下偏 8px）
-	_hover_panel.size = Vector2(width, _hover_panel_h)
-	_hover_panel.position = Vector2(cx - width * 0.5, panel_top)
+	var panel_top: float = thumb_top + hover_panel_top_offset   # 展开组顶边（默认与气泡对齐）
 	var t: float = 0.0 if hover_panel_width <= 0.0 else clampf(width / hover_panel_width, 0.0, 1.0)
-	# 缩略图拉伸高度 = 面板高 + 面板下偏量 + 露出高度；面板下沿以外露出的部分恒为 hover_tail_poke。
-	var stretched_h: float = maxf(_base_native_size.y, _hover_panel_h + hover_panel_top_offset + hover_tail_poke)
+	var stretched_h: float = maxf(_base_native_size.y, _hover_panel_h + hover_panel_top_offset)
+	var bubble_h: float = lerpf(_base_native_size.y, stretched_h, t)
+	_hover_panel.size = Vector2(width, bubble_h - hover_panel_top_offset)
+	_hover_panel.position = Vector2(cx - width * 0.5, panel_top)
 	if is_instance_valid(_base):
-		_base.size = Vector2(_base_native_size.x, lerpf(_base_native_size.y, stretched_h, t))
-		_base.position = Vector2(cx - _base_native_size.x * 0.5, thumb_top)   # 缩略图气泡不移动
+		_base.size = Vector2(_base_native_size.x, bubble_h)
+		_base.position = Vector2(cx - _base_native_size.x * 0.5, thumb_top)
 	_layout_hover_content_box()
 
 ## 面板内元素布局：左侧列（图标在上、行为名称紧接其下）整体垂直居中；右侧文字换行、不超出面板。
@@ -626,17 +655,6 @@ func _value_display() -> String:
 	if _active_value == "":
 		return "?"
 	return _active_value.replace("*", "×")
-
-## 鼠标是否直接落在意图气泡上（以 base_offset+group_offset 为中心的气泡矩形）。
-func _is_mouse_over_intent_bubble(m: Vector2) -> bool:
-	var c: Vector2 = to_global(base_offset + group_offset)
-	return absf(m.x - c.x) <= bubble_hover_half_w and absf(m.y - c.y) <= bubble_hover_half_h
-
-## 鼠标是否落在已展开的详情面板内（避免面板展开后边界外移导致反复开合闪烁）。
-func _is_mouse_over_hover_panel(m: Vector2) -> bool:
-	if not is_instance_valid(_hover_panel) or not _hover_panel.visible:
-		return false
-	return Rect2(_hover_panel.global_position, _hover_panel.size).has_point(m)
 
 ## 生成随机意图数值文字（格式 N*M：N=连击次数 1~3、M=每击伤害，基线 2）。
 ## 用户 2026-09-21 确立：意图数值改为「连击*伤害」(如 1*2 = 1连击·2伤害；3*2 = 3连击·2伤害)，

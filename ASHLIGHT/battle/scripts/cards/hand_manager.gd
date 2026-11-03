@@ -23,6 +23,8 @@ const COMBO_GLOSSARY_SCRIPT := preload("res://battle/scripts/cards/combo_glossar
 @export var regular_spacing: float = 70.0   # 常规间距：单排相邻卡中心基准间距(px)，随张数系数与悬停放大在其上浮动
 @export var hover_lift: float = 75.0          # 悬停时卡牌上移(px)
 @export var hover_scale: float = 1.4
+@export var hand_arc_height: float = 25.0
+@export var hand_fan_angle: float = 3.0
 
 # ── 灵活自动间距：参考 Demo 工程的 resize_table 自动化，按卡数算「随张数变化的间距系数」──
 # 低数量→系数>1(间距放大)；数量增多→系数趋近 1(常规)→继续增则<1(间距缩小)；clamp 到 [min,max]。
@@ -38,6 +40,8 @@ const COMBO_GLOSSARY_SCRIPT := preload("res://battle/scripts/cards/combo_glossar
 
 @export_group("Animation")
 @export var anim_dur: float = 0.35
+@export var discard_flight_duration: float = 0.45
+@export var discard_arc_height: float = 120.0
 @export var stagger_ms: float = 80.0
 @export var hover_anim_dur: float = 0.15      # 悬停散开时长：比 anim_dur 更短，且悬停时禁用 stagger → 齐刷刷同时散开
 @export var cancel_reset_dur: float = 0.15     # 取消选牌后复位动画时长：比 anim_dur 更短、且禁用 stagger → 卡牌齐刷刷快速飞回原位
@@ -403,11 +407,16 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 			cursor += gaps[i]
 		var c := active[i] as HandCard
 		var x: float = cursor
+		# 战斗/HUD刷新只能更新输入状态，不能中断仍在进行的抽牌飞入。
+		if not animated and c.flyin_lock:
+			continue
 		_kill_card_tween(c)   # 杀旧 tween(含悬停抬升)，避免与本次定位 tween 抢 position
 		# 索引大=右侧；层级从右往左（右卡盖左卡，叠放时右卡在上）；悬停卡置顶。
 		c.base_z = 10 + i
 		c.z_index = 1000 if c == _hovered else c.base_z
-		c.home_pos = Vector2(x, hand_y)
+		var fan: float = (float(i) / float(n - 1) * 2.0 - 1.0) if n > 1 else 0.0
+		c.home_pos = Vector2(x, hand_y + hand_arc_height * fan * fan)
+		c.home_rotation = deg_to_rad(hand_fan_angle * fan)
 		c.set_hit_params(hand_scale, hover_lift)
 		# 悬停路径(进入或离开)：所有卡同时(无 stagger)用更短时长(hover_anim_dur)散开/收回 → 齐刷刷；
 		# 非悬停(发牌/重抽)走原 anim_dur + stagger。hover_transition 同时覆盖「进入悬停」与「离开悬停」两种情形。
@@ -418,19 +427,23 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 		if reset_dur >= 0.0:
 			dur = reset_dur           # 取消复位：用更短时长
 		var anim_delay: float = 0.0 if (fast or combo_active or reset_dur >= 0.0) else float(i) * stagger_ms / 1000.0
-		var target_pos: Vector2 = Vector2(x, hand_y)
+		var target_pos: Vector2 = c.home_pos
+		var target_rotation: float = c.home_rotation
 		# 接不上牌堆顶的牌固定下移，一眼区分可出 / 不可出；选为技能目标的牌保持抬起。
-		if c == _skill_card:
-			target_pos = Vector2(x, hand_y - hover_lift)
+		if c == _skill_card or c == _hovered:
+			target_pos = c.home_pos - Vector2(0, hover_lift)
+			target_rotation = 0.0
 		elif not is_playable(c):
-			target_pos = Vector2(x, hand_y + combo_shift_y)
+			target_pos = c.home_pos + Vector2(0, combo_shift_y)
+		var target_scale: Vector2 = Vector2.ONE * hand_scale * (hover_scale if c == _skill_card or c == _hovered else 1.0)
 		if animated:
 			var tw := create_tween().set_parallel(true)
 			# 仅列出的卡(新抽)立即飞入、与抽牌音同步；其余卡按 stagger 静默重排。
 			if not sound_cards.is_empty() and sound_cards.has(c):
 				anim_delay = 0.0
 			tw.tween_property(c, "position", target_pos, dur).set_delay(anim_delay)
-			tw.tween_property(c, "scale", Vector2.ONE * hand_scale, dur).set_delay(anim_delay)
+			tw.tween_property(c, "scale", target_scale, dur).set_delay(anim_delay)
+			tw.tween_property(c, "rotation", target_rotation, dur).set_delay(anim_delay)
 			# 抽牌音随飞入错峰播放：play_sounds 且（sound_cards 空=全量发牌/redraw 全响；非空=仅列出的卡）响。
 			if play_sounds and (sound_cards.is_empty() or sound_cards.has(c)):
 				var snd_delay: float = maxf(0.0, anim_delay - sound_lead_ms / 1000.0)
@@ -438,18 +451,21 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 			_card_tweens[c] = [tw]
 			if c.flyin_lock:
 				# 飞入完成 → 解锁；允许后续 layout(false) 正常瞬间定位（避免 flyin_lock 卡死）
-				tw.tween_callback(_unlock_flyin.bind(c))
+				tw.tween_callback(_unlock_flyin.bind(c.get_instance_id())).set_delay(anim_delay + dur)
 		else:
 			# 飞入锁定中的卡：禁止瞬间定位（让其正在进行的飞入 tween 继续带它到 home），否则飞入被瞬杀不可见。
 			if not c.flyin_lock:
 				c.position = target_pos
-				c.scale = Vector2.ONE * hand_scale
+				c.scale = target_scale
+				c.rotation = target_rotation
 
 
 ## 高亮框(第0格)玩家单位变化时：该单位对应角色手牌组间距 +20px，其余组 -20px；非玩家则复原。
 ## uid 即角色名（与 ROLES 一致）。重排生效。
-func _unlock_flyin(hc: HandCard) -> void:
-	hc.flyin_lock = false   # 飞入 tween 完成后由 layout 调用，解除「禁止 layout(false) 瞬移」锁定
+func _unlock_flyin(card_instance_id: int) -> void:
+	var hc := instance_from_id(card_instance_id) as HandCard
+	if is_instance_valid(hc):
+		hc.flyin_lock = false   # 飞入完成才解锁；期间卡已移除时安全跳过。
 
 
 func _refresh_inactive() -> void:
@@ -471,19 +487,37 @@ func recycle_card(hc: HandCard, delay: float = 0.0, fade_in: bool = false) -> vo
 		_hovered = null
 	hc.state = HandCard.STATE_PLAYED
 	_kill_card_tween(hc)
-	var dest := _pile_center(&"discard_pile")
-	if dest == Vector2.ZERO:
-		dest = Vector2(get_viewport_rect().size.x - 130.0, hand_y)
+	var pile_global := _pile_center(&"discard_pile")
+	var dest: Vector2 = to_local(pile_global) if pile_global != Vector2.ZERO else Vector2(get_viewport_rect().size.x - 130.0, hand_y)
+	var start: Vector2 = hc.position
+	# 二次贝塞尔中点的实际上拱量为控制点偏移的一半。
+	var control: Vector2 = (start + dest) * 0.5 + Vector2.UP * discard_arc_height * 2.0
+	var start_scale: Vector2 = hc.scale
 	hc.modulate = Color(1.0, 1.0, 1.0, 0.0) if fade_in else Color.WHITE   # fade_in：先透明再淡入（飞弃牌时无缝接快照）
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(hc, "position", dest, anim_dur).set_delay(delay)
-	tw.tween_property(hc, "scale", Vector2.ONE * hand_scale * 0.3, anim_dur).set_delay(delay)
+	var tw := hc.create_tween()
+	if delay > 0.0:
+		tw.tween_interval(delay)
+	tw.tween_method(_update_discard_flight.bind(hc.get_instance_id(), start, control, dest, start_scale), 0.0, 1.0, discard_flight_duration)
+	tw.tween_callback(hc.queue_free)
+	var tracked: Array = [tw]
 	if fade_in:
-		tw.tween_property(hc, "modulate:a", 1.0, 0.15).set_delay(delay)
-	# 关键：parallel 模式下 tween_callback 默认 delay=0 会在 t=0 立即触发 → 卡牌当帧 queue_free，
-	# 回收动画根本来不及播（表现=手牌瞬间消失、随后才重发）。必须显式延迟到「该卡动画结束」才 free。
-	tw.tween_callback(hc.queue_free).set_delay(delay + anim_dur)
-	_card_tweens[hc] = [tw]   # 跟踪以便后续 redraw 杀掉（卡 free 后 tween 失效，由 is_instance_valid 兜底）
+		var fade := hc.create_tween()
+		fade.tween_property(hc, "modulate:a", 1.0, 0.15).set_delay(delay)
+		tracked.append(fade)
+	_card_tweens[hc] = tracked
+
+func _update_discard_flight(progress: float, card_instance_id: int, start: Vector2, control: Vector2, dest: Vector2, start_scale: Vector2) -> void:
+	var hc := instance_from_id(card_instance_id) as HandCard
+	if not is_instance_valid(hc):
+		return
+	# 加速推进路径，后半段更快；顶边(-Y)始终指向路径切线。
+	var u: float = progress * progress
+	var inverse: float = 1.0 - u
+	hc.position = inverse * inverse * start + 2.0 * inverse * u * control + u * u * dest
+	var tangent: Vector2 = 2.0 * inverse * (control - start) + 2.0 * u * (dest - control)
+	if tangent.length_squared() > 0.001:
+		hc.rotation = tangent.angle() + PI * 0.5
+	hc.scale = start_scale.lerp(Vector2.ONE * hand_scale * 0.3, u)
 
 ## ── 悬停：每帧权威命中，仅变化时刷新（规避 mouse_exited 漏发残留）──
 func _process(_delta: float) -> void:
@@ -566,7 +600,8 @@ func _hover_card(hc: HandCard) -> void:
 	_kill_card_tween(hc)
 	# 位置：独立 tween 平滑抬升，与缩放回弹并发。
 	var pos_tw := create_tween()
-	pos_tw.tween_property(hc, "position", Vector2(hc.home_pos.x, hand_y - hover_lift), 0.18)
+	pos_tw.tween_property(hc, "position", hc.home_pos - Vector2(0, hover_lift), 0.18)
+	pos_tw.parallel().tween_property(hc, "rotation", 0.0, 0.18)
 	# 缩放：两段式手动过冲（先冲过 ~15% 再落定），纯 EASE_OUT 只过冲一次、不回振，幅度介于 BACK(10%) 与 ELASTIC(30%) 之间。
 	var scale_tw := create_tween()
 	var over_scale := Vector2.ONE * hand_scale * hover_scale * 1.15
@@ -584,7 +619,8 @@ func _raise_card(hc: HandCard) -> void:
 	hc.clear_select_frame()
 	_kill_card_tween(hc)
 	var pos_tw := create_tween()
-	pos_tw.tween_property(hc, "position", Vector2(hc.home_pos.x, hand_y - hover_lift), 0.18)
+	pos_tw.tween_property(hc, "position", hc.home_pos - Vector2(0, hover_lift), 0.18)
+	pos_tw.parallel().tween_property(hc, "rotation", 0.0, 0.18)
 	# 缩放：选牌不抖——平滑线性放大到设定比例（无 ELASTIC 回弹）。
 	var scale_tw := create_tween()
 	scale_tw.tween_property(hc, "scale", Vector2.ONE * hand_scale * hover_scale, 0.18)
@@ -600,6 +636,7 @@ func _lower_card(c: HandCard) -> void:
 	c.modulate = Color.WHITE        # 复位：清除淡出残留的 alpha=0
 	var pos_tw := create_tween()
 	pos_tw.tween_property(c, "position", c.home_pos, 0.2)
+	pos_tw.parallel().tween_property(c, "rotation", c.home_rotation, 0.2)
 	# 缩放：取消选牌不抖——平滑回基准缩放（无 ELASTIC 回弹）。
 	var scale_tw := create_tween()
 	scale_tw.tween_property(c, "scale", Vector2.ONE * hand_scale, 0.2)
@@ -897,6 +934,7 @@ func _combo_package(hc: HandCard) -> void:
 		card.reparent(_combo_front_vp)
 		card.position = _combo_front_vp.size * 0.5
 		card.scale = Vector2.ONE
+		card.rotation = 0.0
 		card.visible = true
 
 	# 卡背设计渲染进 back_vp
@@ -996,6 +1034,7 @@ func _combo_unpackage() -> void:
 		card.reparent(_combo_anchor)
 		card.position = Vector2.ZERO
 		card.scale = Vector2.ONE
+		card.rotation = 0.0
 		card.visible = true
 	if is_instance_valid(_combo_front_disp):
 		_combo_front_disp.material = null
@@ -1257,6 +1296,7 @@ func _get_battle_root() -> BattleRoot:
 
 ## 供 BattleRoot 在「执行卡挂起效果演出」期间锁定/解锁出牌输入（与玩家卡演出共用 _cutscene_playing 闸门）。
 func set_cutscene_lock(b: bool) -> void:
+	# 仅拦截输入；抽牌、弃牌、重排Tween继续独立播放。
 	_cutscene_playing = b
 
 
