@@ -69,7 +69,7 @@
   },
   {
     "Id": "Root",
-    "Name": "禁锢",
+    "Name": "定身",
     "Description": "无法移动，剩余 {T} 回合",
     "IconPath": "UI/Buff/Icon_Root",
     "Polarity": 1,
@@ -225,6 +225,35 @@
     "Polarity": 0,
     "DefaultDuration": -1,
     "MaxStack": 99,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "Dodge",
+    "Name": "闪避",
+    "Description": "闪避下一次受到的攻击，剩余 {V} 次",
+    "IconPath": "UI/Buff/Icon_Dodge",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "Resolve",
+    "Name": "坚毅",
+    "Description": "被打断后意志愈发坚定：每层使打断阈值提高 50%，当前 {V} 层",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 99,
+    "RefreshOnReapply": false
+  },
+  {
+    "Id": "Morale",
+    "Name": "士气",
+    "Description": "特殊增益，当前 {V} 层",
+    "IconPath": "UI/Buff/Icon_Morale",
+    "Polarity": 0,
+    "DefaultDuration": -1,
+    "MaxStack": 3,
     "RefreshOnReapply": false
   }
 ]

@@ -21,6 +21,10 @@ namespace cfg
         /// 执行行动
         /// </summary>
         Execution = 1,
+        /// <summary>
+        /// 蓄力行动
+        /// </summary>
+        Charge = 2,
     }
 
 } 

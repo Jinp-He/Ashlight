@@ -1,5 +1,7 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
+using cfg;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -26,11 +28,22 @@ namespace Ashlight.Battle.Core.Commands
         /// </summary>
         public float Multiplier { get; set; }
 
-        public AttackExtraCommand(int damage, string conditions, float multiplier)
+        public bool IsAoe { get; set; }
+
+        public TargetZoneEnum TargetZone { get; set; } = TargetZoneEnum.Any;
+
+        public AttackExtraCommand(
+            int damage,
+            string conditions,
+            float multiplier,
+            bool isAoe = false,
+            TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             Damage = damage;
             Conditions = conditions;
             Multiplier = multiplier;
+            IsAoe = isAoe;
+            TargetZone = targetZone;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -39,6 +52,13 @@ namespace Ashlight.Battle.Core.Commands
             if (owner == null || owner.IsDead)
             {
                 Debug.LogWarning($"[AttackExtraCommand] 执行者不存在或已死亡: {ownerId}");
+                return;
+            }
+
+            state.LastDamageHitCount = 0;
+            if (IsAoe)
+            {
+                ExecuteAoe(state, owner);
                 return;
             }
 
@@ -55,13 +75,8 @@ namespace Ashlight.Battle.Core.Commands
                 return;
             }
 
-            // 检查目标是否满足条件
-            bool conditionMet = CheckConditions(target);
-            
-            // 计算实际伤害
-            int actualDamage = conditionMet ? Mathf.RoundToInt(Damage * Multiplier) : Damage;
-            
-            int damageDealt = target.TakeDamage(actualDamage);
+            state.LastDamageHitCount = 1;
+            int damageDealt = DealDamage(state, owner, target, out bool conditionMet);
             
             if (conditionMet)
             {
@@ -78,6 +93,7 @@ namespace Ashlight.Battle.Core.Commands
                 AttackerId = ownerId,
                 TargetId = targetId,
                 ActualDamage = damageDealt,
+                ArmorDamage = target.LastArmorDamage,
                 IsAoe = false,
                 IsPrediction = state.IsPrediction
             });
@@ -86,10 +102,49 @@ namespace Ashlight.Battle.Core.Commands
             state.CheckBattleEnd();
         }
 
+        private void ExecuteAoe(BattleStateSnapshot state, UnitState owner)
+        {
+            var targets = owner.IsPlayerUnit
+                ? state.GetAliveEnemyUnits()
+                : state.GetAlivePlayerUnits();
+            targets = ZoneTargeting.FilterByZone(state, targets, TargetZone, strict: true);
+            state.LastDamageHitCount = targets.Count;
+
+            foreach (var target in targets)
+            {
+                int damageDealt = DealDamage(state, owner, target, out bool conditionMet);
+                Debug.Log($"[AttackExtraCommand] AOE {target.UnitId}: 条件={(conditionMet ? "满足" : "不满足")}, 伤害={damageDealt}");
+                GameEvent.Publish(new AttackExecutedEvent
+                {
+                    AttackerId = owner.UnitId,
+                    TargetId = target.UnitId,
+                    ActualDamage = damageDealt,
+                    ArmorDamage = target.LastArmorDamage,
+                    IsAoe = true,
+                    IsPrediction = state.IsPrediction
+                });
+            }
+
+            state.CheckBattleEnd();
+        }
+
+        private int DealDamage(BattleStateSnapshot state, UnitState owner, UnitState target, out bool conditionMet)
+        {
+            conditionMet = CheckConditions(state, target);
+            int baseDamage = conditionMet ? Mathf.RoundToInt(Damage * Multiplier) : Damage;
+            int adjustedDamage = DamageCommand.ApplyAttackerModifiers(owner, baseDamage);
+            int dealt = target.TakeDamage(adjustedDamage);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
+            return dealt;
+        }
+
         /// <summary>
-        /// 检查目标是否满足触发条件
+        /// 检查目标是否满足触发条件。
+        /// 【公共回合口径】Channeling/Channel/Recoil 都视为「处于执行中」= 目标本回合将行动；
+        /// 同名 buff 真实存在时也算满足（兼容将来真的贴 引导/僵直 buff 的设计）。
+        /// 旧时间轴阶段检查保留为兜底。
         /// </summary>
-        private bool CheckConditions(UnitState target)
+        private bool CheckConditions(BattleStateSnapshot state, UnitState target)
         {
             if (string.IsNullOrEmpty(Conditions))
             {
@@ -98,29 +153,28 @@ namespace Ashlight.Battle.Core.Commands
 
             // 解析条件（用|分隔）
             string[] conditionList = Conditions.Split('|');
-            
+
             foreach (var condition in conditionList)
             {
                 string trimmedCondition = condition.Trim();
-                
-                // 检查目标是否处于指定状态
-                if (trimmedCondition == "Recoil")
+
+                if (target.HasBuff(trimmedCondition))
                 {
-                    // 检查目标时间轴上是否有Recoil阶段的Block
-                    if (HasPhaseInTimeline(target, PhaseEnum.Recoil))
+                    return true;
+                }
+
+                if (trimmedCondition == "Channeling" || trimmedCondition == "Channel" || trimmedCondition == "Recoil")
+                {
+                    if (AttackConditionalCommand.IsActingThisRound(state, target))
+                    {
+                        return true;
+                    }
+                    var legacyPhase = trimmedCondition == "Recoil" ? PhaseEnum.Recoil : PhaseEnum.Startup;
+                    if (HasPhaseInTimeline(target, legacyPhase))
                     {
                         return true;
                     }
                 }
-                else if (trimmedCondition == "Channel")
-                {
-                    // 检查目标时间轴上是否有Startup阶段的Block
-                    if (HasPhaseInTimeline(target, PhaseEnum.Startup))
-                    {
-                        return true;
-                    }
-                }
-                // 可以扩展更多条件类型
             }
 
             return false;
@@ -160,7 +214,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new AttackExtraCommand(Damage, Conditions, Multiplier);
+            return new AttackExtraCommand(Damage, Conditions, Multiplier, IsAoe, TargetZone);
         }
     }
 }

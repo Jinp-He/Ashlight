@@ -1,10 +1,10 @@
 [
   {
     "Id": "Enemy001",
-    "Name": "小兵",
+    "Name": "狗骑士",
     "AlternativePath": "DogKnight",
-    "Hp": 100,
-    "Speed": 5,
+    "Hp": 50,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -15,14 +15,16 @@
           }
         ]
       }
-    ]
+    ],
+    "IsElite": false,
+    "StartRow": 0
   },
   {
     "Id": "Enemy002",
-    "Name": "小兵2",
+    "Name": "马匪",
     "AlternativePath": "Mafe",
-    "Hp": 70,
-    "Speed": 5,
+    "Hp": 100,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -33,14 +35,16 @@
           }
         ]
       }
-    ]
+    ],
+    "IsElite": false,
+    "StartRow": 1
   },
   {
     "Id": "Enemy003",
     "Name": "重装步兵",
     "AlternativePath": "DogKnight",
-    "Hp": 140,
-    "Speed": 4,
+    "Hp": 100,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -69,14 +73,16 @@
           }
         ]
       }
-    ]
+    ],
+    "IsElite": false,
+    "StartRow": 0
   },
   {
     "Id": "Enemy004",
-    "Name": "冰焰法师",
+    "Name": "汪汪",
     "AlternativePath": "Wangg",
-    "Hp": 65,
-    "Speed": 5,
+    "Hp": 50,
+    "Speed": 3,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -105,14 +111,16 @@
           }
         ]
       }
-    ]
+    ],
+    "IsElite": false,
+    "StartRow": 1
   },
   {
     "Id": "Enemy005",
-    "Name": "急袭兵",
+    "Name": "雷米",
     "AlternativePath": "Remy",
-    "Hp": 55,
-    "Speed": 7,
+    "Hp": 40,
+    "Speed": 4,
     "IntentionSet": [
       {
         "EnemyIntentionList": [
@@ -141,6 +149,421 @@
           }
         ]
       }
-    ]
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "Enemy006",
+    "Name": "Boss1号",
+    "AlternativePath": "Boss1",
+    "Hp": 300,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES011",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 3,
+            "EnemySkillIndex": "ES013",
+            "TimeSlot": 5
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES012",
+            "TimeSlot": 7
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 4,
+            "EnemySkillIndex": "ES014",
+            "TimeSlot": 14
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "Enemy101",
+    "Name": "掠林狂犬",
+    "AlternativePath": "Remy",
+    "Hp": 30,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES101",
+            "TimeSlot": 1
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES102",
+            "TimeSlot": 1
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "Enemy102",
+    "Name": "影猎收税人",
+    "AlternativePath": "Wangg",
+    "Hp": 45,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES103",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES104",
+            "TimeSlot": 2
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "Enemy103",
+    "Name": "蚀骨炮台",
+    "AlternativePath": "Mafe",
+    "Hp": 60,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES105",
+            "TimeSlot": 5
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES106",
+            "TimeSlot": 4
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "Enemy104",
+    "Name": "锈牙掠犬",
+    "AlternativePath": "DogKnight",
+    "Hp": 35,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES101",
+            "TimeSlot": 1
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "Enemy105",
+    "Name": "断律者",
+    "AlternativePath": "Boss1",
+    "Hp": 180,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ES107",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ES108",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 2,
+            "EnemySkillIndex": "ES109",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 3,
+            "EnemySkillIndex": "ES110",
+            "TimeSlot": 7
+          }
+        ]
+      }
+    ],
+    "IsElite": true,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyM01",
+    "Name": "灰袍信徒",
+    "AlternativePath": "AshrobeDevotee",
+    "Hp": 36,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM01",
+            "TimeSlot": 1
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM02",
+            "TimeSlot": 2
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyM02",
+    "Name": "蒙眼侍僧",
+    "AlternativePath": "VeiledAcolyte",
+    "Hp": 54,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM03",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM04",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "EnemyM03",
+    "Name": "戒律执事",
+    "AlternativePath": "TheDisciplinarian",
+    "Hp": 72,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM05",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM06",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyM04",
+    "Name": "缄默使徒",
+    "AlternativePath": "Mafe",
+    "Hp": 150,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESM07",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESM08",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 2,
+            "EnemySkillIndex": "ESM09",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": true,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyW01",
+    "Name": "指裔",
+    "AlternativePath": "Tusk",
+    "Hp": 36,
+    "Speed": 2,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW01",
+            "TimeSlot": 1
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW02",
+            "TimeSlot": 1
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
+  },
+  {
+    "Id": "EnemyW02",
+    "Name": "血肉猎手",
+    "AlternativePath": "Wangg",
+    "Hp": 54,
+    "Speed": 3,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW03",
+            "TimeSlot": 2
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW04",
+            "TimeSlot": 3
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 1
+  },
+  {
+    "Id": "EnemyW03",
+    "Name": "多臂殉道者",
+    "AlternativePath": "Mafe",
+    "Hp": 72,
+    "Speed": 4,
+    "IntentionSet": [
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 0,
+            "EnemySkillIndex": "ESW05",
+            "TimeSlot": 3
+          }
+        ]
+      },
+      {
+        "EnemyIntentionList": [
+          {
+            "EnemyIntentionType": 1,
+            "EnemySkillIndex": "ESW06",
+            "TimeSlot": 5
+          }
+        ]
+      }
+    ],
+    "IsElite": false,
+    "StartRow": 0
   }
 ]

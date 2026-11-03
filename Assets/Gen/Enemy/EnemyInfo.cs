@@ -23,6 +23,8 @@ public sealed partial class EnemyInfo : Luban.BeanBase
         { if(!_buf["Hp"].IsNumber) { throw new SerializationException(); }  Hp = _buf["Hp"]; }
         { if(!_buf["Speed"].IsNumber) { throw new SerializationException(); }  Speed = _buf["Speed"]; }
         { var __json0 = _buf["IntentionSet"]; if(!__json0.IsArray) { throw new SerializationException(); } IntentionSet = new System.Collections.Generic.List<EnemyIntentions>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { EnemyIntentions __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.EnemyIntentions.DeserializeEnemyIntentions(__e0);  }  IntentionSet.Add(__v0); }   }
+        { if(!_buf["IsElite"].IsBoolean) { throw new SerializationException(); }  IsElite = _buf["IsElite"]; }
+        { if(!_buf["StartRow"].IsNumber) { throw new SerializationException(); }  StartRow = (TargetZoneEnum)_buf["StartRow"].AsInt; }
     }
 
     public static EnemyInfo DeserializeEnemyInfo(JSONNode _buf)
@@ -36,6 +38,8 @@ public sealed partial class EnemyInfo : Luban.BeanBase
     public readonly int Hp;
     public readonly int Speed;
     public readonly System.Collections.Generic.List<EnemyIntentions> IntentionSet;
+    public readonly bool IsElite;
+    public readonly TargetZoneEnum StartRow;
    
     public const int __ID__ = 602199344;
     public override int GetTypeId() => __ID__;
@@ -54,6 +58,8 @@ public sealed partial class EnemyInfo : Luban.BeanBase
         + "Hp:" + Hp + ","
         + "Speed:" + Speed + ","
         + "IntentionSet:" + Luban.StringUtil.CollectionToString(IntentionSet) + ","
+        + "IsElite:" + IsElite + ","
+        + "StartRow:" + StartRow + ","
         + "}";
     }
 }

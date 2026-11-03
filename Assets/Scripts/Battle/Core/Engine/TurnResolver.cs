@@ -14,18 +14,15 @@ namespace Ashlight.Battle.Core.Engine
     public class TurnResolver
     {
         private readonly CardPlayResolver _cardPlayResolver;
-        private readonly ActionBarResolver _actionBarResolver;
 
         public TurnResolver()
         {
             _cardPlayResolver = new CardPlayResolver();
-            _actionBarResolver = new ActionBarResolver();
         }
 
-        public TurnResolver(CardPlayResolver cardPlayResolver, ActionBarResolver actionBarResolver)
+        public TurnResolver(CardPlayResolver cardPlayResolver)
         {
             _cardPlayResolver = cardPlayResolver ?? new CardPlayResolver();
-            _actionBarResolver = actionBarResolver ?? new ActionBarResolver();
         }
 
         /// <summary>
@@ -106,8 +103,7 @@ namespace Ashlight.Battle.Core.Engine
             // 5. 回合结束处理
             OnTurnEnd(state, unit);
 
-            // 6. 行动条重启
-            _actionBarResolver.RestartUnitActionBar(unit);
+            // 注：行动条重排已交由 ATB 公共回合调度（UI 层）负责，这里不再重置段位。
 
             state.CurrentTurnUnitId = null;
 
@@ -122,6 +118,17 @@ namespace Ashlight.Battle.Core.Engine
         private void OnTurnStart(BattleStateSnapshot state, UnitState unit)
         {
             Debug.Log($"[TurnResolver] {unit.UnitId} 回合开始效果处理");
+            ProcessTurnStartBuffs(state, unit);
+        }
+
+        /// <summary>
+        /// 结算单个单位「回合开始」的持续性 Buff（中毒/燃烧/再生）：掉血/回血 + 数值衰减。
+        /// ATB 原子回合改造后，回合开始不再统一走 <see cref="ExecuteTurn"/>（该入口现仅供预解算模拟），
+        /// 实战改由各单位在自己回合起点显式调用本方法（当前：敌人的 ResolveEnemyAtomicTurn）。
+        /// </summary>
+        public void ProcessTurnStartBuffs(BattleStateSnapshot state, UnitState unit)
+        {
+            if (state == null || unit == null || unit.IsDead) return;
 
             // 触发回合开始 Buff 效果（如中毒、再生等）
             var buffsToProcess = new List<BuffState>(unit.Buffs);
@@ -158,8 +165,9 @@ namespace Ashlight.Battle.Core.Engine
                         if (unit.CurrentHp <= 0) { unit.CurrentHp = 0; unit.IsDead = true; }
                         Debug.Log($"[TurnResolver] {unit.UnitId} 中毒造成 {dmg} 伤害 (剩余 HP: {unit.CurrentHp})");
                     }
-                    // 中毒 V 每回合衰减 1
+                    // 中毒 V 每回合衰减 1（层数 = Value，同步 StackCount 供 UI 显示）
                     buff.Value = Mathf.Max(0f, buff.Value - 1f);
+                    buff.StackCount = Mathf.Max(0, Mathf.RoundToInt(buff.Value));
                     if (buff.Value <= 0f)
                     {
                         unit.RemoveBuff("Poison");
@@ -281,6 +289,14 @@ namespace Ashlight.Battle.Core.Engine
             {
                 unit.Overload.OnTurnEnd();
             }
+
+            // 回合内移动触发器（铁蒺藜/隧穿效应）与全局移动计数只存活一个原子回合
+            if (state.MoveTriggers != null && state.MoveTriggers.Count > 0)
+            {
+                Debug.Log($"[TurnResolver] 清空回合内移动触发器 x{state.MoveTriggers.Count}");
+                state.MoveTriggers.Clear();
+            }
+            state.MovesThisTurn = 0;
 
             // 清空当前回合能量
             unit.CurrentEnergy = 0;

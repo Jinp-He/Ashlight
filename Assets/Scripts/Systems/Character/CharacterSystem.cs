@@ -87,6 +87,38 @@ namespace Ashlight.Systems.Character
         }
 
         /// <summary>
+        /// 存档对账：把角色表里「有、但存档里没有」的角色补一份默认（未解锁）状态进存档。
+        /// 用于旧存档兼容后续新增的角色（避免战斗里出现存档无状态的角色）。
+        /// </summary>
+        /// <returns>新增补齐的角色数量</returns>
+        public static int ReconcileCharacters()
+        {
+            var saveData = GetSaveData();
+            if (saveData == null) return 0;
+
+            if (saveData.Characters == null)
+            {
+                saveData.Characters = new List<CharacterRuntimeState>();
+            }
+
+            var configs = ConfigLoader.Tables?.TbCharaterInfo?.DataList;
+            if (configs == null) return 0;
+
+            int added = 0;
+            foreach (var config in configs)
+            {
+                if (config == null) continue;
+                if (saveData.Characters.Any(c => c.CharacterId == config.Character)) continue;
+
+                saveData.Characters.Add(CharacterRuntimeState.CreateFromConfig(config, false));
+                added++;
+                Debug.Log($"[CharacterSystem] 对账补齐角色: {config.Name}");
+            }
+
+            return added;
+        }
+
+        /// <summary>
         /// 解锁角色
         /// </summary>
         /// <param name="characterId">角色ID</param>
@@ -226,7 +258,27 @@ namespace Ashlight.Systems.Character
             characterState.Experience += exp;
             Debug.Log($"[CharacterSystem] 角色 {characterId} 获得经验 {exp}，当前经验: {characterState.Experience}");
 
-            // TODO: 实现升级逻辑
+            // 升级逻辑：TbCharacterExp 中 Level=N 的 Exp = 从 N 升到 N+1 所需经验。
+            // 够阈值就扣经验并升级，支持一次加经验连升多级；查不到当前等级配置（已到顶）则停止。
+            var expTable = ConfigLoader.Tables?.TbCharacterExp;
+            if (expTable != null)
+            {
+                while (true)
+                {
+                    var levelConfig = expTable.GetOrDefault(characterState.Level);
+                    // 没有当前等级的配置 = 已到表格上限，停止升级
+                    if (levelConfig == null) break;
+                    // 阈值非正，避免死循环
+                    if (levelConfig.Exp <= 0) break;
+                    // 经验不足以升级
+                    if (characterState.Experience < levelConfig.Exp) break;
+
+                    characterState.Experience -= levelConfig.Exp;
+                    characterState.Level++;
+                    Debug.Log($"[CharacterSystem] 角色 {characterId} 升级到 {characterState.Level} 级，剩余经验: {characterState.Experience}");
+                }
+            }
+
             return true;
         }
 
@@ -340,6 +392,61 @@ namespace Ashlight.Systems.Character
             }
 
             Debug.Log($"[CharacterSystem] 角色 {characterId} 加入队伍，槽位: {slotIndex}");
+            return true;
+        }
+
+        /// <summary>
+        /// Ensures a new or migrated save has the default playable party.
+        /// Existing team composition is never changed.
+        /// </summary>
+        public static bool EnsureDefaultActiveTeam()
+        {
+            var saveData = GetSaveData();
+            if (saveData == null) return false;
+
+            if (saveData.ActiveTeam == null)
+                saveData.ActiveTeam = new List<CharacterEnum>();
+            if (saveData.ActiveTeam.Count > 0) return false;
+
+            if (saveData.Characters == null)
+            {
+                Debug.LogWarning("[CharacterSystem] No character data is available for the default active team.");
+                return false;
+            }
+            if (saveData.UnlockedCharacters == null)
+                saveData.UnlockedCharacters = new List<CharacterEnum>();
+
+            CharacterEnum[] defaultTeam =
+            {
+                CharacterEnum.Zhouzhou,
+                CharacterEnum.Irene,
+                CharacterEnum.Rocket
+            };
+
+            foreach (CharacterEnum characterId in defaultTeam)
+            {
+                CharacterRuntimeState characterState = null;
+                foreach (CharacterRuntimeState candidate in saveData.Characters)
+                {
+                    if (candidate == null || candidate.CharacterId != characterId) continue;
+                    characterState = candidate;
+                    break;
+                }
+
+                if (characterState == null)
+                {
+                    Debug.LogWarning($"[CharacterSystem] Default-team character is missing from save data: {characterId}");
+                    continue;
+                }
+
+                characterState.IsUnlocked = true;
+                if (!saveData.UnlockedCharacters.Contains(characterId))
+                    saveData.UnlockedCharacters.Add(characterId);
+                saveData.ActiveTeam.Add(characterId);
+            }
+
+            if (saveData.ActiveTeam.Count == 0) return false;
+            Debug.Log("[CharacterSystem] Created default active team: Zhouzhou, Irene, Rocket.");
             return true;
         }
 

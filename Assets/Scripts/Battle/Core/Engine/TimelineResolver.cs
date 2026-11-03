@@ -347,7 +347,7 @@ namespace Ashlight.Battle.Core.Engine
                 Debug.Log($"[TimelineResolver] ✅ 执行Block: {block.OwnerId} -> {block.TargetId}, CardId: {block.SourceCardId} ({block.Commands.Count} commands)");
 
                 // 判断是否包含攻击效果（DamageCommand）
-                bool isAttackCard = block.Commands.Any(c => c is DamageCommand);
+                bool isAttackCard = block.Commands.Any(IsAttackCommand);
 
                 // 发布卡片执行事件（触发战斗演出动画）
                 if (!state.IsPrediction)
@@ -358,7 +358,8 @@ namespace Ashlight.Battle.Core.Engine
                         TargetId = block.TargetId,
                         CardId = block.SourceCardId,
                         IsAttackCard = isAttackCard,
-                        IsPrediction = state.IsPrediction
+                        IsPrediction = state.IsPrediction,
+                        UseCenterStage = true // 时间轴解算（执行牌/敌人技能）：中央舞台演出
                     });
 
                     // 标记等待动画（放到执行指令之后等待）
@@ -408,6 +409,16 @@ namespace Ashlight.Battle.Core.Engine
             }
         }
 
+        private static bool IsAttackCommand(ICommand command)
+        {
+            return command is DamageCommand
+                   || command is AttackExtraCommand
+                   || command is AttackConditionalCommand
+                   || command is AttackCurrentRoundCommand
+                   || command is WeatherConditionalDamageCommand
+                   || command is RepeatAttackByOwnMoveCommand;
+        }
+
         /// <summary>
         /// 标记动画完成（由UI层调用）
         /// </summary>
@@ -418,4 +429,3 @@ namespace Ashlight.Battle.Core.Engine
         }
     }
 }
-

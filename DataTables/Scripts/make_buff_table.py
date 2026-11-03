@@ -29,7 +29,7 @@ BUFFS = [
     ("Stun",          "晕眩",    "无法行动，剩余 {T} 回合",                       "UI/Buff/Icon_Stun",               "Debuff",   1, 1, True),
     ("Vulnerable",    "易伤",    "受到的伤害提高 {V}%，剩余 {T} 回合",            "UI/Buff/Icon_Vulnerable",         "Debuff",   2, 1, True),
     ("ReduceChannel", "引导缩短","下一次引导时间缩短 {V} 格",                     "UI/Buff/Icon_ReduceChannel",      "Buff",     1, 1, True),
-    ("Root",          "禁锢",    "无法移动，剩余 {T} 回合",                       "UI/Buff/Icon_Root",               "Debuff",   2, 1, True),
+    ("Root",          "定身",    "无法移动，剩余 {T} 回合",                       "UI/Buff/Icon_Root",               "Debuff",   2, 1, True),
     ("DrawCard",      "灵感",    "下回合开始时多抽 {V} 张牌",                     "UI/Buff/Icon_DrawCard",           "Buff",     1, 3, False),
     ("Taunt",         "嘲讽",    "敌人优先攻击你",                                "UI/Buff/Icon_Taunt",              "Buff",     2, 1, True),
     ("Taunted",       "被嘲讽",  "必须攻击发动嘲讽的角色",                        "UI/Buff/Icon_Taunted",            "Debuff",   2, 1, True),
@@ -45,6 +45,9 @@ BUFFS = [
     ("Poison",        "中毒",    "每回合开始受到 {V} 点伤害，{V} 随之衰减 1",     "UI/Buff/Icon_Poison",             "Debuff",  -1, 99, False),
     ("Burn",          "燃烧",    "每回合开始受到 {V} 点伤害，剩余 {T} 回合",      "UI/Buff/Icon_Burn",               "Debuff",   3, 1, True),
     ("Artifact",      "圣物",    "抵消下一次 debuff，剩余 {V} 次",                "UI/Buff/Icon_Artifact",           "Buff",    -1, 99, False),
+    ("Dodge",         "闪避",    "闪避下一次受到的攻击，剩余 {V} 次",             "UI/Buff/Icon_Dodge",              "Buff",    -1, 99, False),
+    ("Resolve",       "坚毅",    "被打断后意志愈发坚定：每层使打断阈值提高 50%，当前 {V} 层", "",                    "Buff",    -1, 99, False),
+    ("Morale",        "士气",    "特殊增益，当前 {V} 层",                        "UI/Buff/Icon_Morale",             "Buff",    -1, 3, False),
 ]
 
 
@@ -116,7 +119,7 @@ def update_enums():
         # Delete excess rows
         ws.delete_rows(end_row + delta, amount=-delta)
 
-    # 2) Write all 11 items into col H (name) and col I (alias)
+    # 2) Write all configured items into col H (name) and col I (alias)
     #    First item row keeps full_name in col B; rest leave col B empty
     for i, buff in enumerate(BUFFS):
         r = buff_row + i

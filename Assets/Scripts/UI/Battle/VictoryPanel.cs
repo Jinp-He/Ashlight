@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using TMPro;
 using DG.Tweening;
 using Ashlight.Battle;
+using Ashlight.Systems.Map;
 
 namespace Scripts.UI
 {
@@ -41,7 +42,7 @@ namespace Scripts.UI
 
         [Header("下一关配置")]
         [SerializeField, Tooltip("点击继续后加载的遭遇战 ID（在 Excel 的 Encounter 表里先配好）")]
-        private string nextEncounterId = "E002";
+        private string nextEncounterId = "M102";
 
         [SerializeField, Tooltip("战斗场景名，用于 SceneManager.LoadScene")]
         private string battleSceneName = "BattleScene";
@@ -109,6 +110,11 @@ namespace Scripts.UI
         #endregion
 
         #region 公共方法
+
+        public void SetNextEncounterId(string encounterId)
+        {
+            nextEncounterId = encounterId;
+        }
 
         /// <summary>
         /// 播放弹出动画（缩放 0.3→1 OutBack + 淡入）。
@@ -195,6 +201,11 @@ namespace Scripts.UI
 
         private void OnContinueClicked()
         {
+            if (MapRunSession.Instance != null && MapRunSession.Instance.ContinueAfterBattleVictory())
+            {
+                return;
+            }
+
             // 记录下一关 EncounterId，新的 BattleScene 启动时会读取并消费
             BattleManager.PendingEncounterId = nextEncounterId;
             Debug.Log($"[VictoryPanel] 继续：加载下一关 EncounterId={nextEncounterId}, Scene={battleSceneName}");

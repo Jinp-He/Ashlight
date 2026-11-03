@@ -1,0 +1,11 @@
+[
+  {
+    "Id": "Thunderstorm",
+    "Name": "雷暴",
+    "Description": "每 {T} 回合落雷一次：该回合行动的所有单位受到 {V} 点伤害（可被护甲抵挡）",
+    "IconPath": "UI/Weather/Icon_Thunderstorm",
+    "Period": 6,
+    "Damage": 10,
+    "Weight": 1
+  }
+]

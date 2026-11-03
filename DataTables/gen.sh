@@ -9,3 +9,5 @@ dotnet $LUBAN_DLL \
     -d json \
     --conf $CONF_ROOT/luban.conf \
     -x outputDataDir=output
+
+python Scripts/export_map_tile_content_weights.py

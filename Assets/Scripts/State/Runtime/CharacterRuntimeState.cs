@@ -47,6 +47,12 @@ namespace Ashlight.State.Runtime
         public List<string> EquipmentSlots;
 
         /// <summary>
+        /// 已获得的升级选项Id列表（引用配置表 UpgradeOptions）
+        /// 每场战斗开始时由 UpgradeEffectApplier 重新派生为 buff / 单位属性 / 卡牌修正
+        /// </summary>
+        public List<string> AcquiredUpgrades;
+
+        /// <summary>
         /// 创建默认角色状态
         /// 注意：需要通过 ConfigLoader 获取配置表数据来初始化 BaseHp
         /// </summary>
@@ -64,7 +70,8 @@ namespace Ashlight.State.Runtime
                 Experience = 0,
                 IsUnlocked = isUnlocked,
                 CurrentDeck = new List<CardRuntimeState>(),
-                EquipmentSlots = new List<string>()
+                EquipmentSlots = new List<string>(),
+                AcquiredUpgrades = new List<string>()
             };
         }
 
@@ -84,7 +91,8 @@ namespace Ashlight.State.Runtime
                 Experience = 0,
                 IsUnlocked = isUnlocked,
                 CurrentDeck = new List<CardRuntimeState>(),
-                EquipmentSlots = new List<string>()
+                EquipmentSlots = new List<string>(),
+                AcquiredUpgrades = new List<string>()
             };
 
             // 从BaseDeck初始化默认卡组
@@ -131,6 +139,28 @@ namespace Ashlight.State.Runtime
                 }
             }
             return false;
+        }
+
+        /// <summary>
+        /// 获得一个升级选项（去重）
+        /// </summary>
+        /// <param name="upgradeId">升级选项Id（引用 UpgradeOptions）</param>
+        /// <returns>是否新增成功（已拥有则返回false）</returns>
+        public bool AddUpgrade(string upgradeId)
+        {
+            if (string.IsNullOrEmpty(upgradeId)) return false;
+            if (AcquiredUpgrades == null) AcquiredUpgrades = new List<string>();
+            if (AcquiredUpgrades.Contains(upgradeId)) return false;
+            AcquiredUpgrades.Add(upgradeId);
+            return true;
+        }
+
+        /// <summary>
+        /// 是否已获得指定升级
+        /// </summary>
+        public bool HasUpgrade(string upgradeId)
+        {
+            return AcquiredUpgrades != null && AcquiredUpgrades.Contains(upgradeId);
         }
 
         /// <summary>

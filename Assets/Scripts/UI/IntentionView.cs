@@ -17,20 +17,16 @@ namespace Scripts.UI
     ///     Img_Think                  思考图标
     ///     Img_State                  状态图标
     ///     Img_Shield                 护盾图标
-    ///     Img_Attack                 攻击图标
-    ///   Coord/
-    ///     Img_linkPiece              坐标连接块（横向拉伸）
-    ///     Img_Coord0                 坐标点模板（prefab 里只放 1 个，运行时按需克隆）
+    ///     Img_Attack                 攻击图标容器（按目标区切换近战/远程素材）
+    ///   Coord/Img_Coord0             目标区标记容器（按单体/AOE切换素材）
     ///
     /// 颜色规范：
     ///   激活色  #9c660a
-    ///   坐标点未激活色  #3f4447
     ///
-    /// **Coord 语义（暗黑地牢式目标位置指示）：**
-    /// - 总格子数 = 我方队伍上限（默认 4 格）
-    /// - 激活的格子（橙色） = 本次技能锁定的目标位置
-    /// - AOE 技能 → 4 格全亮 + 连接条铺满
-    /// - 单体 → 仅目标位置一格亮，无连接条
+    /// **Coord 语义：**
+    /// - 单体使用 Coord_Img_Monomer，AOE 使用 Coord_Img_Aoe
+    /// - 前排为红色，后排为蓝色
+    /// - Any 表示前后排同时生效，因此同时显示红、蓝两个标记
     ///
     /// 字段优先取 Inspector 拖入的引用；未拖入时按上述名字自动查找。
     /// </summary>
@@ -41,7 +37,8 @@ namespace Scripts.UI
         // 否则会抛 "DoTryParseHtmlColor is not allowed to be called from a MonoBehaviour constructor"。
         // 直接用 Color32 字面量。#9c660a / #3f4447
         private static readonly Color ActiveColor = new Color32(0x9c, 0x66, 0x0a, 0xff);
-        private static readonly Color InactiveDotColor = new Color32(0x3f, 0x44, 0x47, 0xff);
+        private const string ResourceRoot = "UI/Intention/";
+        private static readonly Dictionary<string, Sprite> RuntimeSprites = new Dictionary<string, Sprite>();
 
         // ===== Inspector 可拖入（可选，留空将按名字自动绑定）=====
         [Header("背景")]
@@ -56,19 +53,20 @@ namespace Scripts.UI
         [SerializeField] private Image _imgShield;
         [SerializeField] private Image _imgAttack;
 
-        [Header("坐标 (Coord/*) — 模板与连接块")]
+        [Header("坐标 (Coord/*) — 运行时复用旧节点显示新标记")]
         [Tooltip("Coord 容器，默认为子节点 'Coord'")]
         [SerializeField] private Transform _coordRoot;
-        [Tooltip("坐标点模板。留空时取 Coord/Img_Coord0")]
+        [Tooltip("目标区标记模板。留空时取 Coord/CoordPoints/Img_Coord0")]
         [SerializeField] private Image _coordTemplate;
-        [Tooltip("坐标连接块。留空时取 Coord/Img_linkPiece")]
+        [Tooltip("旧坐标连接块；新方案始终隐藏")]
         [SerializeField] private Image _imgLinkPiece;
 
-        [Header("动态生成参数")]
-        [Tooltip("默认展示的坐标点总数（队伍上限，DD 式通常为 4）")]
-        [SerializeField] private int _defaultTotalCoords = 4;
-        [Tooltip("相邻坐标点之间的水平间距（像素）")]
-        [SerializeField] private float _dotSpacing = 60f;
+        // ===== 分区颜色（前排红 / 后排蓝） =====
+        // 颜色数据来源(通道)：TbCustomColor（Luban 表 Id→hex）。读不到时用兜底常量。
+        private const string FrontRowColorId = "FrontRow";
+        private const string BackRowColorId  = "BackRow";
+        private static readonly Color FrontRowFallback = new Color32(0xcc, 0x5a, 0x3c, 0xff); // 前排·红
+        private static readonly Color BackRowFallback  = new Color32(0x3c, 0x8f, 0xcc, 0xff); // 后排·蓝
 
         [Header("Tooltip（敌人技能详情）")]
         [Tooltip("DescriptionViewController 预制体（与 CardViewController 用的是同一个）。鼠标悬停在意图上时弹出，显示当前 EnemySkillInfo 的详情")]
@@ -80,24 +78,78 @@ namespace Scripts.UI
         [Tooltip("勾选时 tooltip 跟随鼠标位置出现；不勾选则锚定在 IntentionView 自身的右侧")]
         [SerializeField] private bool _tooltipFollowMouse = true;
 
-        // 运行时生成的坐标点列表（含模板自身）
-        private readonly List<Image> _coordDots = new List<Image>();
-        // 当前总坐标点数（已生成且激活的数量）
-        private int _currentTotalCoords;
+        /// <summary>
+        /// UnitId → 目标角色 UI Transform 的解析器（由 UI_BattleScene 在战斗初始化时注入）。
+        /// 悬停意图时用它把「锁定目标 UnitId」解析为当前 UI 位置，画抛物线指向之。
+        /// 角色移动后 Transform 仍有效，抛物线自动指向其新位置。
+        /// </summary>
+        public static System.Func<string, Transform> TargetTransformResolver;
+
+        /// <summary>由战斗界面注入；为 true 时按间隔重复播放意图箭头。</summary>
+        public static System.Func<bool> PlayerTurnActivePredicate;
+
+        [Header("意图箭头动画")]
+        [SerializeField, Min(0.5f)]
+        [Tooltip("玩家回合内重复播放意图箭头的间隔（秒）")]
+        private float _arrowRepeatInterval = 4f;
+
+        // 悬停时从意图指向锁定目标的抛物线（复用玩家出牌的 TargetArrowRenderer；红色示意来袭攻击）
+        private TargetArrowRenderer _parabola;
+        private ArcProjectile _intentProjectile;
+        private Canvas _canvas;
+        private float _arrowRepeatTimer;
+        private bool _presentationHidden;
+
+        // 最多使用两个标记：Front/Back 各一个；Any 时二者同时显示。
+        private readonly List<Image> _coordMarkers = new List<Image>();
+        private float _coordMarkerY;
+
+        private Sprite _meleeSprite;
+        private Sprite _remoteSprite;
+        private Sprite _coordMonomerSprite;
+        private Sprite _coordAoeSprite;
 
         // tooltip 实例与当前对应的技能配置
         private DescriptionViewController _descriptionView;
         private EnemySkillInfo _currentSkillInfo;
+        // 当前锁定目标 UnitId（供悬停抛物线指向；空区未锁人 / 思考态为 null）
+        private string _currentTargetUnitId;
 
         // ===== 生命周期 =====
 
         private void Awake()
         {
             AutoBindIfMissing();
-            EnsureCoordCount(_defaultTotalCoords);
+            ApplyNewArtwork();
+            PrepareCoordMarkers();
             Hide();
 
             CreateDescriptionView();
+        }
+
+        private void Update()
+        {
+            if (_presentationHidden)
+            {
+                _arrowRepeatTimer = 0f;
+                return;
+            }
+
+            bool shouldRepeat = _currentSkillInfo != null
+                                && !string.IsNullOrEmpty(_currentTargetUnitId)
+                                && PlayerTurnActivePredicate != null
+                                && PlayerTurnActivePredicate();
+            if (!shouldRepeat)
+            {
+                _arrowRepeatTimer = 0f;
+                return;
+            }
+
+            _arrowRepeatTimer += Time.unscaledDeltaTime;
+            if (_arrowRepeatTimer < _arrowRepeatInterval) return;
+
+            _arrowRepeatTimer = 0f;
+            TryPlayIntentProjectile();
         }
 
         private void OnDestroy()
@@ -107,6 +159,118 @@ namespace Scripts.UI
                 Destroy(_descriptionView.gameObject);
                 _descriptionView = null;
             }
+            if (_parabola != null)
+            {
+                Destroy(_parabola.gameObject);
+                _parabola = null;
+            }
+            if (_intentProjectile != null)
+            {
+                Destroy(_intentProjectile.gameObject);
+                _intentProjectile = null;
+            }
+        }
+
+        // ===== 悬停抛物线 =====
+
+        /// <summary>懒创建一条填满 Canvas 的抛物线渲染器（不拦射线、初始隐藏）。</summary>
+        private TargetArrowRenderer EnsureParabola()
+        {
+            if (_parabola != null) return _parabola;
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            if (_canvas == null) return null;
+
+            var go = new GameObject("IntentionParabola");
+            go.transform.SetParent(_canvas.transform, false);
+            go.layer = _canvas.gameObject.layer;
+
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+            rt.anchoredPosition = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            _parabola = go.AddComponent<TargetArrowRenderer>();
+            _parabola.raycastTarget = false;
+            _parabola.Hide();
+            return _parabola;
+        }
+
+        /// <summary>悬停时若已锁定目标，画一条抛物线从意图指向该目标当前 UI 位置。</summary>
+        private void TryShowParabola()
+        {
+            if (_presentationHidden) return;
+            if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
+
+            var targetT = TargetTransformResolver(_currentTargetUnitId);
+            if (targetT == null) return;
+
+            var arrow = EnsureParabola();
+            if (arrow == null) return;
+
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            Camera cam = (_canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                ? _canvas.worldCamera
+                : null;
+
+            Vector3 startScreen = RectTransformUtility.WorldToScreenPoint(cam, transform.position);
+            Vector3 endScreen = RectTransformUtility.WorldToScreenPoint(cam, targetT.position);
+
+            arrow.transform.SetAsLastSibling();      // 画在最上层
+            arrow.UpdateLine(startScreen, endScreen, false); // false → 红色，示意来袭攻击
+            arrow.Show();
+        }
+
+        private void HideParabola()
+        {
+            if (_parabola != null) _parabola.Hide();
+        }
+
+        /// <summary>懒创建兼容 Overlay Canvas 的粒子箭头渲染器。</summary>
+        private ArcProjectile EnsureIntentProjectile()
+        {
+            if (_intentProjectile != null) return _intentProjectile;
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            if (_canvas == null) return null;
+
+            var go = new GameObject("IntentionArcProjectile");
+            go.transform.SetParent(_canvas.transform, false);
+            go.layer = _canvas.gameObject.layer;
+
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            _intentProjectile = go.AddComponent<ArcProjectile>();
+            _intentProjectile.raycastTarget = false;
+            return _intentProjectile;
+        }
+
+        /// <summary>从意图图标向当前锁定角色播放一次弧线箭头。</summary>
+        private void TryPlayIntentProjectile()
+        {
+            if (_presentationHidden) return;
+            if (string.IsNullOrEmpty(_currentTargetUnitId) || TargetTransformResolver == null) return;
+
+            Transform target = TargetTransformResolver(_currentTargetUnitId);
+            if (target == null) return;
+
+            ArcProjectile projectile = EnsureIntentProjectile();
+            if (projectile == null) return;
+
+            if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
+            Camera camera = _canvas != null && _canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? _canvas.worldCamera
+                : null;
+            Vector2 startScreen = RectTransformUtility.WorldToScreenPoint(camera, transform.position);
+            Vector2 endScreen = RectTransformUtility.WorldToScreenPoint(camera, target.position);
+
+            projectile.transform.SetAsLastSibling();
+            projectile.Fire(startScreen, endScreen, _canvas);
         }
 
         private void CreateDescriptionView()
@@ -125,6 +289,21 @@ namespace Scripts.UI
 
         // ===== 公共 API =====
 
+        /// <summary>
+        /// 战斗插入演出期间临时关闭意图的外部视觉，不清空技能和锁定目标。
+        /// 图标本体由演出层的 CanvasGroup 统一隐藏；此处负责停止独立挂在 Canvas 下的箭头与提示。
+        /// </summary>
+        public void SetPresentationHidden(bool hidden)
+        {
+            _presentationHidden = hidden;
+            _arrowRepeatTimer = 0f;
+            if (!hidden) return;
+
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
+            HideTooltip();
+            HideParabola();
+        }
+
         /// <summary>隐藏整个意图指示物</summary>
         public void Hide()
         {
@@ -132,7 +311,11 @@ namespace Scripts.UI
                 gameObject.SetActive(false);
 
             _currentSkillInfo = null;
+            _currentTargetUnitId = null;
+            _arrowRepeatTimer = 0f;
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
             HideTooltip();
+            HideParabola();
         }
 
         /// <summary>显示</summary>
@@ -143,48 +326,49 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 改变坐标点总数（按需 Instantiate 或隐藏多余）。
-        /// 不同队伍大小时调用。
+        /// 复用 prefab 里的旧坐标点节点，整理成最多两个独立标记。
+        /// 标记直接挂到 Coord 下并手动居中，不再受旧 HorizontalLayoutGroup 控制。
         /// </summary>
-        public void EnsureCoordCount(int n)
+        private void PrepareCoordMarkers()
         {
-            if (_coordTemplate == null) return;
-            n = Mathf.Max(1, n);
+            if (_coordTemplate == null || _coordRoot == null) return;
 
-            // 首次：从 CoordPoints（HorizontalLayoutGroup 容器）收集所有已预置的点
-            if (_coordDots.Count == 0)
+            var oldParent = _coordTemplate.transform.parent;
+            if (oldParent != null)
             {
-                var layoutParent = _coordTemplate.transform.parent;
-                if (layoutParent != null)
+                var candidates = new List<Image>();
+                foreach (Transform child in oldParent)
                 {
-                    foreach (Transform child in layoutParent)
-                    {
-                        var img = child.GetComponent<Image>();
-                        if (img != null) _coordDots.Add(img);
-                    }
+                    if (child == null || !child.name.StartsWith("Img_Coord")) continue;
+                    var image = child.GetComponent<Image>();
+                    if (image != null) candidates.Add(image);
                 }
-                // 兜底：至少把模板加进去
-                if (_coordDots.Count == 0)
-                    _coordDots.Add(_coordTemplate);
+                _coordMarkers.AddRange(candidates);
             }
 
-            // 如果预置点不够，再克隆（HorizontalLayoutGroup 会自动排列）
-            while (_coordDots.Count < n)
+            if (_coordMarkers.Count == 0)
+                _coordMarkers.Add(_coordTemplate);
+
+            _coordMarkerY = _coordRoot.InverseTransformPoint(_coordTemplate.transform.position).y;
+
+            while (_coordMarkers.Count < 2)
             {
-                var clone = Instantiate(_coordTemplate, _coordTemplate.transform.parent);
-                clone.name = $"Img_Coord{_coordDots.Count}";
-                _coordDots.Add(clone);
+                var clone = Instantiate(_coordTemplate, _coordRoot);
+                clone.name = $"Img_TargetZone{_coordMarkers.Count}";
+                _coordMarkers.Add(clone);
             }
 
-            // 前 n 个显示，超出的隐藏
-            for (int i = 0; i < _coordDots.Count; i++)
+            for (int i = 0; i < _coordMarkers.Count; i++)
             {
-                bool on = i < n;
-                if (_coordDots[i].gameObject.activeSelf != on)
-                    _coordDots[i].gameObject.SetActive(on);
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                marker.transform.SetParent(_coordRoot, true);
+                marker.raycastTarget = false;
+                marker.gameObject.SetActive(false);
             }
 
-            _currentTotalCoords = n;
+            if (_imgLinkPiece != null)
+                _imgLinkPiece.gameObject.SetActive(false);
         }
 
         /// <summary>思考中：只显示思考图标，无数值，整个 Coord 区域隐藏。思考态无技能详情可看</summary>
@@ -196,20 +380,22 @@ namespace Scripts.UI
             SetCoordsVisible(false); // 思考阶段不展示目标位置
 
             _currentSkillInfo = null;
+            _currentTargetUnitId = null;
+            _arrowRepeatTimer = 0f;
+            if (_intentProjectile != null) _intentProjectile.StopAndClear();
             HideTooltip();
+            HideParabola();
         }
 
         /// <summary>
         /// 根据敌人技能配置 + 目标信息自动显示意图。
-        /// 含攻击效果 → Attack 图标 + 累计伤害
+        /// 含攻击效果 → Front/Any 使用 Melee，Back 使用 Remote，并显示累计伤害
         /// 含防御效果 → Shield 图标 + 累计护甲
         /// 其他 → State 图标，无数值
         /// </summary>
         /// <param name="skillInfo">技能配置</param>
-        /// <param name="targetSlot">目标在队伍中的位置索引（0 起；AOE 时忽略）</param>
-        /// <param name="totalSlots">队伍总人数（决定 Coord 总格数；&lt;=0 时保留当前）</param>
-        /// <param name="isAoe">是否 AOE（全员）</param>
-        public void ShowFromSkill(EnemySkillInfo skillInfo, int targetSlot, int totalSlots, bool isAoe)
+        /// <param name="targetUnitId">当前锁定目标 UnitId（供悬停抛物线）</param>
+        public void ShowFromSkill(EnemySkillInfo skillInfo, string targetUnitId = null)
         {
             if (skillInfo == null)
             {
@@ -217,21 +403,17 @@ namespace Scripts.UI
                 return;
             }
 
-            // 缓存当前技能，供 hover tooltip 使用
+            // 缓存当前技能 + 锁定目标，供 hover tooltip / 抛物线使用
             _currentSkillInfo = skillInfo;
-
-            // 调整总格数
-            if (totalSlots > 0 && totalSlots != _currentTotalCoords)
-            {
-                EnsureCoordCount(totalSlots);
-            }
+            _currentTargetUnitId = targetUnitId;
 
             // 扫效果分类
             int attackDamage = 0;
             int shieldValue = 0;
             bool hasAttack = false;
             bool hasShield = false;
-            bool effectIsAoe = false;
+            bool isAoe = skillInfo.TargetType == TargetTypeEnum.AllEnemy
+                         || skillInfo.TargetType == TargetTypeEnum.AllAlly;
 
             if (skillInfo.Effects != null)
             {
@@ -242,7 +424,7 @@ namespace Scripts.UI
                         case AttackEffect atk:
                             attackDamage += atk.Damage;
                             hasAttack = true;
-                            if (atk.IsAoe) effectIsAoe = true;
+                            if (atk.IsAoe) isAoe = true;
                             break;
                         case AttackExtraEffect atkEx:
                             attackDamage += atkEx.Damage;
@@ -264,80 +446,109 @@ namespace Scripts.UI
                 }
             }
 
-            // 综合判定 AOE：调用方传入 || 任一效果 IsAoe || TargetType 为全体
-            bool aoe = isAoe || effectIsAoe
-                || skillInfo.TargetType == TargetTypeEnum.AllEnemy
-                || skillInfo.TargetType == TargetTypeEnum.AllAlly;
-
-            bool[] mask = BuildTargetMask(targetSlot, _currentTotalCoords, aoe);
+            bool targetsPlayers = skillInfo.TargetType == TargetTypeEnum.SingleEnemy
+                                  || skillInfo.TargetType == TargetTypeEnum.AllEnemy;
 
             if (hasAttack)
-                ShowAttack(attackDamage, mask);
+                ShowAttack(attackDamage, skillInfo.TargetZone, isAoe, targetsPlayers);
             else if (hasShield)
-                ShowShield(shieldValue, mask);
+                ShowShield(shieldValue);
             else
-                ShowState(mask);
+                ShowState();
+
+            // 新意图生成（或锁定目标发生变化）时立即播放一次；后续玩家回合内每 4 秒重复。
+            _arrowRepeatTimer = 0f;
+            TryPlayIntentProjectile();
         }
 
-        /// <summary>旧签名兜底：没有目标信息时，所有坐标灰。</summary>
-        public void ShowFromSkill(EnemySkillInfo skillInfo)
-        {
-            ShowFromSkill(skillInfo, targetSlot: -1, totalSlots: -1, isAoe: false);
-        }
-
-        public void ShowAttack(int damage, bool[] mask)
+        public void ShowAttack(int damage, TargetZoneEnum targetZone, bool isAoe, bool targetsPlayers)
         {
             Show();
+            ApplyImageSprite(_imgAttack, targetZone == TargetZoneEnum.Back ? _remoteSprite : _meleeSprite);
             SetActiveIcon(_imgAttack);
             SetFigure(damage.ToString());
-            SetCoordsVisible(true);
-            SetCoordMask(mask);
+            if (targetsPlayers)
+                ShowTargetZone(targetZone, isAoe);
+            else
+                SetCoordsVisible(false);
         }
 
-        public void ShowShield(int shieldValue, bool[] mask)
+        public void ShowShield(int shieldValue)
         {
             Show();
             SetActiveIcon(_imgShield);
             SetFigure(shieldValue.ToString());
-            SetCoordsVisible(true);
-            SetCoordMask(mask);
+            SetCoordsVisible(false);
         }
 
-        public void ShowState(bool[] mask)
+        public void ShowState()
         {
             Show();
             SetActiveIcon(_imgState);
             SetFigure(null);
+            SetCoordsVisible(false);
+        }
+
+        /// <summary>
+        /// 单体/群体分别使用 Monomer/Aoe 素材；Front 红、Back 蓝；Any/Conditional 同时显示红蓝。
+        /// </summary>
+        private void ShowTargetZone(TargetZoneEnum targetZone, bool isAoe)
+        {
+            if (_coordMarkers.Count == 0) return;
+
             SetCoordsVisible(true);
-            SetCoordMask(mask);
+            bool bothRows = targetZone == TargetZoneEnum.Any || targetZone == TargetZoneEnum.Conditional;
+            int count = bothRows ? 2 : 1;
+            Sprite sprite = isAoe ? _coordAoeSprite : _coordMonomerSprite;
+            float markerWidth = sprite != null ? sprite.rect.width : (isAoe ? 23f : 10f);
+            const float gap = 5f;
+            float firstX = count == 1 ? 0f : -(markerWidth + gap) * 0.5f;
+
+            for (int i = 0; i < _coordMarkers.Count; i++)
+            {
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                bool visible = i < count;
+                marker.gameObject.SetActive(visible);
+                if (!visible) continue;
+
+                ApplyImageSprite(marker, sprite);
+                bool front = bothRows ? i == 0 : targetZone != TargetZoneEnum.Back;
+                marker.color = front
+                    ? ReadCustomColor(FrontRowColorId, FrontRowFallback)
+                    : ReadCustomColor(BackRowColorId, BackRowFallback);
+
+                var markerTransform = marker.transform;
+                markerTransform.localPosition = new Vector3(
+                    firstX + i * (markerWidth + gap),
+                    _coordMarkerY,
+                    0f);
+            }
+
+            if (_imgLinkPiece != null)
+                _imgLinkPiece.gameObject.SetActive(false);
+        }
+
+        /// <summary>从 TbCustomColor 读取指定 Id 的十六进制颜色；缺失/解析失败时返回 fallback。</summary>
+        private static Color ReadCustomColor(string id, Color fallback)
+        {
+            try
+            {
+                var entry = Ashlight.Config.ConfigLoader.Tables?.TbCustomColor?.GetOrDefault(id);
+                if (entry != null && !string.IsNullOrEmpty(entry.Color)
+                    && ColorUtility.TryParseHtmlString("#" + entry.Color.TrimStart('#'), out var c))
+                {
+                    return c;
+                }
+            }
+            catch
+            {
+                // 配置未加载等异常：静默回退
+            }
+            return fallback;
         }
 
         // ===== 内部：图标 / 数值 / 坐标 =====
-
-        /// <summary>
-        /// 构建坐标点掩码。
-        /// CoordPoint 顺序与战斗位置**相反**：
-        ///   战斗位置 pos（0起）→ 点位索引 = (totalSlots - 1 - pos)
-        /// 例：totalSlots=4 时，战斗位置3→点0，战斗位置4→点1（均1起）
-        /// AOE：全部点亮 + LinkPiece 横跨所有点。
-        /// 单体：仅对应点亮，LinkPiece 隐藏。
-        /// </summary>
-        private static bool[] BuildTargetMask(int targetSlot, int totalSlots, bool isAoe)
-        {
-            if (totalSlots <= 0) return null;
-            var mask = new bool[totalSlots];
-            if (isAoe)
-            {
-                for (int i = 0; i < totalSlots; i++) mask[i] = true;
-            }
-            else if (targetSlot >= 0 && targetSlot < totalSlots)
-            {
-                // 战斗位置与 CoordPoint 顺序相反
-                int dotIndex = (totalSlots - 1) - targetSlot;
-                mask[dotIndex] = true;
-            }
-            return mask;
-        }
 
         private void SetActiveIcon(Image active)
         {
@@ -374,7 +585,7 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 切换整个 Coord 区域（坐标点 + 连接条）的显示/隐藏。
+        /// 切换整个 Coord 区域的显示/隐藏。
         /// 思考阶段调用 false；进入执行轨公示意图时调用 true。
         /// </summary>
         private void SetCoordsVisible(bool visible)
@@ -385,96 +596,73 @@ namespace Scripts.UI
                     _coordRoot.gameObject.SetActive(visible);
                 return;
             }
-            // 没有 _coordRoot 兜底：逐个 dot + linkPiece 切换
-            for (int i = 0; i < _coordDots.Count; i++)
+            // 没有 _coordRoot 兜底：逐个标记切换
+            for (int i = 0; i < _coordMarkers.Count; i++)
             {
-                var dot = _coordDots[i];
-                if (dot == null) continue;
-                bool on = visible && i < _currentTotalCoords;
-                if (dot.gameObject.activeSelf != on)
-                    dot.gameObject.SetActive(on);
+                var marker = _coordMarkers[i];
+                if (marker == null) continue;
+                if (!visible && marker.gameObject.activeSelf)
+                    marker.gameObject.SetActive(false);
             }
-            if (_imgLinkPiece != null && _imgLinkPiece.gameObject.activeSelf && !visible)
+            if (_imgLinkPiece != null && !visible)
                 _imgLinkPiece.gameObject.SetActive(false);
         }
 
-        /// <summary>
-        /// 按 mask 点亮 / 熄灭坐标点。mask 为 null 时全部置灰。
-        /// </summary>
-        private void SetCoordMask(bool[] mask)
-        {
-            int total = _currentTotalCoords;
-            int firstActive = -1, lastActive = -1;
-
-            for (int i = 0; i < total; i++)
-            {
-                bool on = mask != null && i < mask.Length && mask[i];
-                if (on)
-                {
-                    if (firstActive < 0) firstActive = i;
-                    lastActive = i;
-                }
-                var dot = _coordDots[i];
-                if (dot == null) continue;
-                dot.color = on ? ActiveColor : InactiveDotColor;
-            }
-
-            UpdateLinkPieceRange(firstActive, lastActive);
-        }
-
-        /// <summary>
-        /// 连接条覆盖第 firstActive 到 lastActive 个坐标点之间的区间。
-        /// CoordLinkPiece pivot=(0,0) 左对齐：
-        ///   anchoredPosition.x = 第一个激活点中心的父级本地 x
-        ///   sizeDelta.x        = 最后一个激活点中心 x − 第一个激活点中心 x
-        /// 位置通过 InverseTransformPoint 从世界坐标换算，与 HorizontalLayoutGroup 解耦。
-        /// </summary>
-        private void UpdateLinkPieceRange(int firstActive, int lastActive)
-        {
-            if (_imgLinkPiece == null) return;
-
-            // 无高亮或单点：隐藏连接条
-            if (firstActive < 0 || firstActive == lastActive)
-            {
-                if (_imgLinkPiece.gameObject.activeSelf)
-                    _imgLinkPiece.gameObject.SetActive(false);
-                return;
-            }
-
-            if (!_imgLinkPiece.gameObject.activeSelf)
-                _imgLinkPiece.gameObject.SetActive(true);
-            _imgLinkPiece.color = ActiveColor;
-
-            var rt = _imgLinkPiece.rectTransform;
-            var linkParent = rt.parent;
-
-            // 取两端点的世界坐标，转换到 CoordLinkPiece 父级的本地空间
-            Vector2 p0 = DotCenterInLocal(firstActive, linkParent);
-            Vector2 p1 = DotCenterInLocal(lastActive, linkParent);
-
-            // pivot=(0,0)：anchoredPosition.x = 起点 x，宽度 = 终点 x - 起点 x
-            float startX = p0.x;
-            float width  = p1.x - p0.x;
-
-            rt.anchoredPosition = new Vector2(startX, rt.anchoredPosition.y);
-            var size = rt.sizeDelta;
-            size.x = width;
-            rt.sizeDelta = size;
-        }
-
-        /// <summary>将第 idx 个坐标点的世界坐标转为目标 Transform 的本地坐标</summary>
-        private Vector2 DotCenterInLocal(int idx, Transform targetParent)
-        {
-            if (idx < 0 || idx >= _coordDots.Count || _coordDots[idx] == null)
-                return Vector2.zero;
-            var lp = targetParent.InverseTransformPoint(_coordDots[idx].transform.position);
-            return new Vector2(lp.x, lp.y);
-        }
-
-        // CoordPoints 有 HorizontalLayoutGroup，位置由布局自动管理，此方法保留空实现以兼容旧调用
-        private void PlaceCoordAt(Image dot, int idx) { }
-
         // ===== 内部：自动绑定 & 工具 =====
+
+        /// <summary>把 0717 导出的独立 PNG 覆盖到旧 PSB 节点上。</summary>
+        private void ApplyNewArtwork()
+        {
+            ApplyImageSprite(_imgBase, LoadIntentionSprite("Img_IntentionBase"));
+            ApplyImageSprite(_imgThink, LoadIntentionSprite("IntentionIcon_Img_Think"));
+            ApplyImageSprite(_imgState, LoadIntentionSprite("IntentionIcon_Img_State"));
+            ApplyImageSprite(_imgShield, LoadIntentionSprite("IntentionIcon_Img_Shield"));
+
+            _meleeSprite = LoadIntentionSprite("IntentionIcon_Img_Melee");
+            _remoteSprite = LoadIntentionSprite("IntentionIcon_Img_Remote");
+            _coordMonomerSprite = LoadIntentionSprite("Coord_Img_Monomer");
+            _coordAoeSprite = LoadIntentionSprite("Coord_Img_Aoe");
+            ApplyImageSprite(_imgAttack, _meleeSprite);
+        }
+
+        /// <summary>
+        /// PNG 尚无 .meta 时 Unity 会按 Texture2D 导入，因此先尝试 Sprite，再用 Texture2D 运行时创建 Sprite。
+        /// </summary>
+        private static Sprite LoadIntentionSprite(string assetName)
+        {
+            if (RuntimeSprites.TryGetValue(assetName, out var cached) && cached != null)
+                return cached;
+
+            string path = ResourceRoot + assetName;
+            var sprite = Resources.Load<Sprite>(path);
+            if (sprite == null)
+            {
+                var texture = Resources.Load<Texture2D>(path);
+                if (texture != null)
+                {
+                    sprite = Sprite.Create(
+                        texture,
+                        new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f),
+                        100f);
+                    sprite.name = assetName;
+                }
+            }
+
+            if (sprite != null)
+                RuntimeSprites[assetName] = sprite;
+            else
+                Debug.LogWarning($"[IntentionView] 无法加载新意图素材: Resources/{path}.png");
+            return sprite;
+        }
+
+        private static void ApplyImageSprite(Image image, Sprite sprite)
+        {
+            if (image == null || sprite == null) return;
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.rectTransform.sizeDelta = new Vector2(sprite.rect.width, sprite.rect.height);
+        }
 
         private void AutoBindIfMissing()
         {
@@ -524,12 +712,19 @@ namespace Scripts.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (_descriptionView == null || _currentSkillInfo == null)
+            if (_currentSkillInfo == null)
             {
-                return; // 没有技能信息（思考态）或没绑 prefab，不显示
+                return; // 思考态/无意图：既不显示 tooltip 也不画抛物线
             }
-            _descriptionView.Show(_currentSkillInfo);
-            PositionTooltip(eventData);
+
+            // 抛物线指向锁定目标（即使没有 tooltip prefab 也要画）
+            TryShowParabola();
+
+            if (_descriptionView != null)
+            {
+                _descriptionView.Show(_currentSkillInfo);
+                PositionTooltip(eventData);
+            }
         }
 
         /// <summary>
@@ -571,6 +766,7 @@ namespace Scripts.UI
         public void OnPointerExit(PointerEventData eventData)
         {
             HideTooltip();
+            HideParabola();
         }
 
         private void HideTooltip()

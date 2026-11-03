@@ -37,6 +37,24 @@ namespace Ashlight.State.Runtime
         public int ExtensionData;
 
         /// <summary>
+        /// 动态归属角色：生成型 token（如飞刀 Extra001）在生成时按「生成者」写入，
+        /// 覆盖卡牌静态 BelongTo，使其可被生成者打出。为 null 时回退到 CardInfo.BelongTo。
+        /// </summary>
+        public cfg.CharacterEnum? OwnerCharacterId;
+
+        /// <summary>
+        /// 闪回牌标识。闪回牌按[虚无]处理：回合结束仍在手牌时移出牌局；
+        /// 同时不能作为新的闪回复制来源。
+        /// </summary>
+        public bool IsFlashback;
+
+        /// <summary>
+        /// 运行时费用覆盖。-1 表示沿用 CardInfo.Energy；0 及正数为本实例的实际费用。
+        /// 用于“旧步重寻”等不改动原始卡表的临时副本。
+        /// </summary>
+        public int EnergyOverride = -1;
+
+        /// <summary>
         /// 创建默认卡牌状态
         /// </summary>
         /// <param name="cardId">卡牌ID</param>
@@ -49,7 +67,9 @@ namespace Ashlight.State.Runtime
                 InstanceId = System.Guid.NewGuid().ToString(),
                 Level = 1,
                 UpgradeCount = 0,
-                ExtensionData = 0
+                ExtensionData = 0,
+                IsFlashback = false,
+                EnergyOverride = -1
             };
         }
 
@@ -65,7 +85,10 @@ namespace Ashlight.State.Runtime
                 InstanceId = this.InstanceId, // 保持相同的实例 ID
                 Level = this.Level,
                 UpgradeCount = this.UpgradeCount,
-                ExtensionData = this.ExtensionData
+                ExtensionData = this.ExtensionData,
+                OwnerCharacterId = this.OwnerCharacterId,
+                IsFlashback = this.IsFlashback,
+                EnergyOverride = this.EnergyOverride
             };
         }
     }

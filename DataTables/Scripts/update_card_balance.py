@@ -42,7 +42,6 @@ BALANCE_UPDATES = {
     "Zhouzhou004": {"damage": "12"},         # 多重射击: 15→12
     "Zhouzhou005": {"damage": "25"},         # 狙击: 60→25
     "Zhouzhou006": {"damage": "8"},          # 后撤步: 5→8
-    "Zhouzhou008": {"damage": "12", "bonus": "12"},  # 致命射击: 25+25→12+12
     "Zhouzhou012": {"damage": "18"},         # 穿云箭: 40→18
 }
 

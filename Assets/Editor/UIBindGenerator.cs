@@ -389,6 +389,21 @@ namespace _Scripts.Editor
             sb.AppendLine("using UnityEngine.UI;");
             sb.AppendLine("using TMPro;");
             sb.AppendLine("using _Scripts.UI;");
+            // 绑定里若存在 Spine 的 SkeletonGraphic，需要 Spine.Unity 命名空间；
+            // partial class 的 using 不跨文件共享，生成文件必须自带，否则编译报 CS0246。
+            bool needsSpine = false;
+            foreach (UIBind b in binds)
+            {
+                if (b != null && b.GetComponentType() == "SkeletonGraphic")
+                {
+                    needsSpine = true;
+                    break;
+                }
+            }
+            if (needsSpine)
+            {
+                sb.AppendLine("using Spine.Unity;");
+            }
             sb.AppendLine();
             
             // Namespace

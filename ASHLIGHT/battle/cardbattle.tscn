@@ -1,0 +1,82 @@
+[gd_scene format=3 uid="uid://dqn06lwqy6mkl"]
+
+[ext_resource type="Script" uid="uid://c8klgfp6swmo2" path="res://battle/scripts/battle_root.gd" id="1_battle"]
+[ext_resource type="Script" uid="uid://bn5kefrv7qs8t" path="res://battle/scripts/units/unit_root.gd" id="3_unitroot"]
+[ext_resource type="Texture2D" uid="uid://bq7a7cv34cx8h" path="res://assets/battle/background/background_001.png" id="bg_tex"]
+[ext_resource type="Texture2D" uid="uid://c0sopexpf8erk" path="res://assets/battle/foreground/foreground_001.png" id="fg_tex"]
+[ext_resource type="Script" uid="uid://dcceeiqtyioih" path="res://battle/scripts/cards/hand_manager.gd" id="hand_mgr"]
+[ext_resource type="Texture2D" uid="uid://dgot1g87ca78t" path="res://assets/battle/midground/midground_001.png" id="mg_tex"]
+[ext_resource type="Script" uid="uid://cyh8o1jqijr3" path="res://battle/scripts/cards/redraw_button.gd" id="redraw_btn"]
+
+[node name="BattleRoot" type="Node2D" unique_id=1491742689]
+script = ExtResource("1_battle")
+
+[node name="Background" type="Node2D" parent="." unique_id=1937306992]
+
+[node name="BackgroundSprite" type="Sprite2D" parent="Background" unique_id=1219599434]
+position = Vector2(800, 450)
+texture = ExtResource("bg_tex")
+
+[node name="Midground" type="Node2D" parent="." unique_id=333484390]
+
+[node name="MidgroundSprite" type="Sprite2D" parent="Midground" unique_id=1934200728]
+position = Vector2(800, 450)
+texture = ExtResource("mg_tex")
+
+[node name="Foreground" type="Node2D" parent="." unique_id=1532477037]
+
+[node name="ForegroundSprite" type="Sprite2D" parent="Foreground" unique_id=26874109]
+position = Vector2(800, 450)
+texture = ExtResource("fg_tex")
+
+[node name="Units" type="Node2D" parent="." unique_id=1240450458]
+
+[node name="UnitL1" type="Node2D" parent="Units" unique_id=1821953224]
+position = Vector2(310, 510)
+script = ExtResource("3_unitroot")
+
+[node name="UnitL2" type="Node2D" parent="Units" unique_id=432831606]
+z_index = 1
+position = Vector2(480, 510)
+script = ExtResource("3_unitroot")
+unit_id = "Irene"
+
+[node name="UnitL3" type="Node2D" parent="Units" unique_id=1209590725]
+z_index = 2
+position = Vector2(650, 510)
+script = ExtResource("3_unitroot")
+unit_id = "Rocket"
+
+[node name="UnitR1" type="Node2D" parent="Units" unique_id=1443527260]
+z_index = 2
+position = Vector2(950, 510)
+script = ExtResource("3_unitroot")
+unit_id = "Banner"
+unit_faction = "enemy"
+start_cell_index = 5
+
+[node name="UnitR2" type="Node2D" parent="Units" unique_id=881758522]
+z_index = 1
+position = Vector2(1120, 510)
+script = ExtResource("3_unitroot")
+unit_id = "DogKnight"
+unit_faction = "enemy"
+
+[node name="UnitR3" type="Node2D" parent="Units" unique_id=1770387230]
+position = Vector2(1290, 510)
+script = ExtResource("3_unitroot")
+unit_id = "Tusk"
+unit_faction = "enemy"
+start_cell_index = 2
+
+[node name="Hand" type="Node2D" parent="." unique_id=323003527]
+z_index = 50
+script = ExtResource("hand_mgr")
+
+[node name="RedrawButton" type="Button" parent="Hand" unique_id=230899089]
+offset_left = 1440.0
+offset_top = 20.0
+offset_right = 1580.0
+offset_bottom = 68.0
+text = "重新发牌"
+script = ExtResource("redraw_btn")

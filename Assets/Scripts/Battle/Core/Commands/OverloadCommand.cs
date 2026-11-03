@@ -14,9 +14,15 @@ namespace Ashlight.Battle.Core.Commands
         /// </summary>
         public int BonusEnergy { get; set; }
 
-        public OverloadCommand(int bonusEnergy = 0)
+        /// <summary>
+        /// 过载格数：下次行动额外推迟的公共回合数（卡牌 [过载]{V} 效果传 V，默认 1）
+        /// </summary>
+        public int Delay { get; set; }
+
+        public OverloadCommand(int bonusEnergy = 0, int delay = 1)
         {
             BonusEnergy = bonusEnergy;
+            Delay = delay;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -33,14 +39,14 @@ namespace Ashlight.Battle.Core.Commands
                 owner.Overload = new OverloadState();
             }
 
-            int debtAdded = owner.Overload.ApplyOverload();
+            int debtAdded = owner.Overload.ApplyOverload(Delay);
 
             if (BonusEnergy > 0)
             {
                 owner.CurrentEnergy += BonusEnergy;
             }
 
-            Debug.Log($"[OverloadCommand] {ownerId} 进入过载 Lv{owner.Overload.OverloadLevel}, 负债+{debtAdded} (总负债: {owner.Overload.OverloadDebt}), 额外能量+{BonusEnergy}");
+            Debug.Log($"[OverloadCommand] {ownerId} 进入过载 Lv{owner.Overload.OverloadLevel}, 下次行动 +{debtAdded} 回合 (本回合累计过载 {owner.Overload.OverloadCountThisTurn} 格), 额外能量+{BonusEnergy}");
         }
 
         public int GetPriority()
@@ -55,7 +61,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new OverloadCommand(BonusEnergy);
+            return new OverloadCommand(BonusEnergy, Delay);
         }
     }
 }

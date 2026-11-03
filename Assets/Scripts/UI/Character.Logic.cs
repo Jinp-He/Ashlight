@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using cfg.Character;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Config;
@@ -12,7 +13,7 @@ namespace Scripts.UI
     /// Character的业务逻辑部分（手动编写）
     /// 角色UI控制器，管理角色的显示和状态更新
     /// </summary>
-    public partial class Character : MonoBehaviour
+    public partial class Character : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         #region 私有字段
 
@@ -60,6 +61,18 @@ namespace Scripts.UI
             {
                 Indicator.alpha = 0f;
             }
+
+            // 经验条容器：从 Fill_Exp 向上找名为 "Exp" 的祖先（两者之间可能隔了中间层），
+            // 战斗中默认隐藏，战斗结束选人阶段才浮现。
+            if (Fill_Exp != null)
+            {
+                Transform t = Fill_Exp.transform.parent;
+                while (t != null && t.name != "Exp") t = t.parent;
+                _expBarRoot = t != null
+                    ? t.gameObject
+                    : (Fill_Exp.transform.parent != null ? Fill_Exp.transform.parent.gameObject : Fill_Exp.gameObject);
+            }
+            ShowExpBar(false);
         }
 
         #endregion
@@ -529,6 +542,92 @@ namespace Scripts.UI
             }
 
             Debug.Log($"[Character] 停止血量预测闪烁: {_unitState?.UnitId}");
+        }
+
+        #endregion
+
+        #region 经验条显示
+
+        // 经验条容器（Fill_Exp 的父节点 Exp）。战斗中隐藏，战斗结束选人阶段由 UI_BattleScene 调 ShowExpBar(true) 浮现。
+        private GameObject _expBarRoot;
+        // 缓存当前显示的数值，供 hover 提示计算"还差多少升级"，避免重复查表
+        private int _cachedExp;
+        private int _cachedExpThreshold;
+
+        /// <summary>
+        /// 显示/隐藏经验条。显示时刷新一次数值。
+        /// </summary>
+        public void ShowExpBar(bool show)
+        {
+            if (show)
+            {
+                UpdateExpDisplay();
+            }
+            if (_expBarRoot != null)
+            {
+                _expBarRoot.SetActive(show);
+            }
+        }
+
+        /// <summary>
+        /// 从持久化角色状态 + TbCharacterExp 刷新经验条填充与文本。
+        /// </summary>
+        public void UpdateExpDisplay()
+        {
+            if (_characterInfo == null) return;
+
+            var state = Ashlight.Systems.Character.CharacterSystem.GetCharacterState(_characterInfo.Character);
+            int level = state != null ? state.Level : 1;
+            int exp = state != null ? state.Experience : 0;
+            int threshold = GetExpThreshold(level); // 0 = 已满级(表无此级配置)
+
+            _cachedExp = exp;
+            _cachedExpThreshold = threshold;
+
+            if (Fill_Exp != null)
+            {
+                Fill_Exp.fillAmount = threshold > 0 ? Mathf.Clamp01((float)exp / threshold) : 1f;
+            }
+            if (Txt_Exp != null)
+            {
+                Txt_Exp.text = threshold > 0 ? $"Lv.{level}  {exp}/{threshold}" : $"Lv.{level}  MAX";
+            }
+        }
+
+        /// <summary>
+        /// 查 TbCharacterExp 取该等级升到下一级所需经验；查不到(已满级)返回 0。
+        /// </summary>
+        private int GetExpThreshold(int level)
+        {
+            var cfg = ConfigLoader.Tables?.TbCharacterExp?.GetOrDefault(level);
+            return cfg != null ? cfg.Exp : 0;
+        }
+
+        /// <summary>
+        /// hover 进入：仅在经验条显示(选人阶段)时，把文本切成"还差 X 经验升级"。
+        /// </summary>
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (_expBarRoot == null || !_expBarRoot.activeSelf || Txt_Exp == null) return;
+
+            if (_cachedExpThreshold > 0)
+            {
+                int remain = Mathf.Max(0, _cachedExpThreshold - _cachedExp);
+                Txt_Exp.text = $"还差 {remain} 经验升级";
+            }
+            else
+            {
+                Txt_Exp.text = "已满级";
+            }
+        }
+
+        /// <summary>
+        /// hover 离开：还原经验条正常文本。
+        /// </summary>
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (_expBarRoot == null || !_expBarRoot.activeSelf) return;
+            UpdateExpDisplay();
         }
 
         #endregion

@@ -5,6 +5,12 @@ using Ashlight.Config;
 using UnityEngine;
 namespace Ashlight.Battle.Core.Data
 {
+    public enum BattleRowPosition
+    {
+        FrontRow = 0,
+        BackRow = 1
+    }
+
     /// <summary>
     /// 单个战斗单位的状态（NvN架构）
     /// POCO类，不继承MonoBehaviour
@@ -52,6 +58,12 @@ namespace Ashlight.Battle.Core.Data
         public bool IsPlayerUnit { get; set; }
 
         /// <summary>
+        /// 是否精英/Boss 档敌人（来自 EnemyInfo.IsElite）。
+        /// 仅精英在被打断时叠 [坚毅](Resolve)——杂兵随便断，压迫感长在精英身上。
+        /// </summary>
+        public bool IsElite { get; set; }
+
+        /// <summary>
         /// 角色/敌人配置ID（用于获取基础属性）
         /// </summary>
         public string ConfigId { get; set; }
@@ -87,6 +99,56 @@ namespace Ashlight.Battle.Core.Data
         /// 过载状态
         /// </summary>
         public OverloadState Overload { get; set; }
+
+        /// <summary>
+        /// 本回合是否已用掉「首张移动免费」（游侠百相 FirstMoveFree）。每回合开始时重置。
+        /// </summary>
+        public bool FreeMoveUsedThisTurn { get; set; }
+
+        /// <summary>
+        /// 本回合是否已用掉战士百相「首张推迟牌免费」。每回合开始时重置。
+        /// </summary>
+        public bool FreePushUsedThisTurn { get; set; }
+
+        /// <summary>
+        /// 本回合是否移动过（换过区）。供条件效果读取（如影袭「本回合移动过则叠毒」）。每回合开始时重置。
+        /// </summary>
+        public bool HasMovedThisTurn { get; set; }
+
+        /// <summary>
+        /// 前后排（显式存储，唯一真相源）。移动 = 改这个值，可独立进出前/后排，无需与他人换位；
+        /// 两区可多人共存。默认后排，开局由 BattleManager 设定（战士前排）。
+        /// </summary>
+        public BattleRowPosition RowPosition { get; set; } = BattleRowPosition.BackRow;
+
+        /// <summary>
+        /// 【公共回合镜像】该单位下一次行动的绝对公共回合（真相在 ATB.AtbIconRuntime.NextRound，
+        /// 由 UI 层在每个原子回合开始时同步进来）。-1 = 尚未同步。
+        /// Core 命令用它判断「当前回合将行动的单位」（NextActionRound == snapshot.CurrentRound）。
+        /// </summary>
+        public int NextActionRound { get; set; } = -1;
+
+        /// <summary>
+        /// 【公共回合镜像】命令结算期间累计的行动推迟回合数（正数 = 延后，负数 = 提前）。
+        /// Core 命令只累加这里；UI 层在结算后调用 ATB.ApplyPendingDelays 把它落到真调度并清零。
+        /// </summary>
+        public int PendingRoundDelay { get; set; }
+
+        /// <summary>
+        /// 上次重排时因过载额外加进 NextRound 的回合数（「过载负债」）。
+        /// UI 层 Reschedule 后写入；该单位行动到来时清零（负债已偿还）。
+        /// ClearOverloadCommand 用它把已落账的过载延迟拉回来（PendingRoundDelay -= 此值）。
+        /// </summary>
+        public int AppliedOverloadRoundDelay { get; set; }
+
+        /// <summary>
+        /// 护甲首次耗尽时要执行的移动。由 MoveOnArmorBreakEffect 注册；空表示没有监听。
+        /// TakeDamage 只把触发标记置起，实际移动由伤害命令在持有 BattleStateSnapshot 时结算。
+        /// </summary>
+        public string ArmorBreakMoveMode { get; set; }
+
+        public bool ArmorBreakMovePending { get; set; }
+        public int LastArmorDamage { get; private set; }
 
         // ========== 敌人意图轴/执行轴字段 ==========
 
@@ -142,7 +204,8 @@ namespace Ashlight.Battle.Core.Data
             ActionBar = new ActionBarState();
             Overload = new OverloadState();
             IsDead = false;
-            Speed = 10;
+            // 【公共回合制】Speed = 每隔几个公共回合行动一次（数字越大越慢）。仅当配置缺失时用此兜底默认。
+            Speed = 2;
             BaseEnergy = 3;
             BaseDrawCount = 5;
             CurrentEnergy = 0;
@@ -162,11 +225,29 @@ namespace Ashlight.Battle.Core.Data
         /// 受到伤害
         /// </summary>
         /// <param name="damage">伤害值</param>
+        /// <param name="canBeDodged">false = 环境伤害（如天气落雷）：不消耗闪避层、不能被闪避免除，但仍吃易伤/减伤/护甲</param>
         /// <returns>实际受到的伤害</returns>
-        public int TakeDamage(int damage)
+        public int TakeDamage(int damage, bool canBeDodged = true)
         {
+            LastArmorDamage = 0;
             if (damage <= 0)
             {
+                return 0;
+            }
+
+            // 0. 闪避：消耗一层，完全免除这一次攻击（在护甲/易伤之前结算）。
+            //    仅拦截攻击伤害——中毒/燃烧走 TurnResolver 直接扣血、不经此处，天然不被闪避；
+            //    环境伤害（canBeDodged=false，如天气落雷）语义上不是"被瞄准的攻击"，同样不吃闪避。
+            var dodge = canBeDodged ? GetBuff("Dodge") : null;
+            if (dodge != null && dodge.Value >= 1f)
+            {
+                dodge.Value -= 1f;
+                dodge.StackCount = Mathf.Max(0, Mathf.RoundToInt(dodge.Value));
+                if (dodge.Value <= 0f)
+                {
+                    RemoveBuff("Dodge");
+                }
+                Debug.Log($"[UnitState] {UnitId} [闪避] 免除一次攻击 (剩余闪避层数: {Mathf.Max(0, Mathf.RoundToInt(dodge.Value))})");
                 return 0;
             }
 
@@ -191,15 +272,20 @@ namespace Ashlight.Battle.Core.Data
             int actualDamage = adjusted;
             if (Defense > 0)
             {
+                int defenseBefore = Defense;
                 if (Defense >= adjusted)
                 {
                     Defense -= adjusted;
+                    LastArmorDamage = defenseBefore - Defense;
+                    MarkArmorBreakMoveIfNeeded();
                     return 0; // 完全被护甲吸收
                 }
                 else
                 {
                     actualDamage = adjusted - Defense;
                     Defense = 0;
+                    LastArmorDamage = defenseBefore;
+                    MarkArmorBreakMoveIfNeeded();
                 }
             }
 
@@ -219,6 +305,33 @@ namespace Ashlight.Battle.Core.Data
             }
 
             return actualDamage;
+        }
+
+        public void RegisterArmorBreakMove(string mode)
+        {
+            ArmorBreakMoveMode = string.IsNullOrWhiteSpace(mode) ? "Toggle" : mode.Trim();
+            ArmorBreakMovePending = false;
+        }
+
+        public string ConsumePendingArmorBreakMove()
+        {
+            if (!ArmorBreakMovePending || string.IsNullOrEmpty(ArmorBreakMoveMode))
+            {
+                return null;
+            }
+
+            string mode = ArmorBreakMoveMode;
+            ArmorBreakMoveMode = null;
+            ArmorBreakMovePending = false;
+            return mode;
+        }
+
+        private void MarkArmorBreakMoveIfNeeded()
+        {
+            if (Defense == 0 && !string.IsNullOrEmpty(ArmorBreakMoveMode))
+            {
+                ArmorBreakMovePending = true;
+            }
         }
 
         /// <summary>
@@ -263,6 +376,15 @@ namespace Ashlight.Battle.Core.Data
             if (CurrentPhase == EnemyPhase.None) return;
 
             Debug.Log($"[UnitState] {UnitId} 被 [{source}] 打断 (原阶段={CurrentPhase}, 技能={PendingSkillId})");
+
+            // 精英被断 → 永久 +1 层 [坚毅](Resolve)：下次施法的打断阈值提高（结算在挂 Stagger/Block 时）。
+            // 打断本身全额生效（技能作废），坚毅只涨"下一次"的价钱——打断从可再生答案变成消耗品。
+            if (!IsPlayerUnit && IsElite)
+            {
+                AddBuff(new BuffState { BuffId = "Resolve", Value = 1, RemainingDuration = -1 });
+                Debug.Log($"[UnitState] {UnitId} 因被打断叠加坚毅，当前 {GetBuff("Resolve")?.Value ?? 0} 层");
+            }
+
             CurrentPhase = EnemyPhase.None;
             IntentAxisLength = 0;
             IntentAxisProgress = 0;
@@ -329,14 +451,65 @@ namespace Ashlight.Battle.Core.Data
         }
 
         /// <summary>
-        /// 添加Buff
+        /// 添加/叠加 Buff。
+        /// 同名 Buff 不再新增第二条，而是按配置合并到已有的那一条上：
+        /// · 可叠加（BuffInfo.MaxStack &gt; 1，如中毒/闪避/冰冻）→ 把层数累加到同一条 Buff 的 Value 上，封顶 MaxStack；
+        ///   Value 即层数（中毒每回合按 Value 掉血，闪避按 Value 计次），StackCount 与之同步供 UI 显示。
+        /// · 不可叠加（MaxStack ≤ 1，如易伤/减伤/力量）→ 只保留一条，数值取较大者，不叠层。
+        /// 两种情况都按 RefreshOnReapply 决定是否刷新剩余回合。
         /// </summary>
         public void AddBuff(BuffState buff)
         {
             if (buff == null) return;
 
-            // 简化版本：直接添加，不处理叠加逻辑
-            Buffs.Add(buff);
+            var info = ConfigLoader.Tables?.TbBuffInfo?.GetOrDefault(buff.BuffId);
+            int maxStack = info != null ? info.MaxStack : 1;
+            bool refresh = info == null || info.RefreshOnReapply;
+            bool stackable = maxStack > 1;
+
+            var existing = GetBuff(buff.BuffId);
+            if (existing == null)
+            {
+                // 首次施加：可叠加 Buff 的层数封顶，并让 StackCount 反映当前层数
+                if (stackable)
+                {
+                    buff.Value = Mathf.Min(buff.Value, maxStack);
+                    buff.StackCount = Mathf.Max(1, Mathf.RoundToInt(buff.Value));
+                }
+                else
+                {
+                    buff.StackCount = 1;
+                }
+                Buffs.Add(buff);
+                return;
+            }
+
+            if (stackable)
+            {
+                // 累加层数到同一条 Buff，封顶 MaxStack
+                existing.Value = Mathf.Min(existing.Value + buff.Value, maxStack);
+                existing.StackCount = Mathf.Max(1, Mathf.RoundToInt(existing.Value));
+            }
+            else
+            {
+                // 不可叠加：取较大数值，避免被更弱的一次覆盖降级
+                existing.Value = Mathf.Max(existing.Value, buff.Value);
+                existing.StackCount = 1;
+            }
+
+            // 刷新持续时间
+            if (refresh)
+            {
+                existing.RemainingDuration = buff.RemainingDuration;
+            }
+            else if (buff.RemainingDuration == -1)
+            {
+                existing.RemainingDuration = -1;
+            }
+            else if (existing.RemainingDuration != -1)
+            {
+                existing.RemainingDuration = Mathf.Max(existing.RemainingDuration, buff.RemainingDuration);
+            }
         }
 
         /// <summary>
@@ -419,6 +592,7 @@ namespace Ashlight.Battle.Core.Data
                 Defense = this.Defense,
                 IsDead = this.IsDead,
                 IsPlayerUnit = this.IsPlayerUnit,
+                IsElite = this.IsElite,
                 ConfigId = this.ConfigId,
                 Speed = this.Speed,
                 BaseEnergy = this.BaseEnergy,
@@ -428,6 +602,15 @@ namespace Ashlight.Battle.Core.Data
                 Track = this.Track?.Clone(),
                 ActionBar = this.ActionBar?.Clone() ?? new ActionBarState(),
                 Overload = this.Overload?.Clone() ?? new OverloadState(),
+                FreeMoveUsedThisTurn = this.FreeMoveUsedThisTurn,
+                FreePushUsedThisTurn = this.FreePushUsedThisTurn,
+                HasMovedThisTurn = this.HasMovedThisTurn,
+                RowPosition = this.RowPosition,
+                NextActionRound = this.NextActionRound,
+                PendingRoundDelay = this.PendingRoundDelay,
+                AppliedOverloadRoundDelay = this.AppliedOverloadRoundDelay,
+                ArmorBreakMoveMode = this.ArmorBreakMoveMode,
+                ArmorBreakMovePending = this.ArmorBreakMovePending,
                 // 敌人意图轴/执行轴
                 CurrentPhase = this.CurrentPhase,
                 IntentAxisLength = this.IntentAxisLength,

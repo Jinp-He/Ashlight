@@ -36,6 +36,16 @@ namespace Scripts.UI
         private const string AmountColor = "#921303";
 
         /// <summary>
+        /// Healing amount color - green.
+        /// </summary>
+        private const string HealAmountColor = "#2E7D32";
+
+        /// <summary>
+        /// Armor amount color - dark gray.
+        /// </summary>
+        private const string DefenseAmountColor = "#5F6368";
+
+        /// <summary>
         /// 标签颜色（用于[]标签内容） - 绿色
         /// </summary>
         private const string TagColor = "#9c660a";
@@ -58,21 +68,142 @@ namespace Scripts.UI
                 return string.Empty;
             }
 
-            if (string.IsNullOrEmpty(cardInfo.Description))
+            // 获取原始描述
+            string description = cardInfo.Description ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(description))
             {
-                return string.Empty;
+                // 替换 {} 标签（效果数值）
+                var descriptionEffects = new List<Effect>();
+                if (cardInfo.Effects != null) descriptionEffects.AddRange(cardInfo.Effects);
+                if (cardInfo.ChargeStartEffects != null) descriptionEffects.AddRange(cardInfo.ChargeStartEffects);
+                if (cardInfo.ChargeWhileEffects != null) descriptionEffects.AddRange(cardInfo.ChargeWhileEffects);
+                description = ReplaceEffectTags(description, descriptionEffects, mode);
+
+                // 替换 [] 标签（其他属性）
+                description = ReplaceBracketTags(description, cardInfo);
             }
 
-            // 获取原始描述
-            string description = cardInfo.Description;
+            // 追加关键词标签（[一次性]/[虚无]），复用绿色 + 悬停词条渲染
+            description = AppendKeywordTags(description, cardInfo);
 
-            // 替换 {} 标签（效果数值）
-            description = ReplaceEffectTags(description, cardInfo.Effects, mode);
-
-            // 替换 [] 标签（其他属性）
-            description = ReplaceBracketTags(description, cardInfo);
+            // 移动触发牌（隧穿/铁蒺藜）：战斗中卡面补充显示本回合全场已移动次数
+            description = AppendMoveCounter(description, cardInfo, mode);
 
             return description;
+        }
+
+        /// <summary>
+        /// 【动态计数】卡牌带移动触发效果（OnMoveAddCard/OnMoveDamage）时，
+        /// 战斗模式下在描述末尾追加「本回合已移动 N 次」（N = BattleStateSnapshot.MovesThisTurn，
+        /// 全场任何单位每完成一次换排 +1，回合结束清零）。
+        /// 手牌在移动发生后由 UI_BattleScene.RefreshHandEnergyAffordability 触发重解析刷新。
+        /// </summary>
+        private static string AppendMoveCounter(string description, CardInfo cardInfo, DescriptionMode mode)
+        {
+            if (mode != DescriptionMode.Battle || cardInfo.Effects == null)
+            {
+                return description;
+            }
+
+            bool hasMoveTrigger = false;
+            foreach (var effect in cardInfo.Effects)
+            {
+                if (effect is OnMoveAddCardEffect || effect is OnMoveDamageEffect)
+                {
+                    hasMoveTrigger = true;
+                    break;
+                }
+            }
+            if (!hasMoveTrigger)
+            {
+                return description;
+            }
+
+            var state = Ashlight.Battle.BattleManager.Instance?.CurrentState;
+            if (state == null)
+            {
+                return description;
+            }
+
+            string count = WrapWithColor(state.MovesThisTurn.ToString(), AmountColor);
+            return description + $"\n（本回合已移动 {count} 次）";
+        }
+
+        /// <summary>
+        /// 根据卡牌标记追加关键词标签（[一次性]/[虚无]/[前排]/[后排]/[近战]/[远程]/[过载]）。
+        /// 若描述里已手写该关键词则不重复追加。
+        /// </summary>
+        private static string AppendKeywordTags(string text, CardInfo cardInfo)
+        {
+            var tags = new List<string>();
+
+            void AddKeyword(string keyword, string extra = null)
+            {
+                if (!string.IsNullOrEmpty(text) && text.Contains(keyword))
+                {
+                    return;
+                }
+                string tag = WrapWithColorAndLink(keyword, keyword, TagColor);
+                if (!string.IsNullOrEmpty(extra))
+                {
+                    tag += WrapWithColor(extra, AmountColor);
+                }
+                tags.Add(tag);
+            }
+
+            // 【前排/后排】打出站位限制（CastZone）
+            if (cardInfo.CastZone == TargetZoneEnum.Front)
+            {
+                AddKeyword("前排");
+            }
+            else if (cardInfo.CastZone == TargetZoneEnum.Back)
+            {
+                AddKeyword("后排");
+            }
+
+            // 【近战/远程】单体牌索敌分区限制（TargetZone）
+            bool isSingleTarget = cardInfo.TargetType == TargetTypeEnum.SingleEnemy
+                                  || cardInfo.TargetType == TargetTypeEnum.SingleAlly;
+            if (isSingleTarget && cardInfo.TargetZone == TargetZoneEnum.Front)
+            {
+                AddKeyword("近战");
+            }
+            else if (isSingleTarget && cardInfo.TargetZone == TargetZoneEnum.Back)
+            {
+                AddKeyword("远程");
+            }
+
+            // 【过载】使用后自身过载 V 格
+            if (cardInfo.Effects != null)
+            {
+                foreach (Effect effect in cardInfo.Effects)
+                {
+                    if (effect is OverloadEffect overloadEffect)
+                    {
+                        AddKeyword("过载", overloadEffect.Value.ToString());
+                        break;
+                    }
+                }
+            }
+
+            if (cardInfo.IsExhaust && (string.IsNullOrEmpty(text) || !text.Contains("一次性")))
+            {
+                tags.Add(WrapWithColorAndLink("一次性", "一次性", TagColor));
+            }
+
+            if (cardInfo.IsEthereal && (string.IsNullOrEmpty(text) || !text.Contains("虚无")))
+            {
+                tags.Add(WrapWithColorAndLink("虚无", "虚无", TagColor));
+            }
+
+            if (tags.Count == 0)
+            {
+                return text ?? string.Empty;
+            }
+
+            string keywordLine = string.Join(" ", tags);
+            return string.IsNullOrEmpty(text) ? keywordLine : text + "\n" + keywordLine;
         }
 
         #endregion
@@ -113,7 +244,7 @@ namespace Scripts.UI
                         {
                             // 找到目标Effect，提取数值并添加颜色标签
                             string value = GetEffectValue(effect, mode);
-                            return WrapWithColor(value, AmountColor);
+                            return WrapWithColor(value, GetAmountColor(effectType));
                         }
                         currentIndex++;
                     }
@@ -143,6 +274,23 @@ namespace Scripts.UI
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未知的效果类型代码: {code}");
                     return EffectEnum.Null;
+            }
+        }
+
+        /// <summary>
+        /// Uses semantic colors for card amounts while preserving the existing
+        /// red color for damage and all other effect values.
+        /// </summary>
+        private static string GetAmountColor(EffectEnum effectType)
+        {
+            switch (effectType)
+            {
+                case EffectEnum.Heal:
+                    return HealAmountColor;
+                case EffectEnum.Defense:
+                    return DefenseAmountColor;
+                default:
+                    return AmountColor;
             }
         }
 
@@ -183,6 +331,9 @@ namespace Scripts.UI
                 case DefenseEffect defenseEffect:
                     return defenseEffect.Value.ToString();
 
+                case DefenseConditionalEffect defenseConditionalEffect:
+                    return defenseConditionalEffect.Value.ToString();
+
                 case InterceptEffect interceptEffect:
                     return interceptEffect.ShieldValue.ToString();
 
@@ -190,7 +341,7 @@ namespace Scripts.UI
                     return healEffect.Value.ToString();
 
                 case PushCollisionEffect pushCollisionEffect:
-                    return pushCollisionEffect.ShiftValue.ToString();
+                    return Mathf.Abs(pushCollisionEffect.ShiftValue).ToString();
 
                 case TimeShiftAllEffect timeShiftAllEffect:
                     return timeShiftAllEffect.ShiftValue.ToString();
@@ -199,6 +350,83 @@ namespace Scripts.UI
                     // 整数显示为整数，非整数保留一位小数
                     float bv = buffEffect.Value;
                     return (bv == Mathf.Floor(bv)) ? ((int)bv).ToString() : bv.ToString("0.#");
+
+                case BuffConditionalEffect buffConditionalEffect:
+                    float bcv = buffConditionalEffect.Value;
+                    return (bcv == Mathf.Floor(bcv)) ? ((int)bcv).ToString() : bcv.ToString("0.#");
+
+                case BuffPerCurrentRoundEnemyEffect buffPerRoundEffect:
+                    float bpv = buffPerRoundEffect.Value;
+                    return (bpv == Mathf.Floor(bpv)) ? ((int)bpv).ToString() : bpv.ToString("0.#");
+
+                case AttackCurrentRoundEffect attackCurrentRoundEffect:
+                    return attackCurrentRoundEffect.Damage.ToString();
+
+                case OnMoveDamageEffect onMoveDamageEffect:
+                    return onMoveDamageEffect.Damage.ToString();
+
+                case OnMoveAddCardEffect onMoveAddCardEffect:
+                    return onMoveAddCardEffect.Count.ToString();
+
+                case AddToHandEffect addToHandEffect:
+                    return addToHandEffect.Count.ToString();
+
+                case AddRandomToHandEffect addRandomToHandEffect:
+                    return addRandomToHandEffect.Count.ToString();
+
+                case ChargedAttackEffect chargedAttackEffect:
+                    return chargedAttackEffect.DamagePerCharge.ToString();
+
+                case StunCurrentRoundEffect stunCurrentRoundEffect:
+                    return stunCurrentRoundEffect.Duration.ToString();
+
+                case EnergyEffect energyEffect:
+                    return energyEffect.Value.ToString();
+
+                case DrawEffect drawEffect:
+                    return drawEffect.Count.ToString();
+
+                case OverloadEffect overloadEffect:
+                    return overloadEffect.Value.ToString();
+
+                case CastShiftEffect castShiftEffect:
+                    return Mathf.Abs(castShiftEffect.ShiftValue).ToString();
+
+                case CastShiftAllEffect castShiftAllEffect:
+                    return Mathf.Abs(castShiftAllEffect.ShiftValue).ToString();
+
+                case CastDamageBonusEffect castDamageBonusEffect:
+                    return castDamageBonusEffect.DamageBonus.ToString();
+
+                case CastResolveDrawEffect castResolveDrawEffect:
+                    return castResolveDrawEffect.Count.ToString();
+
+                case CastResolveBuffEffect castResolveBuffEffect:
+                    float castBuffValue = castResolveBuffEffect.Value;
+                    return castBuffValue == Mathf.Floor(castBuffValue)
+                        ? ((int)castBuffValue).ToString()
+                        : castBuffValue.ToString("0.#");
+
+                case CastEchoEffect castEchoEffect:
+                    return castEchoEffect.Delay.ToString();
+
+                case WeatherConditionalAttackEffect weatherAttackEffect:
+                    return weatherAttackEffect.Damage.ToString();
+
+                case DelayScaledAttackEffect delayAttackEffect:
+                    return delayAttackEffect.BaseDamage.ToString();
+
+                case WeatherSyncEnergyEffect weatherSyncEnergyEffect:
+                    return weatherSyncEnergyEffect.Value.ToString();
+
+                case AlignToWeatherEffect alignToWeatherEffect:
+                    return alignToWeatherEffect.MaxShift.ToString();
+
+                case WeatherGuardEffect weatherGuardEffect:
+                    return weatherGuardEffect.Value.ToString();
+
+                case WeatherShiftEffect weatherShiftEffect:
+                    return Mathf.Abs(weatherShiftEffect.ShiftValue).ToString();
 
                 default:
                     Debug.LogWarning($"[CardDescriptionParser] 未处理的Effect类型: {effect.GetType().Name}");
@@ -308,6 +536,10 @@ namespace Scripts.UI
         {
             switch (rarity)
             {
+                case RarityEnum.Temporary:
+                    return "临时";
+                case RarityEnum.Basic:
+                    return "基础";
                 case RarityEnum.Normal:
                     return "普通";
                 case RarityEnum.Rare:

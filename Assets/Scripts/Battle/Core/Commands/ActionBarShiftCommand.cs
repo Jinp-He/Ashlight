@@ -1,4 +1,7 @@
 using Ashlight.Battle.Core.Data;
+using cfg;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -19,10 +22,17 @@ namespace Ashlight.Battle.Core.Commands
         /// </summary>
         public bool IsAoe { get; set; }
 
-        public ActionBarShiftCommand(int shiftSegments, bool isAoe = false)
+        /// <summary>AOE 位移作用的目标分区。</summary>
+        public TargetZoneEnum TargetZone { get; set; } = TargetZoneEnum.Any;
+
+        /// <summary>单体位移撞上同阵营单位同一行动回合时触发的结果；None/空表示不处理碰撞。</summary>
+        public string CollisionResult { get; set; }
+
+        public ActionBarShiftCommand(int shiftSegments, bool isAoe = false, string collisionResult = null)
         {
             ShiftSegments = shiftSegments;
             IsAoe = isAoe;
+            CollisionResult = collisionResult;
         }
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
@@ -32,6 +42,7 @@ namespace Ashlight.Battle.Core.Commands
                 var owner = state.GetUnitById(ownerId);
                 bool ownerIsPlayer = owner != null && owner.IsPlayerUnit;
                 var targets = ownerIsPlayer ? state.GetAliveEnemyUnits() : state.GetAlivePlayerUnits();
+                targets = ZoneTargeting.FilterByZone(state, targets, TargetZone, strict: true);
 
                 foreach (var target in targets)
                 {
@@ -47,42 +58,77 @@ namespace Ashlight.Battle.Core.Commands
                     return;
                 }
 
+                int beforeRound = GetProjectedRound(target);
                 ApplyShift(target);
+                int afterRound = GetProjectedRound(target);
+                ResolveCollision(state, ownerId, target, beforeRound, afterRound);
             }
         }
 
         private void ApplyShift(UnitState target)
         {
-            // 如果目标处于意图轴/执行轴且为负向位移（延后），作用于轴进度而非行动条
-            if (ShiftSegments < 0 && target.CurrentPhase != EnemyPhase.None)
+            // 【公共回合制】推迟 = 目标下次行动延后 N 个公共回合。
+            // Core 只累加 PendingRoundDelay；UI 层结算后调用 ATB.ApplyPendingDelays 把它落到真调度（NextRound += N）。
+            // 正数 = 推迟（延后），负数 = 提前（当前无卡使用，落账时会被 clamp 到不早于当前回合）。
+            target.PendingRoundDelay += ShiftSegments;
+            string direction = ShiftSegments > 0 ? "推迟" : "提前";
+            Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 行动{direction} {System.Math.Abs(ShiftSegments)} 回合 (累计待落账 {target.PendingRoundDelay})");
+        }
+
+        private static int GetProjectedRound(UnitState unit)
+        {
+            return unit.NextActionRound < 0 ? -1 : unit.NextActionRound + unit.PendingRoundDelay;
+        }
+
+        private void ResolveCollision(
+            BattleStateSnapshot state,
+            string ownerId,
+            UnitState shifted,
+            int beforeRound,
+            int afterRound)
+        {
+            if (string.IsNullOrWhiteSpace(CollisionResult)
+                || string.Equals(CollisionResult, "None", StringComparison.OrdinalIgnoreCase)
+                || beforeRound < 0
+                || afterRound < 0
+                || beforeRound == afterRound)
             {
-                int delayAmount = System.Math.Abs(ShiftSegments);
-                if (target.CurrentPhase == EnemyPhase.IntentAxis)
-                {
-                    int before = target.IntentAxisProgress;
-                    target.IntentAxisProgress = Mathf.Max(0, target.IntentAxisProgress - delayAmount);
-                    Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 意图轴延后 {delayAmount} 格 ({before} -> {target.IntentAxisProgress}/{target.IntentAxisLength})");
-                }
-                else if (target.CurrentPhase == EnemyPhase.ExecuteAxis)
-                {
-                    int before = target.ExecuteAxisProgress;
-                    target.ExecuteAxisProgress = Mathf.Max(0, target.ExecuteAxisProgress - delayAmount);
-                    Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 执行轴延后 {delayAmount} 格 ({before} -> {target.ExecuteAxisProgress}/{target.ExecuteAxisLength})");
-                }
                 return;
             }
 
-            if (target.ActionBar == null)
+            var collided = new List<UnitState>();
+            foreach (var other in state.GetAllUnits())
+            {
+                if (other == null || other == shifted || other.IsDead || other.IsPlayerUnit != shifted.IsPlayerUnit)
+                {
+                    continue;
+                }
+
+                if (GetProjectedRound(other) == afterRound)
+                {
+                    collided.Add(other);
+                }
+            }
+
+            if (collided.Count == 0)
             {
                 return;
             }
 
-            int beforeSeg = target.ActionBar.CurrentSegment;
-            target.ActionBar.Shift(ShiftSegments);
-            int afterSeg = target.ActionBar.CurrentSegment;
+            if (!string.Equals(CollisionResult, "Stun", StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogWarning($"[ActionBarShiftCommand] 未支持的碰撞结果: {CollisionResult}");
+                return;
+            }
 
-            string direction = ShiftSegments > 0 ? "前进" : "后退";
-            Debug.Log($"[ActionBarShiftCommand] {target.UnitId} 行动条{direction} {System.Math.Abs(ShiftSegments)} 段 ({beforeSeg} -> {afterSeg})");
+            // 碰撞双方均晕眩 1 回合；通过 BuffCommand 统一走圣物抵消和 Buff 配置。
+            new BuffCommand("Stun", 1).Execute(state, ownerId, shifted.UnitId);
+            foreach (var other in collided)
+            {
+                new BuffCommand("Stun", 1).Execute(state, ownerId, other.UnitId);
+            }
+
+            Debug.Log($"[ActionBarShiftCommand] {shifted.UnitId} 在回合 {afterRound} 与 {collided.Count} 个同阵营单位碰撞，双方晕眩");
         }
 
         public int GetPriority()
@@ -97,7 +143,10 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new ActionBarShiftCommand(ShiftSegments, IsAoe);
+            return new ActionBarShiftCommand(ShiftSegments, IsAoe, CollisionResult)
+            {
+                TargetZone = TargetZone
+            };
         }
     }
 }

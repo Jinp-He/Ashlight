@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening;
 using Ashlight.Battle.Core.Data;
 using Ashlight.Battle.Core.Engine;
 using Ashlight.Config;
@@ -53,10 +54,15 @@ namespace Scripts.UI.Timeline
         [Tooltip("格子宽度")]
         private float slotWidth = 95f;
         
-        [SerializeField] 
+        [SerializeField]
         [Tooltip("格子间距")]
         private float slotSpacing = 5f;
-        
+
+        [Header("动画设置")]
+        [SerializeField]
+        [Tooltip("时间轴前进时，卡片/敌人槽滑到新格子的动画时长（秒）")]
+        private float shiftAnimDuration = 0.25f;
+
         #endregion
         
         #region 私有字段
@@ -979,6 +985,48 @@ namespace Scripts.UI.Timeline
         }
 
         /// <summary>
+        /// 移除指定敌人（按 UnitId）在敌人共享时间轴上的所有时间槽（敌人死亡时调用）。
+        /// 同时释放其占用的时间轴格子，避免死亡敌人的卡牌残留。
+        /// </summary>
+        public void RemoveEnemyTimeSlotsByOwner(string unitId)
+        {
+            if (!_isSharedEnemyTrack || string.IsNullOrEmpty(unitId)) return;
+
+            int removed = 0;
+            for (int i = _enemyTimeSlots.Count - 1; i >= 0; i--)
+            {
+                var slot = _enemyTimeSlots[i];
+                if (slot == null)
+                {
+                    _enemyTimeSlots.RemoveAt(i);
+                    continue;
+                }
+
+                if (slot.GetAttackerUnitId() != unitId) continue;
+
+                // 释放该槽占用的格子
+                int startIndex = slot.GetSlotIndex();
+                int cost = slot.GetEnemySkillInfo()?.ExecutingCost ?? 0;
+                for (int c = 0; c < cost && startIndex + c < TimelineTrack.TrackLength; c++)
+                {
+                    if (startIndex >= 0 && _slots[startIndex + c] != null)
+                    {
+                        _slots[startIndex + c].SetOccupied(false);
+                    }
+                }
+
+                Destroy(slot.gameObject);
+                _enemyTimeSlots.RemoveAt(i);
+                removed++;
+            }
+
+            if (removed > 0)
+            {
+                Debug.Log($"[TimelineTrackView] 已移除死亡敌人 {unitId} 的 {removed} 个时间槽，剩余 {_enemyTimeSlots.Count} 个");
+            }
+        }
+
+        /// <summary>
         /// 创建EnemyTimeSlot（仅用于敌人时间轴）
         /// 遍历时间轴上的Blocks，为每个敌人技能创建EnemyTimeSlot
         /// </summary>
@@ -1244,8 +1292,10 @@ namespace Scripts.UI.Timeline
                 if (rect != null)
                 {
                     Vector2 newPos = new Vector2(rect.anchoredPosition.x + offset, rect.anchoredPosition.y);
-                    rect.anchoredPosition = newPos;
-                    Debug.Log($"<color=cyan>【移动TimeSlot(来自_placedCards): {cardName} Owner: {ownerId} 从索引{currentSlotIndex}到{newSlotIndex}】位置: {rect.anchoredPosition}</color>");
+                    // 滑动到新格子（取代瞬间设位置）；同名 tween 会被覆盖，避免连续前进时叠加
+                    rect.DOKill();
+                    rect.DOAnchorPos(newPos, shiftAnimDuration).SetEase(Ease.OutCubic);
+                    Debug.Log($"<color=cyan>【移动TimeSlot(来自_placedCards): {cardName} Owner: {ownerId} 从索引{currentSlotIndex}到{newSlotIndex}】目标位置: {newPos}</color>");
                 }
 
                 // 更新CardTimeSlot的槽位索引
@@ -1310,7 +1360,9 @@ namespace Scripts.UI.Timeline
                     {
                         Vector2 currentPos = rect.anchoredPosition;
                         Vector2 newPos = new Vector2(currentPos.x + offset, currentPos.y);
-                        rect.anchoredPosition = newPos;
+                        // 滑动到新格子（取代瞬间设位置）
+                        rect.DOKill();
+                        rect.DOAnchorPos(newPos, shiftAnimDuration).SetEase(Ease.OutCubic);
                         // Debug.Log($"<color=cyan>【移动TimeSlot(来自_enemyTimeSlots): {skillName} Owner: {ownerId} 从索引{currentSlotIndex}到{newSlotIndex}】坐标: {currentPos} -> {newPos}</color>");
                     }
 

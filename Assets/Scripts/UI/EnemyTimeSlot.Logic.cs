@@ -164,6 +164,15 @@ namespace Scripts.UI
             return _slotIndex;
         }
 
+        /// <summary>
+        /// 获取该时间槽所属攻击者（敌人）的 UnitId；无攻击者时返回 null。
+        /// 供死亡清理时按所属敌人移除时间轴上的卡牌。
+        /// </summary>
+        public string GetAttackerUnitId()
+        {
+            return _attacker != null ? _attacker.GetUnitState()?.UnitId : null;
+        }
+
         #endregion
         
         #region 鼠标悬停处理

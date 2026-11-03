@@ -21,6 +21,11 @@
         <var name="condition_type" type="string" comment="触发条件，如 'IsAttacking'"/>
     </bean>
 
+    <bean name="DefenseConditionalEffect" parent="Effect">
+        <var name="value" type="int" comment="条件护甲数值 {D}"/>
+        <var name="condition_type" type="string" comment="触发条件，如 'SelfInFrontRow'"/>
+    </bean>
+
 
     <bean name="DefenseEffect" parent="Effect">
         <var name="value" type="int" comment="护甲数值 {D}"/>
@@ -56,6 +61,22 @@
     <bean name="SwiftEffect" parent="Effect">
         </bean>
 
+    <bean name="MovePositionEffect" parent="Effect">
+        <var name="mode" type="string" comment="位置变化模式，如 Toggle/FrontRow/BackRow"/>
+    </bean>
+
+    <bean name="AddToHandEffect" parent="Effect">
+        <var name="card_id" type="string" comment="加入手牌的卡牌Id"/>
+        <var name="count" type="int" comment="加入张数"/>
+    </bean>
+
+    <bean name="AddRandomToHandEffect" parent="Effect">
+        <var name="card_ids" type="string" comment="候选卡牌Id，以 | 分隔；同次生成不重复"/>
+        <var name="count" type="int" comment="基础生成张数 {N}"/>
+        <var name="condition_type" type="string" comment="数量翻倍条件，如 SelfInBackRow；空表示无条件"/>
+        <var name="condition_multiplier" type="int" comment="满足条件时的数量倍率"/>
+    </bean>
+
     <bean name="ChannelEffect" parent="Effect">
         <var name="duration" type="int" comment="引导持续时间"/>
     </bean>
@@ -67,6 +88,161 @@
     <bean name="BuffEffect" parent="Effect">
         <var name="buff_id" type="string" comment="Buff ID"/>
         <var name="value" type="float" comment="Buff参数/数值"/>
+    </bean>
+
+    <bean name="BuffConditionalEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="Buff ID"/>
+        <var name="value" type="float" comment="满足条件时施加的层数/数值"/>
+        <var name="condition_type" type="string" comment="触发条件，如 'MovedThisTurn'"/>
+    </bean>
+
+    <bean name="DrawEffect" parent="Effect">
+        <var name="count" type="int" comment="立即抽牌数量 {V}"/>
+    </bean>
+
+    <bean name="OverloadEffect" parent="Effect">
+        <var name="value" type="int" comment="过载格数：使用后自身过载，下次行动额外推迟 {V} 格"/>
+    </bean>
+
+    <!-- 0709 新增（战斗侧映射已接入 CardPlayResolver，见 effect-catalog） -->
+    <bean name="MoveSelfEffect" parent="Effect">
+        <var name="mode" type="string" comment="施法者自身移动（区别于 MovePositionEffect 移动的是卡牌目标），模式同 Toggle/FrontRow/BackRow"/>
+    </bean>
+
+    <bean name="ClearOverloadEffect" parent="Effect">
+        </bean>
+
+    <bean name="OnMoveDamageEffect" parent="Effect">
+        <var name="damage" type="int" comment="本回合内每次有角色移动，随机对一名敌人造成 {A} 点伤害"/>
+    </bean>
+
+    <bean name="AttackCurrentRoundEffect" parent="Effect">
+        <var name="damage" type="int" comment="对当前回合（本轮将行动）的所有敌人造成 {A} 点伤害"/>
+    </bean>
+
+    <bean name="StunCurrentRoundEffect" parent="Effect">
+        <var name="duration" type="int" comment="晕眩回合数"/>
+        <var name="random_one" type="bool" comment="true=随机晕眩一名当前回合敌人, false=晕眩全部当前回合敌人"/>
+    </bean>
+
+    <bean name="MoveRowEffect" parent="Effect">
+        </bean>
+
+    <bean name="OnMoveAddCardEffect" parent="Effect">
+        <var name="card_id" type="string" comment="本回合内每次有角色移动，加入手牌的卡牌 Id"/>
+        <var name="count" type="int" comment="每次触发加入的张数"/>
+    </bean>
+
+    <bean name="BuffPerCurrentRoundEnemyEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="Buff ID"/>
+        <var name="value" type="float" comment="当前回合每有一个敌人，获得的层数"/>
+    </bean>
+
+    <bean name="EnergyEffect" parent="Effect">
+        <var name="value" type="int" comment="立即获得 {V} 点能量"/>
+    </bean>
+
+    <bean name="MoveOnArmorBreakEffect" parent="Effect">
+        <var name="mode" type="string" comment="本效果所授护甲首次耗尽时的移动方向：FrontRow/BackRow/Toggle"/>
+    </bean>
+
+    <bean name="ChargedAttackEffect" parent="Effect">
+        <var name="damage_per_charge" type="int" comment="每层蓄力造成的伤害 {A}"/>
+        <var name="is_aoe" type="bool" comment="是否为群体攻击"/>
+    </bean>
+
+    <!-- Irene：操作在轨执行牌与天气节拍 -->
+    <bean name="CastShiftEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="在轨执行牌顺延（正）或提前（负）的公共回合数 {T}"/>
+    </bean>
+
+    <bean name="CastDamageBonusEffect" parent="Effect">
+        <var name="damage_bonus" type="int" comment="目标执行牌结算时增加的伤害 {A}"/>
+    </bean>
+
+    <bean name="CastResolveDrawEffect" parent="Effect">
+        <var name="count" type="int" comment="目标执行牌结算后抽牌数 {V}"/>
+    </bean>
+
+    <bean name="CastResolveBuffEffect" parent="Effect">
+        <var name="buff_id" type="string" comment="目标执行牌结算后施加给施法者的 Buff Id"/>
+        <var name="value" type="float" comment="Buff 层数/数值 {V}"/>
+    </bean>
+
+    <bean name="CastImmediateEffect" parent="Effect">
+        </bean>
+
+    <bean name="CastEchoEffect" parent="Effect">
+        <var name="delay" type="int" comment="首次结算后，回声延迟的公共回合数 {V}"/>
+        <var name="multiplier" type="float" comment="回声伤害、护甲与治疗的数值倍率"/>
+    </bean>
+
+    <bean name="WeatherConditionalAttackEffect" parent="Effect">
+        <var name="damage" type="int" comment="基础伤害 {A}"/>
+        <var name="multiplier" type="float" comment="本公共回合已结算天气时的伤害倍率"/>
+    </bean>
+
+    <bean name="DelayScaledAttackEffect" parent="Effect">
+        <var name="base_damage" type="int" comment="基础伤害 {A}"/>
+        <var name="damage_per_delay" type="int" comment="每被己方卡牌顺延 1 格增加的伤害"/>
+        <var name="max_bonus" type="int" comment="顺延提供的最大额外伤害"/>
+        <var name="is_aoe" type="bool" comment="是否为群体攻击"/>
+    </bean>
+
+    <bean name="WeatherSyncEnergyEffect" parent="Effect">
+        <var name="value" type="int" comment="有己方执行牌与下一次天气同回合时获得的能量 {V}"/>
+    </bean>
+
+    <bean name="AlignToWeatherEffect" parent="Effect">
+        <var name="max_shift" type="int" comment="目标行动向下一次天气移动的最大公共回合数 {T}"/>
+    </bean>
+
+    <bean name="WeatherGuardEffect" parent="Effect">
+        <var name="value" type="int" comment="下一次天气结算前为同回合友方提供的护甲 {D}"/>
+    </bean>
+
+    <bean name="WeatherShiftEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="下一次天气顺延的公共回合数 {T}"/>
+    </bean>
+
+    <bean name="CastShiftAllEffect" parent="Effect">
+        <var name="shift_value" type="int" comment="所有己方在轨执行牌顺延（正）或提前（负）的公共回合数 {T}"/>
+    </bean>
+
+
+    <!-- ============================================================== -->
+    <!-- 升级选项效果 (UpgradeOptions.Effects)                          -->
+    <!-- 多态基类，子类名作为判别符（与 Effect 体系一致）              -->
+    <!-- 编码示例: GrantBuff,Block,3,Self ; ModifyCardStat,Rocket001,Damage,5 -->
+    <!-- ============================================================== -->
+    <bean name="UpgradeEffect" sep=","/>
+
+    <!-- 战斗开始时给单位贴一个整场永久 buff（力量/敏捷/再生 等真 buff，走 UnitState.Buffs） -->
+    <bean name="GrantBuff" parent="UpgradeEffect">
+        <var name="buff_id" type="string" comment="引用 TbBuffInfo 的 Id，如 Strength/Dexterity/Regen"/>
+        <var name="stack" type="int" comment="层数/数值（落到 BuffState.Value）"/>
+        <var name="target" type="TargetTypeEnum" comment="贴给谁：Self=本角色 / AllAlly=全体我方"/>
+    </bean>
+
+    <!-- 修改单位的战斗属性字段（护甲/最大生命/能量 等，非 buff，整场生效） -->
+    <bean name="ModifyUnitStat" parent="UpgradeEffect">
+        <var name="stat" type="string" comment="要改的属性：MaxHp/Armor/Energy"/>
+        <var name="delta" type="int" comment="增减量(+/-)"/>
+        <var name="target" type="TargetTypeEnum" comment="作用对象：Self=本角色 / AllAlly=全体我方"/>
+    </bean>
+
+    <!-- 针对卡牌的数值修正（整局生效，按 selector 匹配卡牌） -->
+    <bean name="ModifyCardStat" parent="UpgradeEffect">
+        <var name="selector" type="string" comment="目标卡：卡Id / BelongTo:Rocket / CardType:Swift / All"/>
+        <var name="stat" type="string" comment="要改的属性：Damage/Defense/Energy/ExecutingCost ..."/>
+        <var name="delta" type="int" comment="增减量(+/-)"/>
+    </bean>
+
+    <!-- 针对卡牌的行为标记修正（如 单体→AOE） -->
+    <bean name="ModifyCardFlag" parent="UpgradeEffect">
+        <var name="selector" type="string" comment="目标卡：卡Id / BelongTo:Rocket / CardType:Swift / All"/>
+        <var name="flag" type="string" comment="要改的标记：如 IsAoe"/>
+        <var name="value" type="bool" comment="目标值"/>
     </bean>
 
 </module>

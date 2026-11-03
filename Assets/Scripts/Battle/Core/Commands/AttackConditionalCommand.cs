@@ -1,4 +1,5 @@
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Core.Engine;
 using Ashlight.Common.Events;
 using UnityEngine;
 
@@ -50,7 +51,7 @@ namespace Ashlight.Battle.Core.Commands
             }
 
             // 检查是否满足条件
-            bool conditionMet = CheckCondition(state, target);
+            bool conditionMet = CheckCondition(state, owner, target);
             
             if (!conditionMet)
             {
@@ -59,7 +60,9 @@ namespace Ashlight.Battle.Core.Commands
             }
 
             // 造成额外伤害
-            int damageDealt = target.TakeDamage(BonusDamage);
+            int adjustedDamage = DamageCommand.ApplyAttackerModifiers(owner, BonusDamage);
+            int damageDealt = target.TakeDamage(adjustedDamage);
+            ArmorBreakMoveProcessor.ResolvePending(state, target);
             Debug.Log($"[AttackConditionalCommand] 目标 {targetId} 满足条件 [{ConditionType}]，受到额外伤害 {damageDealt} 点");
 
             // 发布攻击执行事件
@@ -68,6 +71,7 @@ namespace Ashlight.Battle.Core.Commands
                 AttackerId = ownerId,
                 TargetId = targetId,
                 ActualDamage = damageDealt,
+                ArmorDamage = target.LastArmorDamage,
                 IsAoe = false,
                 IsPrediction = state.IsPrediction
             });
@@ -79,7 +83,7 @@ namespace Ashlight.Battle.Core.Commands
         /// <summary>
         /// 检查是否满足触发条件
         /// </summary>
-        private bool CheckCondition(BattleStateSnapshot state, UnitState target)
+        private bool CheckCondition(BattleStateSnapshot state, UnitState owner, UnitState target)
         {
             if (string.IsNullOrEmpty(ConditionType))
             {
@@ -89,9 +93,10 @@ namespace Ashlight.Battle.Core.Commands
             switch (ConditionType)
             {
                 case "IsAttacking":
-                    // 旧条件：检查目标时间轴上是否有Active阶段（兼容旧系统）
-                    // 新系统中等价于 EnemyInExecuteAxis
-                    return target.CurrentPhase == EnemyPhase.ExecuteAxis || HasAttackingPhase(target);
+                    // 【公共回合口径】目标本回合将行动（NextActionRound == CurrentRound）即视为「正在攻击/执行」。
+                    // 保留旧执行轴/时间轴检查作兜底（旧路径兼容）。
+                    return IsActingThisRound(state, target)
+                        || target.CurrentPhase == EnemyPhase.ExecuteAxis || HasAttackingPhase(target);
 
                 case "IsDefending":
                 case "HasShield":
@@ -121,6 +126,24 @@ namespace Ashlight.Battle.Core.Commands
                     return target.CurrentPhase == EnemyPhase.IntentAxis
                         || target.CurrentPhase == EnemyPhase.ExecuteAxis;
 
+                case "InExecution":
+                    // 【公共回合口径】同 IsAttacking：目标本回合将行动。
+                    return IsActingThisRound(state, target) || target.CurrentPhase == EnemyPhase.ExecuteAxis;
+
+                case "SelfInFrontRow":
+                    return owner != null && state.IsFrontRow(owner);
+
+                case "SelfInBackRow":
+                    return owner != null && !state.IsFrontRow(owner);
+
+                case "AllyActingThisRound":
+                    if (owner == null)
+                    {
+                        return false;
+                    }
+                    var allies = owner.IsPlayerUnit ? state.GetAlivePlayerUnits() : state.GetAliveEnemyUnits();
+                    return allies.Exists(ally => ally.UnitId != owner.UnitId && IsActingThisRound(state, ally));
+
                 case "IsStunned":
                     // 目标处于硬直状态
                     return target.IsStunned;
@@ -129,6 +152,14 @@ namespace Ashlight.Battle.Core.Commands
                     Debug.LogWarning($"[AttackConditionalCommand] 未知的条件类型: {ConditionType}");
                     return false;
             }
+        }
+
+        /// <summary>
+        /// 【公共回合口径】目标是否在当前公共回合行动（调度镜像，见 UnitState.NextActionRound）。
+        /// </summary>
+        internal static bool IsActingThisRound(BattleStateSnapshot state, UnitState target)
+        {
+            return target != null && target.NextActionRound >= 0 && target.NextActionRound == state.CurrentRound;
         }
 
         /// <summary>

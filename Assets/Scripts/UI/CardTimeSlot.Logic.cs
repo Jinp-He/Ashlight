@@ -5,6 +5,7 @@ using cfg.Character;
 using Ashlight.Config;
 using Ashlight.State.Runtime;
 using Ashlight.Common.Utils;
+using Ashlight.Battle.Prototype;
 using Scripts.UI.Timeline;
 
 namespace Scripts.UI
@@ -256,7 +257,8 @@ namespace Scripts.UI
             }
 
             // 获取 MiniSprite 资源路径
-            string spritePath = AssetPath.GetCardMiniSpriteAssetPath(cardId);
+            string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cardId);
+            string spritePath = AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
 
             // 从 Resources 加载 Sprite
             Sprite sprite = Resources.Load<Sprite>(spritePath);
@@ -268,7 +270,18 @@ namespace Scripts.UI
             }
             else
             {
-                Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}");
+                // 找不到对应卡图时，回退到默认卡图 Resources/Cards/Sprites/Default
+                string defaultPath = AssetPath.GetCardSpriteAssetPath("Default");
+                Sprite defaultSprite = Resources.Load<Sprite>(defaultPath);
+                if (defaultSprite != null)
+                {
+                    MiniSprite.sprite = defaultSprite;
+                    Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}，已回退到默认卡图: {defaultPath}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[CardTimeSlot] 无法加载卡牌 MiniSprite: {spritePath}，且默认卡图也缺失: {defaultPath}");
+                }
             }
         }
 

@@ -10,5 +10,6 @@ dotnet %LUBAN_DLL% ^
     -x outputCodeDir=%WORKSPACE%/Assets/Gen ^
     -x outputDataDir=%WORKSPACE%/Assets/Resources/Config
 
+python Scripts\export_map_tile_content_weights.py
 
-pause 
+pause

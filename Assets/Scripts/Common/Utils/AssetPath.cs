@@ -174,6 +174,22 @@ namespace Ashlight.Common.Utils
 
         #endregion
 
+        #region 行动顺序（时间轴）单位图标
+
+        /// <summary>行动顺序卡（TurnOrder / UI_ActionOrder）单位图标 Resources 根路径。</summary>
+        public const string ActionOrderIconPrefix = "UI/ActionOrder";
+
+        /// <summary>
+        /// 获取行动顺序卡里某单位的图标资源路径（相对 Resources，不含扩展名）。
+        /// 图片按 Img_{configId} 命名，放在 Assets/Resources/UI/ActionOrder/ 下（玩家/敌人共用一个文件夹）。
+        /// </summary>
+        public static string GetActionOrderIconPath(string configId)
+        {
+            return $"{ActionOrderIconPrefix}/Img_{configId}";
+        }
+
+        #endregion
+
         #region Resources路径
 
         /// <summary>

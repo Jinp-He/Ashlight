@@ -21,7 +21,15 @@ namespace Scripts.UI
         {
             // 调用自动生成的UI绑定初始化方法
             InitUIBindings();
-            
+
+            // tooltip 是纯展示面板，绝不能拦截指针射线：它显示在鼠标附近时若拦射线，会盖住触发它的
+            // 元素（敌人意图 / 行动顺序卡 / 手牌），导致对方 PointerExit→隐藏→鼠标回到元素→PointerEnter→
+            // 再显示的反复闪烁。用显式判空而非 ?? （Unity 的 GetComponent 不存在时返回“伪 null”，?? 不认）。
+            var cg = GetComponent<CanvasGroup>();
+            if (cg == null) cg = gameObject.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+
             // 默认隐藏
             gameObject.SetActive(false);
         }
@@ -127,6 +135,31 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 显示天气描述：标题=Weather.Name，正文=Weather.Description，
+        /// {V}=Damage、{T}=Period（沿用 BuffInfo 的占位符约定与染色）。
+        /// </summary>
+        public void Show(WeatherInfo weatherInfo)
+        {
+            if (weatherInfo == null)
+            {
+                Hide();
+                return;
+            }
+
+            if (Txt_EntryName != null)
+            {
+                Txt_EntryName.text = weatherInfo.Name;
+            }
+
+            if (Txt_Entry != null)
+            {
+                Txt_Entry.text = FormatWeatherDescription(weatherInfo);
+            }
+
+            gameObject.SetActive(true);
+        }
+
+        /// <summary>
         /// 隐藏名词描述
         /// </summary>
         public void Hide()
@@ -135,12 +168,49 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 设置位置
+        /// 设置位置（世界坐标），并做画布边缘检测：
+        /// 面板任何一边超出 Canvas 矩形时整体回移，保证 tooltip 完整可见。
+        /// 所有调用方（意图/手牌/buff/天气/行动顺序）共用这一处 clamp。
         /// </summary>
-        /// <param name="position">屏幕坐标</param>
+        /// <param name="position">世界坐标（调用方已从屏幕坐标换算）</param>
         public void SetPosition(Vector3 position)
         {
             transform.position = position;
+            ClampToCanvas();
+        }
+
+        /// <summary>tooltip 边缘检测的留白（Canvas 本地单位，随缩放）。</summary>
+        private const float EdgePadding = 8f;
+
+        /// <summary>
+        /// 把面板整体拉回 Canvas 矩形内。文本刚被 Show() 改写、ContentSizeFitter 尚未重建，
+        /// 先强制重建拿到真实尺寸再算溢出量；面板比画布还大时优先保住左/上边缘（阅读起点）。
+        /// </summary>
+        private void ClampToCanvas()
+        {
+            var rt = transform as RectTransform;
+            var canvas = GetComponentInParent<Canvas>();
+            var canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+            if (rt == null || canvasRect == null) return;
+
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners); // 0=左下 2=右上
+            Vector2 min = canvasRect.InverseTransformPoint(corners[0]);
+            Vector2 max = canvasRect.InverseTransformPoint(corners[2]);
+            Rect cr = canvasRect.rect;
+
+            Vector2 shift = Vector2.zero;
+            if (max.x > cr.xMax - EdgePadding) shift.x = (cr.xMax - EdgePadding) - max.x;
+            if (min.x + shift.x < cr.xMin + EdgePadding) shift.x = (cr.xMin + EdgePadding) - min.x;
+            if (max.y > cr.yMax - EdgePadding) shift.y = (cr.yMax - EdgePadding) - max.y;
+            if (min.y + shift.y < cr.yMin + EdgePadding) shift.y = (cr.yMin + EdgePadding) - min.y;
+
+            if (shift != Vector2.zero)
+            {
+                transform.position += canvasRect.TransformVector(new Vector3(shift.x, shift.y, 0f));
+            }
         }
 
         #endregion
@@ -223,6 +293,27 @@ namespace Scripts.UI
                     _ => match.Value
                 };
                 return $"<color=#921303>{value}</color>";
+            });
+        }
+
+        /// <summary>
+        /// 替换天气描述中的占位符：{V}=Damage，{T}=Period。
+        /// colored=true 时与 buff 同款 #921303 染色（tooltip 用）；false 输出纯文本（开场横幅深底上染深红看不清）。
+        /// </summary>
+        public static string FormatWeatherDescription(WeatherInfo info, bool colored = true)
+        {
+            if (info == null || string.IsNullOrEmpty(info.Description)) return string.Empty;
+
+            return Regex.Replace(info.Description, @"\{([A-Z])\}", match =>
+            {
+                string code = match.Groups[1].Value;
+                string value = code switch
+                {
+                    "T" => info.Period.ToString(),
+                    "V" => info.Damage.ToString(),
+                    _ => match.Value
+                };
+                return colored ? $"<color=#921303>{value}</color>" : value;
             });
         }
 

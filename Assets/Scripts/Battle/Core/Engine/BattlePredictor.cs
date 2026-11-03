@@ -143,7 +143,7 @@ namespace Ashlight.Battle.Core.Engine
 
                 if (unit.Overload != null)
                 {
-                    snapshot.OverloadDebtMap[unit.UnitId] = unit.Overload.OverloadDebt;
+                    snapshot.OverloadDebtMap[unit.UnitId] = unit.Overload.OverloadCountThisTurn;
                 }
             }
 
@@ -210,7 +210,7 @@ namespace Ashlight.Battle.Core.Engine
                 // 过载负债变化
                 if (unit.Overload != null && initial.OverloadDebtMap.ContainsKey(id))
                 {
-                    int debtChange = unit.Overload.OverloadDebt - initial.OverloadDebtMap[id];
+                    int debtChange = unit.Overload.OverloadCountThisTurn - initial.OverloadDebtMap[id];
                     if (debtChange > 0)
                     {
                         result.ExpectedOverloadDebt += debtChange;

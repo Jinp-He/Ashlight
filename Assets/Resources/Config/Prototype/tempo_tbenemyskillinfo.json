@@ -1,0 +1,70 @@
+[
+  {
+    "Id": "TempoEnemySkill001",
+    "Name": "抢拍斩 · CD1",
+    "Description": "1回合后，对前排单体造成{A}点伤害。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 4, "is_aoe": false }
+    ],
+    "ExecutingCost": 1,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "TempoEnemySkill002",
+    "Name": "处刑重落 · CD4",
+    "Description": "4回合后，对前排单体造成{A}点伤害。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 16, "is_aoe": false }
+    ],
+    "ExecutingCost": 4,
+    "TargetType": 3,
+    "TargetZone": 0
+  },
+  {
+    "Id": "TempoEnemySkill003",
+    "Name": "横扫节拍 · CD3",
+    "Description": "3回合后，对所有角色造成{A}点伤害。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 5, "is_aoe": true }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 4,
+    "TargetZone": 2
+  },
+  {
+    "Id": "TempoEnemySkill004",
+    "Name": "后排时针 · CD2",
+    "Description": "2回合后，对后排单体造成{A}点伤害。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 7, "is_aoe": false }
+    ],
+    "ExecutingCost": 2,
+    "TargetType": 3,
+    "TargetZone": 1
+  },
+  {
+    "Id": "TempoEnemySkill005",
+    "Name": "迟滞波 · CD3",
+    "Description": "3回合后，对所有角色造成{A}点伤害并[推迟]{T}回合。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 3, "is_aoe": true },
+      { "$type": "TimeShiftAllEffect", "EffectType": 2, "shift_value": 1 }
+    ],
+    "ExecutingCost": 3,
+    "TargetType": 4,
+    "TargetZone": 2
+  },
+  {
+    "Id": "TempoEnemySkill006",
+    "Name": "截止刻度 · CD4",
+    "Description": "4回合后，对后排单体造成{A}点伤害并[推迟]{T}回合。",
+    "Effects": [
+      { "$type": "AttackEffect", "EffectType": 0, "damage": 13, "is_aoe": false },
+      { "$type": "PushCollisionEffect", "EffectType": 2, "shift_value": 2, "collision_result": "None" }
+    ],
+    "ExecutingCost": 4,
+    "TargetType": 3,
+    "TargetZone": 1
+  }
+]

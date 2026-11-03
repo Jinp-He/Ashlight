@@ -24,6 +24,7 @@ public sealed partial class CharaterInfo : Luban.BeanBase
         { if(!_buf["Speed"].IsNumber) { throw new SerializationException(); }  Speed = _buf["Speed"]; }
         { if(!_buf["Draw"].IsNumber) { throw new SerializationException(); }  Draw = _buf["Draw"]; }
         { if(!_buf["Energy"].IsNumber) { throw new SerializationException(); }  Energy = _buf["Energy"]; }
+        { var _j = _buf["Trait"]; if (_j.Tag != JSONNodeType.None && _j.Tag != JSONNodeType.NullValue) { { if(!_j.IsString) { throw new SerializationException(); }  Trait = _j; } } else { Trait = null; } }
     }
 
     public static CharaterInfo DeserializeCharaterInfo(JSONNode _buf)
@@ -39,6 +40,7 @@ public sealed partial class CharaterInfo : Luban.BeanBase
     public readonly int Speed;
     public readonly int Draw;
     public readonly int Energy;
+    public readonly string Trait;
    
     public const int __ID__ = -1839130327;
     public override int GetTypeId() => __ID__;
@@ -60,6 +62,7 @@ public sealed partial class CharaterInfo : Luban.BeanBase
         + "Speed:" + Speed + ","
         + "Draw:" + Draw + ","
         + "Energy:" + Energy + ","
+        + "Trait:" + Trait + ","
         + "}";
     }
 }

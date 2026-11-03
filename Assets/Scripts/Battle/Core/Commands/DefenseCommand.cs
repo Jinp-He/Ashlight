@@ -1,4 +1,5 @@
 using Ashlight.Battle.Core.Data;
+using cfg;
 using UnityEngine;
 
 namespace Ashlight.Battle.Core.Commands
@@ -15,9 +16,19 @@ namespace Ashlight.Battle.Core.Commands
         public int DefenseValue { get; set; }
 
         /// <summary>
-        /// 是否按命中次数叠加（预留）
+        /// 是否按上一条伤害指令的命中次数叠加。PerHit 防御固定加给施法者自身。
         /// </summary>
         public bool PerHit { get; set; }
+
+        /// <summary>
+        /// 是否为群体护甲（对施法者所在阵营的全体生效）。玩家卡 TargetType=AllAlly 时置 true（如奥术护罩）。
+        /// </summary>
+        public bool IsAoe { get; set; }
+
+        /// <summary>
+        /// 群体护甲的目标分区限制（仅在 <see cref="IsAoe"/> 时生效）。默认 Any = 全体友军；Front/Back 只给某一区。
+        /// </summary>
+        public TargetZoneEnum TargetZone { get; set; } = TargetZoneEnum.Any;
 
         public DefenseCommand(int defenseValue, bool perHit = false)
         {
@@ -27,6 +38,34 @@ namespace Ashlight.Battle.Core.Commands
 
         public void Execute(BattleStateSnapshot state, string ownerId, string targetId)
         {
+            if (PerHit)
+            {
+                var owner = state.GetUnitById(ownerId);
+                if (owner == null || owner.IsDead)
+                {
+                    Debug.LogWarning($"[DefenseCommand] PerHit 施法者不存在或已死亡: {ownerId}");
+                    return;
+                }
+
+                int hitCount = Mathf.Max(0, state.LastDamageHitCount);
+                int totalDefense = DefenseValue * hitCount;
+                if (totalDefense <= 0)
+                {
+                    Debug.Log($"[DefenseCommand] {ownerId} 上一条伤害未命中目标，不获得 PerHit 护甲");
+                    return;
+                }
+
+                owner.AddDefense(totalDefense);
+                Debug.Log($"[DefenseCommand] {ownerId} 按 {hitCount} 次命中获得 {totalDefense} 点护甲");
+                return;
+            }
+
+            if (IsAoe)
+            {
+                ExecuteAoeDefense(state, ownerId);
+                return;
+            }
+
             // 如果没有指定目标，则对自己生效
             string actualTargetId = string.IsNullOrEmpty(targetId) ? ownerId : targetId;
 
@@ -47,6 +86,33 @@ namespace Ashlight.Battle.Core.Commands
             Debug.Log($"[DefenseCommand] {actualTargetId} 获得 {DefenseValue} 点护甲 (当前护甲: {target.Defense})");
         }
 
+        /// <summary>群体护甲：给施法者阵营（按分区过滤）的每名存活友军各加护甲。</summary>
+        private void ExecuteAoeDefense(BattleStateSnapshot state, string ownerId)
+        {
+            var owner = state.GetUnitById(ownerId);
+            if (owner == null)
+            {
+                Debug.LogWarning($"[DefenseCommand] AOE 施法者不存在: {ownerId}");
+                return;
+            }
+
+            var allies = owner.IsPlayerUnit
+                ? state.GetAlivePlayerUnits()
+                : state.GetAliveEnemyUnits();
+
+            // 分区过滤：Front 只护前排、Back 只护后排、Any 全体。strict=true：目标区无人则不回退全体。
+            var effectiveZone = TargetZone == TargetZoneEnum.Conditional
+                ? (owner.RowPosition == BattleRowPosition.FrontRow ? TargetZoneEnum.Front : TargetZoneEnum.Back)
+                : TargetZone;
+            allies = ZoneTargeting.FilterByZone(state, allies, effectiveZone, strict: true);
+
+            foreach (var ally in allies)
+            {
+                ally.AddDefense(DefenseValue);
+                Debug.Log($"[DefenseCommand] AOE: {ally.UnitId} 获得 {DefenseValue} 点护甲 (当前护甲: {ally.Defense})");
+            }
+        }
+
         public int GetPriority()
         {
             return 100; // Defense优先级最高
@@ -59,7 +125,7 @@ namespace Ashlight.Battle.Core.Commands
 
         public ICommand Clone()
         {
-            return new DefenseCommand(DefenseValue, PerHit);
+            return new DefenseCommand(DefenseValue, PerHit) { IsAoe = IsAoe, TargetZone = TargetZone };
         }
     }
 }

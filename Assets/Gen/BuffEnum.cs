@@ -105,6 +105,18 @@ namespace cfg
         /// 圣物
         /// </summary>
         Artifact = 22,
+        /// <summary>
+        /// 闪避
+        /// </summary>
+        Dodge = 23,
+        /// <summary>
+        /// 坚毅
+        /// </summary>
+        Resolve = 24,
+        /// <summary>
+        /// 士气
+        /// </summary>
+        Morale = 25,
     }
 
 } 

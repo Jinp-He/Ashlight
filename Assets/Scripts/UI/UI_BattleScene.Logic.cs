@@ -11,6 +11,7 @@ using Ashlight.Common.Utils;
 using Ashlight.Config;
 using Ashlight.Battle;
 using Ashlight.Battle.Core.Data;
+using Ashlight.Battle.Prototype;
 using Ashlight.State.Runtime;
 using Ashlight.Systems.Core;
 using Sirenix.OdinInspector;
@@ -40,6 +41,66 @@ namespace Scripts.UI
         [Tooltip("手牌间距")]
         private float cardSpacing = 10f;
 
+        [SerializeField]
+        [Tooltip("超过该数量后，根据手牌容器宽度自动压缩间距")]
+        [Min(1)]
+        private int handCompressionThreshold = 7;
+
+        [SerializeField]
+        [Tooltip("大量手牌重叠时允许的最小 Layout spacing")]
+        private float minimumCompressedHandSpacing = -100f;
+
+        [SerializeField]
+        [Tooltip("非当前行动角色手牌的紧凑间距（负值会使卡牌重叠）")]
+        private float inactiveHandSpacing = -85f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("非当前行动角色手牌区与当前角色手牌区之间保留的间隔")]
+        private float inactiveHandSideGap = 20f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("不同角色的侧边手牌组之间保留的间隔")]
+        private float inactiveHandOwnerGap = 20f;
+
+        [Header("卡牌流转动画")]
+        [SerializeField, LabelText("抽牌起始点")]
+        [Tooltip("抽牌动画的独立起始锚点；未配置时回退到 CardDeck")]
+        private RectTransform cardDrawStartPoint;
+
+        [SerializeField, LabelText("回收结束点")]
+        [Tooltip("结束回合回收动画的独立结束锚点；未配置时回退到 CardBin")]
+        private RectTransform cardRecycleEndPoint;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("卡牌从抽牌起点移动并放大到手牌区的时长；设为 0 可关闭动画")]
+        private float cardDrawDuration = 0.35f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("卡牌从手牌区移动并缩小到回收终点的时长；设为 0 可关闭动画")]
+        private float cardDiscardDuration = 0.35f;
+
+        [SerializeField, Range(0f, 0.2f)]
+        [Tooltip("连续抽牌的错峰间隔")]
+        private float cardDrawStagger = 0.1f;
+
+        [SerializeField, Range(0f, 0.2f)]
+        [Tooltip("结束回合时从右向左逐张回收的错峰间隔")]
+        private float cardRecycleStagger = 0.1f;
+
+        [SerializeField]
+        [Tooltip("抽牌落位期间使用的展开间距")]
+        private float expandedHandSpacing = 10f;
+
+        [SerializeField]
+        [Tooltip("全部抽完后自动收紧到的间距")]
+        private float compactHandSpacing = 5f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("从展开手牌收紧到紧凑模式的动画时长")]
+        private float handCompactDuration = 0.2f;
+
+        private const float CARD_FLOW_MIN_SCALE = 0.08f;
+
         [Header("单位预制体设置")]
         [SerializeField]
         [Tooltip("Character预制体")]
@@ -48,6 +109,15 @@ namespace Scripts.UI
         [SerializeField]
         [Tooltip("Enemy预制体")]
         private GameObject enemyPrefab;
+
+        [Header("敌人死亡退场")]
+        [SerializeField, Min(0f)]
+        [Tooltip("播放死亡动作后开始淡出的等待时间")]
+        private float enemyDeathHoldDuration = 0.55f;
+
+        [SerializeField, Min(0f)]
+        [Tooltip("敌人死亡淡出时间；设为0则立即消失")]
+        private float enemyDeathFadeDuration = 0.2f;
 
         [Header("时间轴设置")]
         [SerializeField]
@@ -67,11 +137,15 @@ namespace Scripts.UI
 
         [SerializeField]
         [Tooltip("测试用遭遇战ID（若 BattleManager.PendingEncounterId 有值则优先使用那个；testEncounterSequence 非空时也会被它覆盖）")]
-        private string testEncounterId = "E001";
+        private string testEncounterId = "M101";
 
         [SerializeField]
         [Tooltip("测试关卡推进序列。胜利后按当前关 Id 在数组中的下标 +1 取下一关。留空则不启用序列推进，回退到 testEncounterId")]
-        private string[] testEncounterSequence = new[] { "E001", "E002", "E003", "E004" };
+        private string[] testEncounterSequence =
+        {
+            "M101", "M102", "M103", "M104", "M105",
+            "W101", "W102", "W103", "W104"
+        };
 
         [SerializeField]
         [Tooltip("胜利后自动跳下一关（不弹胜利弹窗）。关闭则走 VictoryPanel 流程")]
@@ -94,6 +168,10 @@ namespace Scripts.UI
         [SerializeField]
         [Tooltip("战斗胜利弹窗（由用户在场景内手搭，挂 VictoryPanel 脚本后拖进来）")]
         private VictoryPanel victoryPanel;
+
+        [SerializeField]
+        [Tooltip("胜利面板 WinPanel（场景内 WinPanel 实例拖进来）。若已绑定则优先于 victoryPanel")]
+        private WinPanel winPanel;
 
         #endregion
 
@@ -142,16 +220,22 @@ namespace Scripts.UI
         /// </summary>
         private BattleAnimationHandler _animationHandler;
         private bool _isProcessingAtbTurn;
-        /// <summary>
-        /// 当前正在执行轨中的敌人 unitId 集合（支持多敌人同时在执行轨）
-        /// </summary>
-        private readonly HashSet<string> _enemiesInExecutionTrack = new HashSet<string>();
-        private bool _isProcessingPlayerExecutionTurn;
 
         /// <summary>
-        /// 当前规划回合内是否已打出过执行牌（用于 ATB 执行轨与手牌压制）
+        /// 当前回合内是否已打出过执行牌（用于手牌压制：一回合限一张执行牌）。
         /// </summary>
         private bool _playerPlayedExecutionCardThisAtbTurn;
+        private bool _isDealingHand;
+        private int _pendingDrawAnimations;
+        private int _drawSequenceVersion;
+        private Tween _handCompactTween;
+        private Coroutine _displayHandAfterRecycleCoroutine;
+        private bool _handLayoutSpacingCaptured;
+        private float _defaultHandLayoutSpacing;
+        private string _lastHandLayoutTurnUnitId;
+        private RectTransform _cardAnimationLayer;
+        private readonly Dictionary<CardViewController, Tween> _cardFlowTweens = new Dictionary<CardViewController, Tween>();
+        private readonly HashSet<string> _retiringEnemyIds = new HashSet<string>();
 
         #endregion
 
@@ -198,11 +282,49 @@ namespace Scripts.UI
             // 订阅战斗结束事件
             GameEvent.Subscribe<BattleEndedEvent>(OnBattleEnded);
 
+            // 订阅换位事件（MovePosition 效果驱动角色交换 sibling 顺序）
+            GameEvent.Subscribe<PositionSwappedEvent>(OnPositionSwapped);
+
             if (ATB != null)
             {
-                ATB.OnPlanningComplete += HandleAtbPlanningComplete;
-                ATB.OnExecutionComplete += HandleAtbExecutionComplete;
+                ATB.OnUnitTurn += HandleAtbUnitTurn;
+                ATB.OnObjectiveRoundAdvanced += HandleObjectiveRoundAdvanced;
+                // 演出闸门：上一个单位的战斗演出没播完，ATB 不开下一个单位的回合
+                ATB.AnimationBusyPredicate = () =>
+                    (_animationHandler != null && _animationHandler.IsAnimating) || IsCardFlowAnimating();
+                // ATB 节点在场景里是隐藏的（旧图标条已弃用），协程借本组件跑——
+                // 否则 TriggerNextUnit 退化为同步一帧跑完，节奏/闸门全部失效。
+                ATB.CoroutineHost = this;
             }
+
+            if (TurnOrderView != null)
+            {
+                // hover 行动顺序卡 → 战场上对应敌人亮选中圈
+                TurnOrderView.OnUnitHover = HandleTurnOrderUnitHover;
+            }
+        }
+
+        /// <summary>
+        /// hover 行动顺序卡的联动：点亮/熄灭战场上对应敌人的 Indicator。
+        /// 玩家单位暂不标记（需求只覆盖敌人）；已死亡/找不到的单位静默忽略。
+        /// </summary>
+        private void HandleTurnOrderUnitHover(string unitId, bool hovering)
+        {
+            if (string.IsNullOrEmpty(unitId)) return;
+
+            var enemy = FindEnemyByUnitId(unitId);
+            if (enemy == null) return;
+
+            if (hovering) enemy.ShowIndicator();
+            else enemy.HideIndicator();
+        }
+
+        /// <summary>
+        /// 客观回合推进（整排 slot 前进一格）：驱动游戏侧的逐客观回合效果——目前是全体闪避各掉 1 层。
+        /// </summary>
+        private void HandleObjectiveRoundAdvanced()
+        {
+            _battleManager?.DecayAllDodgeOneObjectiveRound();
         }
 
         /// <summary>
@@ -221,13 +343,26 @@ namespace Scripts.UI
         {
             if (ATB != null)
             {
+                // 【回合制说明】规划轨和执行轨都改为离散 Slots 队列，由 TriggerNextUnit() 统一驱动。
+                // ATB 始终 IsPaused=true，因此此 Tick 实际是空操作（保留仅为兼容旧实时模式）。
                 ATB.Tick(Time.deltaTime);
             }
+
+            // 行动顺序视图每帧同步排序
+            TurnOrderView?.RefreshOrder();
 
             string currentTurnUnitId = _battleManager?.CurrentState?.CurrentTurnUnitId;
             if (!string.IsNullOrEmpty(currentTurnUnitId))
             {
                 UpdateEnergyBarByUnitId(currentTurnUnitId);
+            }
+
+            // 手牌会同时预览全队下一手；轮到新角色时，把该角色的牌恢复到主区域，
+            // 其余角色的牌收拢到侧边。只在实际切换时重排，避免每帧触发布局重建。
+            if (_lastHandLayoutTurnUnitId != currentTurnUnitId)
+            {
+                _lastHandLayoutTurnUnitId = currentTurnUnitId;
+                UpdateHandLayout();
             }
 
             // 监听空格键触发时间轴前进
@@ -242,6 +377,16 @@ namespace Scripts.UI
         /// </summary>
         private void OnDestroy()
         {
+            // SetUpdate(true) 的 UI 流转动画不依赖 Time.timeScale；场景销毁时必须主动停止，
+            // 以免延迟回调访问已被回收的对象池。
+            foreach (var tween in _cardFlowTweens.Values.ToList())
+                tween.Kill();
+            _cardFlowTweens.Clear();
+
+            // IntentionView 的静态解析器捕获本场战斗实例，离场时必须释放。
+            IntentionView.TargetTransformResolver = null;
+            IntentionView.PlayerTurnActivePredicate = null;
+
             // 取消订阅事件
             GameEvent.Unsubscribe<EnemyIntentionSelectedEvent>(OnEnemyIntentionSelected);
             GameEvent.Unsubscribe<AttackExecutedEvent>(OnAttackExecuted);
@@ -251,11 +396,13 @@ namespace Scripts.UI
             GameEvent.Unsubscribe<BeforeTimelineAdvanceEvent>(OnBeforeTimelineAdvance);
             GameEvent.Unsubscribe<AfterTimelineAdvanceEvent>(OnAfterTimelineAdvance);
             GameEvent.Unsubscribe<BattleEndedEvent>(OnBattleEnded);
+            GameEvent.Unsubscribe<PositionSwappedEvent>(OnPositionSwapped);
 
             if (ATB != null)
             {
-                ATB.OnPlanningComplete -= HandleAtbPlanningComplete;
-                ATB.OnExecutionComplete -= HandleAtbExecutionComplete;
+                ATB.OnUnitTurn -= HandleAtbUnitTurn;
+                ATB.OnObjectiveRoundAdvanced -= HandleObjectiveRoundAdvanced;
+                ATB.OnIconRemoved -= OnAtbIconRemoved;
             }
 
             // 移除按钮监听
@@ -309,11 +456,75 @@ namespace Scripts.UI
             // 创建玩家和敌人的UI
             CreateBattleUnits();
 
+            // 悬停敌人意图时，抛物线需要把「锁定目标 UnitId」解析为角色 UI 位置：注入解析器。
+            IntentionView.TargetTransformResolver = id =>
+            {
+                var ch = FindCharacterByUnitId(id);
+                return ch != null ? ch.transform : null;
+            };
+            IntentionView.PlayerTurnActivePredicate = IsPlayerTurnActive;
+
+            // 新战斗开始：复位升级流程相关 UI（隐藏经验条、恢复手牌区、收起升级面板）
+            ResetUpgradeUIForNewBattle();
+
             // 初始化ATB图标（按单位速度决定初始位置）
             if (ATB != null && _battleManager != null && _battleManager.CurrentState != null)
             {
                 ATB.InitializeByUnits(_battleManager.CurrentState.PlayerUnits, _battleManager.CurrentState.EnemyUnits);
-                ATB.Resume();
+
+                // 【死亡保护】注入死亡判定，使 ATB 推进队列时能跳过/移除死亡单位的图标，
+                // 避免单位死亡后图标残留导致 TriggerNextUnit 反复触发死亡单位回合卡死。
+                ATB.IsUnitDeadPredicate = id =>
+                {
+                    var u = _battleManager?.CurrentState?.GetUnitById(id);
+                    return u == null || u.IsDead;
+                };
+
+                // ATB 图标被移除时，同步移除行动顺序视图（卡牌区域）中对应的卡片，
+                // 保证死亡单位的卡片不会残留在卡牌区域。
+                ATB.OnIconRemoved -= OnAtbIconRemoved;
+                ATB.OnIconRemoved += OnAtbIconRemoved;
+
+                // 初始化行动顺序视图（需在 TriggerNextUnit 之前，确保卡片已创建好）
+                if (TurnOrderView != null)
+                {
+                    TurnOrderView.Initialize(
+                        _battleManager.CurrentState.PlayerUnits,
+                        _battleManager.CurrentState.EnemyUnits);
+                }
+
+                // 【公共回合镜像】开局把调度同步进快照（CurrentRound / 各单位 NextActionRound），
+                // 供 Core 命令查询「当前回合的敌人」。之后每个原子回合开始时都会再同步。
+                ATB.SyncScheduleToState(_battleManager.CurrentState);
+
+                // 【天气】把本场天气挂进公共回合时钟（虚拟单位·第三方阵营，首次结算=第 Period 回合），
+                // 并做开场预告（TurnOrderView 雷暴格 / 常驻角标 / 开场横幅）。
+                var weather = _battleManager.CurrentWeather;
+                if (weather != null)
+                {
+                    ATB.AddWeatherIcon(weather.IconPath, weather.Period);
+                    TurnOrderView?.SetWeather(weather);
+                    ShowWeatherAnnouncement(weather);
+                    ATB.SyncScheduleToState(_battleManager.CurrentState);
+                }
+
+                // 【回合制】暂停 ATB 后立即触发第一个单位的回合，无需等待实时推进
+                ATB.Pause();
+
+                // 【公共回合制】敌人开局种子回合 = Speed（由 InitializeByUnits 设定），我方 = 第 1 回合。
+                // 这里只为每个敌人预告首次意图（telegraph，供行动顺序视图显示），不做任何排队；
+                // 轮到敌人回合（第 Speed 个公共回合）时才结算。
+                var bootstrapEnemies = _battleManager.CurrentState.EnemyUnits;
+                if (bootstrapEnemies != null)
+                {
+                    foreach (var enemy in bootstrapEnemies)
+                    {
+                        if (enemy == null || enemy.IsDead) continue;
+                        DeclareEnemyIntent(enemy.UnitId);
+                    }
+                }
+
+                ATB.TriggerNextUnit();
             }
 
             // 创建时间轴UI
@@ -374,6 +585,14 @@ namespace Scripts.UI
         {
             Debug.Log("[UI_BattleScene] 使用测试数据初始化战斗");
 
+            // 测试期：仅在「本次 PlayMode 首次进入战斗」时把角色重建为 Lv1 + BaseDeck，
+            // 同一次运行内的后续战斗沿用（经验/卡组累积），下次 PlayMode 再重置。
+            // 判定：GameManager 是 DontDestroyOnLoad，跨场景重载存活，本次为空=本次运行首次。
+            bool firstBattleThisSession = GameManager.Instance == null;
+            GameManager.EnsureInstance();
+            if (firstBattleThisSession)
+                Ashlight.Systems.Character.CharacterSystem.InitializeCharacters(unlockFirst: true);
+
             // 创建测试用的角色列表（包含Rocket、Irene、Zhouzhou）
             var testCharacters = new List<CharacterEnum>
             {
@@ -415,8 +634,51 @@ namespace Scripts.UI
                 return;
             }
 
-            // 1. 将当前 UI 层手牌移到弃牌堆（而非销毁）
-            _cardPoolManager.ClearHandCards();
+            // 同一批手牌可能在回合切换的多个 UI 刷新入口中被请求显示。
+            // 回收尚未结束时，等待中的协程会读取最新数据；抽牌尚未结束时，
+            // 若 UI 已经代表当前数据，则不能再次回收并从起点重播。
+            if (_displayHandAfterRecycleCoroutine != null || IsCurrentHandAlreadyBeingDrawn())
+                return;
+
+            // 1. 将当前 UI 层手牌送入弃牌堆（而非销毁）
+            // 数据层在此之前已经完成换手牌；UI 仍保留旧牌一小段时间，便于玩家看清流向。
+            float recycleDuration = AnimateAllHandCardsToDiscard();
+            if (recycleDuration > 0f)
+            {
+                if (_displayHandAfterRecycleCoroutine != null)
+                    StopCoroutine(_displayHandAfterRecycleCoroutine);
+                _displayHandAfterRecycleCoroutine = StartCoroutine(DisplayCurrentHandAfterRecycle(recycleDuration));
+                return;
+            }
+
+            DisplayCurrentHandCards();
+        }
+
+        private bool IsCurrentHandAlreadyBeingDrawn()
+        {
+            if (_pendingDrawAnimations <= 0 || _battleManager?.CurrentState?.DeckSystem?.Hand == null)
+                return false;
+
+            var dataIds = new HashSet<string>(_battleManager.CurrentState.DeckSystem.Hand
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+            var viewIds = new HashSet<string>(_handCards
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+
+            return dataIds.Count == viewIds.Count && dataIds.SetEquals(viewIds);
+        }
+
+        private IEnumerator DisplayCurrentHandAfterRecycle(float delay)
+        {
+            yield return new WaitForSecondsRealtime(delay);
+            _displayHandAfterRecycleCoroutine = null;
+            DisplayCurrentHandCards();
+        }
+
+        /// <summary>回收序列完成后，按当前数据层手牌建立并播放抽牌序列。</summary>
+        private void DisplayCurrentHandCards()
+        {
 
             // 2. 从数据层获取当前手牌
             var handCards = _battleManager.CurrentState.DeckSystem.Hand;
@@ -427,6 +689,7 @@ namespace Scripts.UI
             }
 
             // 3. 从池中获取对应的 CardViewController
+            var drawnCards = new List<CardViewController>();
             foreach (var cardState in handCards)
             {
                 if (cardState == null)
@@ -435,19 +698,22 @@ namespace Scripts.UI
                     continue;
                 }
 
-                var cardView = _cardPoolManager.GetCard(cardState.InstanceId);
+                // 运行时产出的卡（如 AddToHand 生成的飞刀）不在初始池中，GetOrCreateCard 会按需补建 UI
+                var cardView = _cardPoolManager.GetOrCreateCard(cardState);
                 if (cardView != null)
                 {
                     _cardPoolManager.MoveToHand(cardView);
+                    drawnCards.Add(cardView);
                 }
                 else
                 {
-                    Debug.LogWarning($"[UI_BattleScene] 池中未找到卡牌: {cardState.InstanceId} (CardId: {cardState.CardId})");
+                    Debug.LogWarning($"[UI_BattleScene] 无法获取/创建卡牌 UI: {cardState.InstanceId} (CardId: {cardState.CardId})");
                 }
             }
 
             // 更新手牌布局
             UpdateHandLayout();
+            AnimateDrawCards(drawnCards);
 
             Debug.Log($"[UI_BattleScene] 显示手牌完成: {_handCards.Count} 张");
         }
@@ -478,17 +744,15 @@ namespace Scripts.UI
         /// </summary>
         private void CreatePlayerCharacters()
         {
-            if (PlayerPosition == null)
-            {
-                Debug.LogError("[UI_BattleScene] PlayerPosition未绑定");
-                return;
-            }
-
             if (characterPrefab == null)
             {
                 Debug.LogError("[UI_BattleScene] Character预制体未设置");
                 return;
             }
+
+            // 两区容器：确保各自有 HorizontalLayoutGroup + ContentSizeFitter（缺失才补，不覆盖场景设置）
+            EnsureRowLayout(PlayerFrontRow);
+            EnsureRowLayout(PlayerBackRow);
 
             var playerUnits = _battleManager.CurrentState.PlayerUnits;
             Debug.Log($"[UI_BattleScene] 创建 {playerUnits.Count} 个玩家角色UI");
@@ -496,9 +760,16 @@ namespace Scripts.UI
             for (int i = 0; i < playerUnits.Count; i++)
             {
                 var unitState = playerUnits[i];
-                
-                // 实例化Character预制体
-                GameObject characterObj = Instantiate(characterPrefab, PlayerPosition);
+
+                // 按单位显式前后排(RowPosition)放入对应容器；由容器的 HLG 负责排布，不再手动摆位
+                RectTransform parent = ResolveRowParent(unitState);
+                if (parent == null)
+                {
+                    Debug.LogError("[UI_BattleScene] 前后排容器与 PlayerPosition 均未绑定");
+                    return;
+                }
+
+                GameObject characterObj = Instantiate(characterPrefab, parent);
                 Character character = characterObj.GetComponent<Character>();
 
                 if (character == null)
@@ -508,22 +779,87 @@ namespace Scripts.UI
                     continue;
                 }
 
-                // 使用UnitState初始化Character
                 character.Initialize(unitState);
-
-                // 设置位置（如果有多个角色，可以排列）
-                RectTransform rectTransform = characterObj.GetComponent<RectTransform>();
-                if (rectTransform != null && playerUnits.Count > 1)
-                {
-                    // 水平排列多个角色
-                    float spacing = 200f; // 角色之间的间距
-                    float totalWidth = (playerUnits.Count - 1) * spacing;
-                    float startX = -totalWidth / 2f;
-                    rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
-                }
-
                 _unitUIManager.RegisterCharacter(character);
-                Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId})");
+                Debug.Log($"[UI_BattleScene] 创建玩家角色: {unitState.UnitId} ({unitState.ConfigId}) -> {parent.name}");
+            }
+
+            // Instantiate 到 HLG 后不会自动重排，强制立即重建两区（及父级 PlayerPosition）布局
+            RebuildRowLayout();
+        }
+
+        /// <summary>强制立即重建前后排容器（及父级 PlayerPosition）的布局——HLG 加入子物体后需手动触发。</summary>
+        private void RebuildRowLayout()
+        {
+            if (PlayerFrontRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerFrontRow);
+            if (PlayerBackRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerBackRow);
+            if (PlayerPosition != null) LayoutRebuilder.ForceRebuildLayoutImmediate(PlayerPosition);
+        }
+
+        /// <summary>按单位当前前后排返回对应容器：前排→PlayerFrontRow，后排→PlayerBackRow；容器缺失时回退 PlayerPosition。</summary>
+        private RectTransform ResolveRowParent(UnitState unit)
+        {
+            bool front = unit != null && _battleManager.CurrentState.IsFrontRow(unit);
+            RectTransform target = front ? PlayerFrontRow : PlayerBackRow;
+            return target != null ? target : PlayerPosition;
+        }
+
+        /// <summary>确保前后排容器有水平布局 + ContentSizeFitter（仅在缺失时添加，尊重场景已有设置）。</summary>
+        private void EnsureRowLayout(RectTransform row)
+        {
+            if (row == null) return;
+
+            if (row.GetComponent<HorizontalLayoutGroup>() == null)
+            {
+                var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+                hlg.childForceExpandWidth = false;
+                hlg.childForceExpandHeight = false;
+                hlg.childControlWidth = false;
+                hlg.childControlHeight = false;
+            }
+
+            if (row.GetComponent<ContentSizeFitter>() == null)
+            {
+                var csf = row.gameObject.AddComponent<ContentSizeFitter>();
+                csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            }
+        }
+
+        /// <summary>
+        /// 换位事件处理：交换两名角色在 HorizontalLayoutGroup 里的 sibling 顺序，由 layout 完成实际重排。
+        /// 逻辑层已交换好二者的 RowPosition（唯一真相源），这里只做视觉呈现。
+        /// 注意：HorizontalLayoutGroup 默认瞬间重排；如需缓动要另做（临时脱离 layout 再 tween）。
+        /// </summary>
+        private void OnPositionSwapped(PositionSwappedEvent e)
+        {
+            if (e.IsPrediction) return; // 预解算不移动
+
+            // 独立移动：UnitIdA 必移动；UnitIdB 可空（旧的双人换位才有两个）
+            var a = _unitUIManager?.FindCharacter(e.UnitIdA);
+            if (a != null) ReparentToRow(a);
+
+            var b = string.IsNullOrEmpty(e.UnitIdB) ? null : _unitUIManager?.FindCharacter(e.UnitIdB);
+            if (b != null) ReparentToRow(b);
+
+            if (a == null && b == null) return;
+            RebuildRowLayout(); // 移动/换位后强制重排两区
+
+            // 站位变化会改变条件牌（SelfInFrontRow/SelfInBackRow 等）的判定 → 刷新手牌条件描边
+            RefreshHandEnergyAffordability();
+
+            Debug.Log($"[UI_BattleScene] 移动重排 {e.UnitIdA}{(string.IsNullOrEmpty(e.UnitIdB) ? "" : " <-> " + e.UnitIdB)}");
+        }
+
+        /// <summary>把角色 UI 重新挂到其当前前后排对应的容器下（HLG 负责实际排布）。</summary>
+        private void ReparentToRow(Character character)
+        {
+            var unit = character?.GetUnitState();
+            if (unit == null) return;
+
+            RectTransform parent = ResolveRowParent(unit);
+            if (parent != null && character.transform.parent != parent)
+            {
+                character.transform.SetParent(parent, false);
             }
         }
 
@@ -532,9 +868,12 @@ namespace Scripts.UI
         /// </summary>
         private void CreateEnemies()
         {
-            if (EnemyPostion == null)
+            // 与玩家侧同构：有前后排容器则按 RowPosition 分区挂载；
+            // 容器未绑定（如 TestScene）时回退到旧的 EnemyPostion 单容器手动排布。
+            bool hasRowContainers = EnemyFrontRow != null && EnemyBackRow != null;
+            if (!hasRowContainers && EnemyPostion == null)
             {
-                Debug.LogError("[UI_BattleScene] EnemyPostion未绑定");
+                Debug.LogError("[UI_BattleScene] EnemyFrontRow/EnemyBackRow 与 EnemyPostion 均未绑定");
                 return;
             }
 
@@ -544,15 +883,21 @@ namespace Scripts.UI
                 return;
             }
 
+            if (hasRowContainers)
+            {
+                EnsureRowLayout(EnemyFrontRow);
+                EnsureRowLayout(EnemyBackRow);
+            }
+
             var enemyUnits = _battleManager.CurrentState.EnemyUnits;
-            Debug.Log($"[UI_BattleScene] 创建 {enemyUnits.Count} 个敌人UI");
+            Debug.Log($"[UI_BattleScene] 创建 {enemyUnits.Count} 个敌人UI（分区容器={hasRowContainers}）");
 
             for (int i = 0; i < enemyUnits.Count; i++)
             {
                 var unitState = enemyUnits[i];
-                
-                // 实例化Enemy预制体
-                GameObject enemyObj = Instantiate(enemyPrefab, EnemyPostion);
+
+                RectTransform parent = hasRowContainers ? ResolveEnemyRowParent(unitState) : EnemyPostion;
+                GameObject enemyObj = Instantiate(enemyPrefab, parent);
                 Enemy enemy = enemyObj.GetComponent<Enemy>();
 
                 if (enemy == null)
@@ -565,20 +910,43 @@ namespace Scripts.UI
                 // 使用UnitState初始化Enemy
                 enemy.Initialize(unitState);
 
-                // 设置位置（如果有多个敌人，可以排列）
-                RectTransform rectTransform = enemyObj.GetComponent<RectTransform>();
-                if (rectTransform != null && enemyUnits.Count > 1)
+                // 回退路径：单容器时手动水平排列多个敌人
+                if (!hasRowContainers)
                 {
-                    // 水平排列多个敌人
-                    float spacing = 200f; // 敌人之间的间距
-                    float totalWidth = (enemyUnits.Count - 1) * spacing;
-                    float startX = -totalWidth / 2f;
-                    rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
+                    RectTransform rectTransform = enemyObj.GetComponent<RectTransform>();
+                    if (rectTransform != null && enemyUnits.Count > 1)
+                    {
+                        float spacing = 200f; // 敌人之间的间距
+                        float totalWidth = (enemyUnits.Count - 1) * spacing;
+                        float startX = -totalWidth / 2f;
+                        rectTransform.anchoredPosition = new Vector2(startX + i * spacing, 0f);
+                    }
                 }
 
                 _unitUIManager.RegisterEnemy(enemy);
-                Debug.Log($"[UI_BattleScene] 创建敌人: {unitState.UnitId} ({unitState.ConfigId})");
+                Debug.Log($"[UI_BattleScene] 创建敌人: {unitState.UnitId} ({unitState.ConfigId}) -> {parent.name}");
             }
+
+            if (hasRowContainers)
+            {
+                RebuildEnemyRowLayout();
+            }
+        }
+
+        /// <summary>按敌人当前前后排返回对应容器：前排→EnemyFrontRow，后排→EnemyBackRow；容器缺失时回退 EnemyPostion。</summary>
+        private RectTransform ResolveEnemyRowParent(UnitState unit)
+        {
+            bool front = unit != null && _battleManager.CurrentState.IsFrontRow(unit);
+            RectTransform target = front ? EnemyFrontRow : EnemyBackRow;
+            return target != null ? target : EnemyPostion;
+        }
+
+        /// <summary>强制立即重建敌方前后排容器（及父级 EnemyPostion）的布局——HLG 加入子物体后需手动触发。</summary>
+        private void RebuildEnemyRowLayout()
+        {
+            if (EnemyFrontRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyFrontRow);
+            if (EnemyBackRow != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyBackRow);
+            if (EnemyPostion != null) LayoutRebuilder.ForceRebuildLayoutImmediate(EnemyPostion);
         }
 
         /// <summary>
@@ -586,6 +954,7 @@ namespace Scripts.UI
         /// </summary>
         private void ClearBattleUnits()
         {
+            _retiringEnemyIds.Clear();
             _unitUIManager.ClearAll();
         }
 
@@ -611,6 +980,158 @@ namespace Scripts.UI
                     enemy.UpdateFromUnitState();
                 }
             }
+
+            // 单位死亡后，立即把它从卡牌区域（行动顺序视图）与 ATB 队列移除，避免残留。
+            RemoveDeadUnitsFromTurnViews();
+
+            // 【动态索敌·预告期】玩家移动/站位变化后，重解敌人意图锁定目标并刷新意图指示/抛物线。
+            RefreshEnemyIntentTargets();
+        }
+
+        /// <summary>
+        /// 重解所有待执行敌人意图的锁定目标（原目标离开目标区 → 区内改选 / 空区清空），
+        /// 并把发生变化的敌人意图指示（坐标高亮 + 悬停抛物线目标 / 思考态）刷新为新目标。
+        /// </summary>
+        private void RefreshEnemyIntentTargets()
+        {
+            if (_battleManager?.CurrentState == null) return;
+
+            var changed = _battleManager.RefreshPendingEnemyIntentTargets();
+            if (changed == null || changed.Count == 0) return;
+
+            foreach (var kv in changed)
+            {
+                string enemyId = kv.Key;
+                if (!_battleManager.TryGetPendingEnemyIntent(enemyId, out var skill, out var targetUnitId)) continue;
+                ApplyEnemyIntentDisplay(enemyId, skill, targetUnitId);
+            }
+        }
+
+        /// <summary>
+        /// 统一设置某敌人的意图显示（意图指示物 + 行动顺序卡攻击图标）。
+        /// 无合法目标（目标区空排、未锁到人）→ 显示思考态 intention_think（并撤下攻击图标），命中时会落空 miss；
+        /// 否则 → 显示攻击意图（图标/数值/坐标高亮 + 悬停抛物线目标）。
+        /// </summary>
+        private void ApplyEnemyIntentDisplay(string unitId, EnemySkillInfo skill, string targetUnitId)
+        {
+            var enemyUi = FindEnemyByUnitId(unitId);
+
+            if (string.IsNullOrEmpty(targetUnitId))
+            {
+                // 找不到合法目标 → 思考态；行动顺序卡撤下攻击图标（仍在执行轨、到点会 miss）
+                enemyUi?.SetIntentionThinking();
+                TurnOrderView?.SetExecuting(unitId, false);
+                return;
+            }
+
+            enemyUi?.SetIntentionExecuting(skill, targetUnitId);
+            TurnOrderView?.SetExecuting(unitId, true, skill);
+        }
+
+        /// <summary>
+        /// 扫描当前战场，移除所有死亡单位在 ATB 队列与行动顺序视图（卡牌区域）中的残留。
+        /// 由 UpdateAllUnitsDisplay 在每次状态变化后调用，保证死亡单位的卡片即时消失。
+        /// </summary>
+        private void RemoveDeadUnitsFromTurnViews()
+        {
+            var state = _battleManager?.CurrentState;
+            if (state == null) return;
+
+            RemoveDeadUnitsFrom(state.PlayerUnits);
+            RemoveDeadUnitsFrom(state.EnemyUnits);
+        }
+
+        private void RemoveDeadUnitsFrom(IReadOnlyList<UnitState> units)
+        {
+            if (units == null) return;
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                var u = units[i];
+                if (u == null || !u.IsDead) continue;
+
+                // RemoveUnitIcon 会触发 OnIconRemoved → OnAtbIconRemoved，同步移除卡片；
+                // 两个方法都对不存在的 unitId 静默无操作，可安全重复调用。
+                ATB?.RemoveUnitIcon(u.UnitId);
+                TurnOrderView?.RemoveUnit(u.UnitId);
+
+                // 施法者倒下 → 其在轨引线全部作废（规则书：结算前被击倒则取消），图标一并移除。
+                if (u.IsPlayerUnit && _battleManager != null)
+                {
+                    _battleManager.CancelPendingCharges(u.UnitId);
+                    foreach (var castId in _battleManager.CancelPendingCasts(u.UnitId))
+                    {
+                        ATB?.RemoveUnitIcon(castId);
+                        TurnOrderView?.RemoveCast(castId);
+                    }
+                }
+
+                // 移除该单位残留在敌人共享时间轴上的时间槽卡牌（仅敌人会有）。
+                _enemyTimeline?.RemoveEnemyTimeSlotsByOwner(u.UnitId);
+
+                if (!u.IsPlayerUnit)
+                {
+                    BeginEnemyDeathRetirement(u.UnitId);
+                }
+            }
+        }
+
+        private void BeginEnemyDeathRetirement(string unitId)
+        {
+            if (string.IsNullOrEmpty(unitId) || _retiringEnemyIds.Contains(unitId))
+                return;
+
+            Enemy enemy = FindEnemyByUnitId(unitId);
+            if (enemy == null)
+                return;
+
+            _retiringEnemyIds.Add(unitId);
+            StartCoroutine(RetireEnemyAfterDeath(enemy));
+        }
+
+        private IEnumerator RetireEnemyAfterDeath(Enemy enemy)
+        {
+            if (enemy == null)
+                yield break;
+
+            enemy.ClearIntention();
+            enemy.PlayDeathAnimation();
+            enemy.enabled = false;
+
+            CanvasGroup group = enemy.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = enemy.gameObject.AddComponent<CanvasGroup>();
+            }
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            if (enemyDeathHoldDuration > 0f)
+            {
+                yield return new WaitForSeconds(enemyDeathHoldDuration);
+            }
+
+            if (enemy != null && enemyDeathFadeDuration > 0f)
+            {
+                Tween fade = group.DOFade(0f, enemyDeathFadeDuration).SetEase(Ease.InQuad);
+                yield return fade.WaitForCompletion();
+            }
+
+            if (enemy == null)
+                yield break;
+
+            _unitUIManager.UnregisterEnemy(enemy);
+            enemy.gameObject.SetActive(false);
+            Destroy(enemy.gameObject);
+            RebuildEnemyRowLayout();
+        }
+
+        /// <summary>
+        /// ATB 图标被移除时的回调：同步移除行动顺序视图中的对应卡片。
+        /// </summary>
+        private void OnAtbIconRemoved(string unitId)
+        {
+            TurnOrderView?.RemoveUnit(unitId);
         }
 
         /// <summary>
@@ -948,7 +1469,7 @@ namespace Scripts.UI
                 return;
             }
 
-            _cardPoolManager.MoveToDiscard(card);
+            AnimateCardToDiscard(card);
             UpdateHandLayout();
             // 出牌后能量减少，剩余手牌可能转为能量不足 —— 立即刷新变色
             RefreshHandEnergyAffordability();
@@ -956,8 +1477,60 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 玩家打出执行牌：挂起动作、压暗其余执行牌、并立即将 ATB 图标移入执行轨。
-        /// ATB 此时处于 Pause 状态，图标会冻在执行轨起点，等玩家结束回合 Resume 后才开始移动。
+        /// 从数据层补齐手牌 UI：为 DeckSystem.Hand 中尚未显示的卡牌（如打牌时 AddToHand 产出的 token）创建/取出 UI 并移入手牌。
+        /// 增量式，不销毁现有手牌 view；出牌后产出卡牌时调用。
+        /// </summary>
+        public void RefreshHandFromData()
+        {
+            if (_battleManager?.CurrentState?.DeckSystem == null)
+            {
+                return;
+            }
+
+            var handData = _battleManager.CurrentState.DeckSystem.Hand;
+            if (handData == null)
+            {
+                return;
+            }
+
+            var shownInstanceIds = new HashSet<string>();
+            foreach (var view in _cardPoolManager.HandCards)
+            {
+                if (view != null)
+                {
+                    shownInstanceIds.Add(view.InstanceId);
+                }
+            }
+
+            var drawnCards = new List<CardViewController>();
+            foreach (var cardState in handData)
+            {
+                if (cardState == null || shownInstanceIds.Contains(cardState.InstanceId))
+                {
+                    continue;
+                }
+
+                var cardView = _cardPoolManager.GetOrCreateCard(cardState);
+                if (cardView != null)
+                {
+                    _cardPoolManager.MoveToHand(cardView);
+                    drawnCards.Add(cardView);
+                    Debug.Log($"[UI_BattleScene] 补齐产出卡牌到手牌: {cardState.CardId} ({cardState.InstanceId})");
+                }
+            }
+
+            if (drawnCards.Count > 0)
+            {
+                UpdateHandLayout();
+                AnimateDrawCards(drawnCards);
+                RefreshHandEnergyAffordability();
+            }
+        }
+
+        /// <summary>
+        /// 玩家打出执行牌：挂起动作；达到该角色本回合执行牌上限后，压暗其余执行牌。
+        /// 【真延迟】把引线（BattleManager.LastQueuedCast）作为虚拟单位挂进 ATB 时钟，
+        /// 到 ResolveRound 回合由 ResolveCastAtomicTurn 结算；行动顺序轴上可见卡牌图标。
         /// </summary>
         public void OnPlayerPlayedExecutionCard(CardViewController playedCard, string ownerUnitId)
         {
@@ -967,12 +1540,42 @@ namespace Scripts.UI
             }
 
             _playerPlayedExecutionCardThisAtbTurn = true;
-            ApplyHandExecutionSuppressionExcept(playedCard);
-
-            if (ATB != null && _battleManager != null)
+            if (_battleManager == null || _battleManager.GetRemainingExecutionSlots(ownerUnitId) <= 0)
             {
-                int executingCost = _battleManager.GetPendingPlayerExecutionCost(ownerUnitId);
-                ATB.MoveToExecutingTrack(ownerUnitId, executingCost);
+                ApplyHandExecutionSuppressionExcept(playedCard);
+            }
+
+            var cast = _battleManager?.LastQueuedCast;
+            if (cast != null && ATB != null)
+            {
+                string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cast.Card.Id);
+                string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
+                ATB.AddCastIcon(cast.CastId, iconPath, cast.ResolveRound);
+                TurnOrderView?.SetCast(cast.CastId, cast.Card);
+                TurnOrderView?.RefreshOrder();
+            }
+        }
+
+        /// <summary>玩家开始蓄力：本次行动内压暗其余蓄力牌。</summary>
+        public void OnPlayerPlayedChargeCard(CardViewController playedCard)
+        {
+            if (playedCard == null)
+            {
+                return;
+            }
+
+            foreach (var c in _handCards)
+            {
+                if (c == null || c == playedCard)
+                {
+                    continue;
+                }
+
+                var info = c.GetCurrentCard();
+                if (info != null && info.CardType == CardTypeEnum.Charge)
+                {
+                    c.SetExecutionSuppressed(true);
+                }
             }
         }
 
@@ -1078,9 +1681,87 @@ namespace Scripts.UI
             if (CardContainer == null || _handCards.Count == 0)
                 return;
 
-            var sortedCards = _handCards.OrderBy(GetHandSortKey).ToList();
+            // 抽牌/弃牌动画中的卡会暂时移动到独立动画层；此时不能改写它们的局部坐标，
+            // 只布局已经回到 CardContainer 的卡牌。
+            var sortedCards = _handCards
+                .Where(card => card != null && card.transform.parent == CardContainer.transform)
+                .OrderBy(GetHandSortKey)
+                .ToList();
+            if (sortedCards.Count == 0)
+                return;
 
-            float totalWidth = (sortedCards.Count - 1) * cardSpacing;
+            // BattleScene 的 CardContainer 自带 HorizontalLayoutGroup；优先调整它的 spacing，
+            // 否则 LayoutGroup 会在本帧末覆盖下面手动设置的 anchoredPosition。
+            var layout = CardContainer.GetComponent<HorizontalLayoutGroup>();
+            if (layout != null)
+            {
+                if (!_handLayoutSpacingCaptured)
+                {
+                    _defaultHandLayoutSpacing = layout.spacing;
+                    _handLayoutSpacingCaptured = true;
+                }
+
+                if (TryGetTurnFocusedHandGroups(sortedCards, out var currentTurnCards, out var inactiveCards))
+                {
+                    LayoutTurnFocusedHand(layout, currentTurnCards, inactiveCards);
+                    return;
+                }
+
+                // 没有其他角色的预览牌时继续使用场景原本的 LayoutGroup 排版。
+                layout.enabled = true;
+
+                for (int i = 0; i < sortedCards.Count; i++)
+                {
+                    if (sortedCards[i] != null)
+                        sortedCards[i].transform.SetSiblingIndex(i);
+                }
+
+                float spacing = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
+                if (sortedCards.Count > handCompressionThreshold)
+                {
+                    float availableWidth = Mathf.Max(0f,
+                        CardContainer.rectTransform.rect.width - layout.padding.left - layout.padding.right);
+                    float cardsWidth = 0f;
+                    foreach (var card in sortedCards)
+                    {
+                        var rect = card != null ? card.transform as RectTransform : null;
+                        if (rect != null) cardsWidth += rect.rect.width;
+                    }
+
+                    // HorizontalLayoutGroup 只认识 CardViewController 根节点的宽度（当前为 120），
+                    // 但实际卡面 Card 缩放后的可见宽度更大（当前约为 175）。
+                    // 把首张卡左侧、末张卡右侧超出根节点的部分也计入，否则算出的 spacing
+                    // 虽然变小了，整排可见卡面仍会超出 CardContainer。
+                    float outerVisualOverflow =
+                        GetHandCardVisualOverflow(sortedCards[0], true) +
+                        GetHandCardVisualOverflow(sortedCards[sortedCards.Count - 1], false);
+                    float fitSpacing =
+                        (availableWidth - cardsWidth - outerVisualOverflow) /
+                        Mathf.Max(1, sortedCards.Count - 1);
+                    spacing = Mathf.Clamp(fitSpacing, minimumCompressedHandSpacing, spacing);
+                }
+
+                layout.spacing = spacing;
+                LayoutRebuilder.ForceRebuildLayoutImmediate(CardContainer.rectTransform);
+                foreach (var card in sortedCards)
+                {
+                    card?.RefreshHandLayoutBaseline();
+                }
+                return;
+            }
+
+            // 无 LayoutGroup 的场景回退到手动居中，并在超过阈值后压缩中心点间距。
+            float step = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
+            if (sortedCards.Count > handCompressionThreshold)
+            {
+                var firstRect = sortedCards.FirstOrDefault(card => card != null)?.transform as RectTransform;
+                float cardWidth = firstRect != null ? firstRect.rect.width : 0f;
+                float availableWidth = CardContainer.rectTransform.rect.width;
+                float fitStep = (availableWidth - cardWidth) / Mathf.Max(1, sortedCards.Count - 1);
+                step = Mathf.Min(cardSpacing, Mathf.Max(0f, fitStep));
+            }
+
+            float totalWidth = (sortedCards.Count - 1) * step;
             float startX = -totalWidth / 2f;
 
             for (int i = 0; i < sortedCards.Count; i++)
@@ -1090,11 +1771,514 @@ namespace Scripts.UI
                 RectTransform cardRect = sortedCards[i].transform as RectTransform;
                 if (cardRect != null)
                 {
-                    float xPos = startX + i * cardSpacing;
+                    float xPos = startX + i * step;
                     cardRect.anchoredPosition = new Vector2(xPos, 0f);
                     cardRect.SetSiblingIndex(i);
+                    sortedCards[i].RefreshHandLayoutBaseline();
                 }
             }
+        }
+
+        /// <summary>
+        /// 当手牌中同时存在当前行动角色和其他角色的牌时，拆成主区与侧边预览区。
+        /// 当前角色的牌保留正常间距并居中；其他角色的牌紧凑排列在右侧。
+        /// </summary>
+        private bool TryGetTurnFocusedHandGroups(
+            List<CardViewController> sortedCards,
+            out List<CardViewController> currentTurnCards,
+            out List<CardViewController> inactiveCards)
+        {
+            currentTurnCards = new List<CardViewController>();
+            inactiveCards = new List<CardViewController>();
+
+            var currentUnit = _battleManager?.CurrentState?.GetUnitById(
+                _battleManager.CurrentState.CurrentTurnUnitId);
+            var currentCharacterId = currentUnit?.GetCharacterId();
+            // 战斗尚未开始时沿用原始总手牌布局；敌人/天气行动时则没有玩家主手牌，
+            // 所有玩家牌都以侧边预览形式收起。
+            if (string.IsNullOrEmpty(_battleManager?.CurrentState?.CurrentTurnUnitId))
+                return false;
+
+            foreach (var card in sortedCards)
+            {
+                if (card == null)
+                    continue;
+
+                if (currentCharacterId.HasValue && GetCardOwnerCharacterId(card) == currentCharacterId.Value)
+                    currentTurnCards.Add(card);
+                else
+                    inactiveCards.Add(card);
+            }
+
+            return inactiveCards.Count > 0;
+        }
+
+        private CharacterEnum GetCardOwnerCharacterId(CardViewController card)
+        {
+            var runtimeCard = _battleManager?.CurrentState?.DeckSystem?.Hand?
+                .FirstOrDefault(state => state != null && state.InstanceId == card.InstanceId);
+            if (runtimeCard != null && runtimeCard.OwnerCharacterId.HasValue)
+                return runtimeCard.OwnerCharacterId.Value;
+
+            return card.GetCurrentCard()?.BelongTo ?? default;
+        }
+
+        private void LayoutTurnFocusedHand(
+            HorizontalLayoutGroup layout,
+            List<CardViewController> currentTurnCards,
+            List<CardViewController> inactiveCards)
+        {
+            // 不同分组需要不同间距，HorizontalLayoutGroup 无法表达，改由此处统一定位。
+            layout.enabled = false;
+
+            var container = CardContainer.rectTransform;
+            float containerWidth = container.rect.width;
+            float normalSpacing = _isDealingHand ? expandedHandSpacing : compactHandSpacing;
+            var inactiveOwnerGroups = BuildHandOwnerGroups(inactiveCards);
+
+            // 当前角色手牌从左侧主区域开始排。主区会根据侧边预览所需宽度收缩，
+            // 不再强制以整个 CardContainer 为中心，避免两组在卡多时互相覆盖。
+            float currentLeftOverflow = currentTurnCards.Count > 0
+                ? GetHandCardVisualOverflow(currentTurnCards[0], true)
+                : 0f;
+            float inactiveRightOverflow = inactiveCards.Count > 0
+                ? GetHandCardVisualOverflow(inactiveOwnerGroups[inactiveOwnerGroups.Count - 1].Last(), false)
+                : 0f;
+            float inactiveRightLimit = containerWidth - layout.padding.right - inactiveRightOverflow;
+            float minimumInactiveWidth = GetMinimumOwnerGroupWidth(inactiveOwnerGroups);
+            float maxCurrentWidth = Mathf.Max(
+                GetCardWidth(currentTurnCards.FirstOrDefault()),
+                inactiveRightLimit - layout.padding.left - currentLeftOverflow -
+                inactiveHandSideGap - minimumInactiveWidth);
+            if (currentTurnCards.Count > 1)
+            {
+                float fitSpacing =
+                    (maxCurrentWidth - currentTurnCards.Sum(GetCardWidth)) /
+                    (currentTurnCards.Count - 1);
+                normalSpacing = Mathf.Min(normalSpacing, fitSpacing);
+            }
+            float currentWidth = GetHandGroupWidth(currentTurnCards, normalSpacing);
+            float currentStart = layout.padding.left + currentLeftOverflow;
+            PositionHandGroup(currentTurnCards, currentStart, normalSpacing);
+
+            // CardViewController 根节点是左上 anchor。anchoredPosition.x=0 对应容器左边缘，
+            // 因此这里全部在 [0, CardContainer.width] 的局部坐标内计算，避免负 x 越界。
+            // 其他角色手牌贴右侧，按角色拆组；组内紧凑，角色之间保留 ownerGap。
+            float inactiveSpacing = inactiveHandSpacing;
+            int inactiveInnerGapCount = inactiveCards.Count - inactiveOwnerGroups.Count;
+            if (inactiveInnerGapCount > 0)
+            {
+                float currentEnd = currentStart + currentWidth;
+                float availableInactiveWidth = Mathf.Max(
+                    minimumInactiveWidth,
+                    inactiveRightLimit - currentEnd - inactiveHandSideGap);
+                float fitSpacing =
+                    (availableInactiveWidth - inactiveCards.Sum(GetCardWidth) -
+                    Mathf.Max(0, inactiveOwnerGroups.Count - 1) * inactiveHandOwnerGap) /
+                    inactiveInnerGapCount;
+                inactiveSpacing = Mathf.Min(inactiveSpacing, fitSpacing);
+            }
+            float inactiveWidth = GetOwnerGroupsWidth(inactiveOwnerGroups, inactiveSpacing);
+            float inactiveStart = Mathf.Max(
+                layout.padding.left,
+                inactiveRightLimit - inactiveWidth);
+            PositionOwnerGroups(inactiveOwnerGroups, inactiveStart, inactiveSpacing);
+
+            // 让当前角色的牌在层级上位于预览牌之上，交互与阅读均优先于当前回合。
+            foreach (var card in inactiveCards)
+                card.transform.SetSiblingIndex(0);
+            foreach (var card in currentTurnCards)
+                card.transform.SetAsLastSibling();
+
+            foreach (var card in inactiveCards)
+                card.RefreshHandLayoutBaseline();
+            foreach (var card in currentTurnCards)
+                card.RefreshHandLayoutBaseline();
+        }
+
+        private static float GetHandGroupWidth(List<CardViewController> cards, float spacing)
+        {
+            if (cards == null || cards.Count == 0)
+                return 0f;
+
+            return cards.Sum(GetCardWidth) + Mathf.Max(0, cards.Count - 1) * spacing;
+        }
+
+        private List<List<CardViewController>> BuildHandOwnerGroups(List<CardViewController> cards)
+        {
+            return cards
+                .Where(card => card != null)
+                .GroupBy(GetCardOwnerCharacterId)
+                .Select(group => group.ToList())
+                .ToList();
+        }
+
+        private float GetMinimumOwnerGroupWidth(List<List<CardViewController>> ownerGroups)
+        {
+            if (ownerGroups == null || ownerGroups.Count == 0)
+                return 0f;
+
+            // 组内卡牌允许完全重叠时，每个角色至少需要露出一张卡的宽度。
+            return ownerGroups.Sum(group => group.Max(GetCardWidth)) +
+                Mathf.Max(0, ownerGroups.Count - 1) * inactiveHandOwnerGap;
+        }
+
+        private float GetOwnerGroupsWidth(List<List<CardViewController>> ownerGroups, float cardSpacing)
+        {
+            if (ownerGroups == null || ownerGroups.Count == 0)
+                return 0f;
+
+            return ownerGroups.Sum(group => GetHandGroupWidth(group, cardSpacing)) +
+                Mathf.Max(0, ownerGroups.Count - 1) * inactiveHandOwnerGap;
+        }
+
+        private void PositionOwnerGroups(
+            List<List<CardViewController>> ownerGroups,
+            float startX,
+            float cardSpacing)
+        {
+            float x = startX;
+            foreach (var group in ownerGroups)
+            {
+                PositionHandGroup(group, x, cardSpacing);
+                x += GetHandGroupWidth(group, cardSpacing) + inactiveHandOwnerGap;
+            }
+        }
+
+        private static float GetCardWidth(CardViewController card)
+        {
+            var rect = card != null ? card.transform as RectTransform : null;
+            return rect != null ? rect.rect.width : 0f;
+        }
+
+        private static void PositionHandGroup(List<CardViewController> cards, float startX, float spacing)
+        {
+            float x = startX;
+            foreach (var card in cards)
+            {
+                if (card == null)
+                    continue;
+
+                var rect = card.transform as RectTransform;
+                if (rect == null)
+                    continue;
+
+                float width = rect.rect.width;
+                // 根节点的 anchor 在容器左上；x 使用距左边缘的距离，并由 pivot 换算到锚点坐标。
+                rect.anchoredPosition = new Vector2(x + width * rect.pivot.x, rect.anchoredPosition.y);
+                x += width + spacing;
+            }
+        }
+
+        /// <summary>
+        /// 某名角色结束行动并预抽下一手后，同步手牌区而不回收其他角色的预览牌。
+        /// </summary>
+        private void RefreshHandPreviewAfterRedraw()
+        {
+            if (_battleManager?.CurrentState?.DeckSystem?.Hand == null)
+            {
+                return;
+            }
+
+            var liveInstanceIds = new HashSet<string>(_battleManager.CurrentState.DeckSystem.Hand
+                .Where(card => card != null && !string.IsNullOrEmpty(card.InstanceId))
+                .Select(card => card.InstanceId));
+            var staleCards = _handCards
+                .Where(card => card != null && !liveInstanceIds.Contains(card.InstanceId))
+                .ToList();
+
+            foreach (var card in staleCards)
+            {
+                AnimateCardToDiscard(card);
+            }
+
+            // 已保留的其他角色手牌不会移动到弃牌堆；只补建刚抽出的新牌。
+            RefreshHandFromData();
+            UpdateHandLayout();
+        }
+
+        /// <summary>
+        /// 提供一个脱离 LayoutGroup 的临时动画层。动画期间卡牌不参与手牌布局，
+        /// 结束后才归入目标容器，因此不会被 HorizontalLayoutGroup 覆盖位移。
+        /// </summary>
+        private RectTransform GetCardAnimationLayer()
+        {
+            if (_cardAnimationLayer != null)
+                return _cardAnimationLayer;
+
+            var layer = new GameObject("CardAnimationLayer", typeof(RectTransform), typeof(CanvasGroup));
+            _cardAnimationLayer = layer.GetComponent<RectTransform>();
+            _cardAnimationLayer.SetParent(transform, false);
+            _cardAnimationLayer.anchorMin = Vector2.zero;
+            _cardAnimationLayer.anchorMax = Vector2.one;
+            _cardAnimationLayer.offsetMin = Vector2.zero;
+            _cardAnimationLayer.offsetMax = Vector2.zero;
+            _cardAnimationLayer.SetAsLastSibling();
+
+            var group = layer.GetComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+            return _cardAnimationLayer;
+        }
+
+        private bool IsCardFlowAnimating()
+        {
+            return _pendingDrawAnimations > 0 ||
+                _cardFlowTweens.Count > 0 ||
+                _displayHandAfterRecycleCoroutine != null;
+        }
+
+        private IEnumerator WaitForCardFlowAnimations()
+        {
+            while (IsCardFlowAnimating())
+            {
+                yield return null;
+            }
+        }
+
+        private void StopCardFlow(CardViewController card)
+        {
+            if (card != null && _cardFlowTweens.TryGetValue(card, out var tween))
+            {
+                tween.Kill();
+                _cardFlowTweens.Remove(card);
+            }
+        }
+
+        private void AnimateDrawCards(IReadOnlyList<CardViewController> cards)
+        {
+            RectTransform drawStartPoint = cardDrawStartPoint != null ? cardDrawStartPoint : CardDeck;
+            if (cards == null || cards.Count == 0 || drawStartPoint == null || cardDrawDuration <= 0f)
+                return;
+
+            _handCompactTween?.Kill();
+            _isDealingHand = true;
+            var drawableCards = cards
+                .Where(card => card != null && card.transform is RectTransform)
+                .ToList();
+            _pendingDrawAnimations = drawableCards.Count;
+            int drawSequenceVersion = ++_drawSequenceVersion;
+            // 先用展开间距计算每张牌的最终槽位；全部落位后再统一收紧。
+            UpdateHandLayout();
+
+            // 必须在任何牌脱离 LayoutGroup 前一次性冻结所有终点，否则逐张重挂父节点时
+            // 后面的牌会被布局重算，造成飞入终点左右跳动。
+            var drawDestinations = new Dictionary<CardViewController, Vector3>();
+            var drawScales = new Dictionary<CardViewController, Vector3>();
+            foreach (var drawableCard in drawableCards)
+            {
+                RectTransform drawableRect = drawableCard.transform as RectTransform;
+                drawDestinations[drawableCard] = drawableRect.position;
+                drawScales[drawableCard] = drawableRect.localScale;
+            }
+
+            var animationLayer = GetCardAnimationLayer();
+            for (int i = 0; i < drawableCards.Count; i++)
+            {
+                var card = drawableCards[i];
+                var rect = card.transform as RectTransform;
+
+                // 同一张牌在极短时间内被重抽/重置时，取消尚未结束的流转，
+                // 避免旧弃牌动画的回调把已经回到手里的牌再次隐藏。
+                StopCardFlow(card);
+                rect.DOKill();
+                card.PrepareForCardFlowAnimation();
+
+                Vector3 destination = drawDestinations[card];
+                Vector3 destinationScale = drawScales[card];
+                card.transform.SetParent(animationLayer, true);
+                rect.position = drawStartPoint.position;
+                rect.localScale = destinationScale * CARD_FLOW_MIN_SCALE;
+
+                var canvasGroup = card.GetComponent<CanvasGroup>();
+                if (canvasGroup != null)
+                {
+                    canvasGroup.DOKill();
+                    canvasGroup.alpha = 0f;
+                    canvasGroup.blocksRaycasts = false;
+                    canvasGroup.interactable = false;
+                }
+
+                float delay = i * cardDrawStagger;
+                Sequence sequence = DOTween.Sequence().SetUpdate(true);
+                _cardFlowTweens[card] = sequence;
+                if (delay > 0f)
+                    sequence.AppendInterval(delay);
+                if (canvasGroup != null)
+                    sequence.AppendCallback(() => canvasGroup.alpha = 1f);
+                sequence.Append(rect.DOMove(destination, cardDrawDuration).SetEase(Ease.OutCubic));
+                sequence.Join(rect.DOScale(destinationScale, cardDrawDuration).SetEase(Ease.OutCubic));
+                sequence.OnComplete(() =>
+                {
+                    if (card == null) return;
+                    _cardFlowTweens.Remove(card);
+                    card.transform.SetParent(CardContainer.transform, true);
+                    if (canvasGroup != null)
+                    {
+                        canvasGroup.alpha = 1f;
+                        canvasGroup.blocksRaycasts = true;
+                        canvasGroup.interactable = true;
+                    }
+                    UpdateHandLayout();
+                    if (drawSequenceVersion == _drawSequenceVersion)
+                    {
+                        _pendingDrawAnimations = Mathf.Max(0, _pendingDrawAnimations - 1);
+                        if (_pendingDrawAnimations == 0)
+                            CompleteDrawSequence(drawSequenceVersion);
+                    }
+                });
+            }
+
+            if (_pendingDrawAnimations == 0)
+                CompleteDrawSequence(drawSequenceVersion);
+        }
+
+        private void CompleteDrawSequence(int drawSequenceVersion)
+        {
+            if (drawSequenceVersion != _drawSequenceVersion)
+                return;
+            _isDealingHand = false;
+            var layout = CardContainer != null ? CardContainer.GetComponent<HorizontalLayoutGroup>() : null;
+            if (layout == null || !layout.enabled || handCompactDuration <= 0f)
+            {
+                UpdateHandLayout();
+                return;
+            }
+
+            float targetSpacing = compactHandSpacing;
+            if (_handCards.Count > handCompressionThreshold)
+            {
+                float availableWidth = Mathf.Max(0f,
+                    CardContainer.rectTransform.rect.width - layout.padding.left - layout.padding.right);
+                float cardsWidth = _handCards
+                    .Where(card => card != null)
+                    .Select(card => card.transform as RectTransform)
+                    .Where(rect => rect != null)
+                    .Sum(rect => rect.rect.width);
+                float fitSpacing = (availableWidth - cardsWidth) / Mathf.Max(1, _handCards.Count - 1);
+                targetSpacing = Mathf.Clamp(fitSpacing, minimumCompressedHandSpacing, compactHandSpacing);
+            }
+
+            _handCompactTween = DOTween.To(
+                    () => layout.spacing,
+                    value =>
+                    {
+                        layout.spacing = value;
+                        LayoutRebuilder.ForceRebuildLayoutImmediate(CardContainer.rectTransform);
+                    },
+                    targetSpacing,
+                    handCompactDuration)
+                .SetEase(Ease.InOutCubic)
+                .SetUpdate(true)
+                .OnComplete(() =>
+                {
+                    foreach (var card in _handCards)
+                        card?.RefreshHandLayoutBaseline();
+                    _handCompactTween = null;
+                });
+        }
+
+        private float AnimateAllHandCardsToDiscard()
+        {
+            // 回收开始即终止上一轮抽牌收紧状态，旧 Tween 回调不得再影响下一手牌。
+            _drawSequenceVersion++;
+            _pendingDrawAnimations = 0;
+            _isDealingHand = false;
+            _handCompactTween?.Kill();
+            _handCompactTween = null;
+
+            var cardsRightToLeft = _handCards
+                .Where(card => card != null)
+                .OrderByDescending(card => card.transform.GetSiblingIndex())
+                .ToList();
+
+            for (int i = 0; i < cardsRightToLeft.Count; i++)
+                AnimateCardToDiscard(cardsRightToLeft[i], i * cardRecycleStagger);
+
+            return cardsRightToLeft.Count == 0
+                ? 0f
+                : cardDiscardDuration + (cardsRightToLeft.Count - 1) * cardRecycleStagger;
+        }
+
+        private void AnimateCardToDiscard(CardViewController card, float startDelay = 0f)
+        {
+            if (card == null) return;
+
+            RectTransform recycleEndPoint = cardRecycleEndPoint != null ? cardRecycleEndPoint : CardBin;
+            if (recycleEndPoint == null || cardDiscardDuration <= 0f)
+            {
+                _cardPoolManager.MoveToDiscard(card);
+                return;
+            }
+
+            var rect = card.transform as RectTransform;
+            if (rect == null)
+            {
+                _cardPoolManager.MoveToDiscard(card);
+                return;
+            }
+
+            StopCardFlow(card);
+            rect.DOKill();
+            card.PrepareForCardFlowAnimation();
+
+            // 先从手牌列表除名，让剩余手牌立即补位；实体卡牌留在动画层直到飞入弃牌堆。
+            _cardPoolManager.RemoveFromHandList(card);
+            card.transform.SetParent(GetCardAnimationLayer(), true);
+
+            var canvasGroup = card.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.DOKill();
+                canvasGroup.blocksRaycasts = false;
+                canvasGroup.interactable = false;
+            }
+
+            Vector3 originalScale = rect.localScale;
+            Sequence sequence = DOTween.Sequence().SetUpdate(true);
+            _cardFlowTweens[card] = sequence;
+            if (startDelay > 0f)
+                sequence.AppendInterval(startDelay);
+            sequence.Append(rect.DOMove(recycleEndPoint.position, cardDiscardDuration).SetEase(Ease.InCubic));
+            sequence.Join(rect.DOScale(originalScale * CARD_FLOW_MIN_SCALE, cardDiscardDuration).SetEase(Ease.InCubic));
+            sequence.OnComplete(() =>
+            {
+                _cardFlowTweens.Remove(card);
+                _cardPoolManager.MoveToDiscard(card);
+            });
+        }
+
+        /// <summary>
+        /// 获取实际卡面相对布局根节点向左或向右超出的宽度。
+        /// HorizontalLayoutGroup 排布的是 CardViewController 根节点，而 Card 子节点才是玩家看到的卡面。
+        /// </summary>
+        private static float GetHandCardVisualOverflow(CardViewController cardView, bool leftSide)
+        {
+            if (cardView == null)
+                return 0f;
+
+            RectTransform layoutRect = cardView.transform as RectTransform;
+            RectTransform visualRect = cardView.Card != null
+                ? cardView.Card.transform as RectTransform
+                : null;
+            if (layoutRect == null || visualRect == null)
+                return 0f;
+
+            var corners = new Vector3[4];
+            visualRect.GetWorldCorners(corners);
+
+            float minX = float.PositiveInfinity;
+            float maxX = float.NegativeInfinity;
+            for (int i = 0; i < corners.Length; i++)
+            {
+                float localX = layoutRect.InverseTransformPoint(corners[i]).x;
+                minX = Mathf.Min(minX, localX);
+                maxX = Mathf.Max(maxX, localX);
+            }
+
+            return leftSide
+                ? Mathf.Max(0f, layoutRect.rect.xMin - minX)
+                : Mathf.Max(0f, maxX - layoutRect.rect.xMax);
         }
 
         private static int GetHandSortKey(CardViewController cardView)
@@ -1324,6 +2508,61 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 【公共回合镜像】把命令结算累计的推迟（PendingRoundDelay）落到 ATB 真调度并刷新行动顺序视图。
+        /// 每次卡牌/敌技结算完成后调用（CardViewController 出牌成功、执行牌结算、敌人原子回合）。
+        /// </summary>
+        public void ApplyPendingScheduleChanges()
+        {
+            if (ATB == null || _battleManager?.CurrentState == null)
+            {
+                return;
+            }
+
+            bool changed = ATB.ApplyPendingDelays(_battleManager.CurrentState);
+            changed |= SyncPendingCastSchedule();
+            ATB.SyncScheduleToState(_battleManager.CurrentState);
+            if (changed) TurnOrderView?.RefreshOrder();
+        }
+
+        /// <summary>
+        /// 将 BattleManager 中的在轨执行牌注册表同步到 ATB：新增回声、更新顺延/提前后的回合，
+        /// 并移除已经被“提前至当前回合”立即结算掉的图标。
+        /// </summary>
+        private bool SyncPendingCastSchedule()
+        {
+            if (ATB == null || _battleManager == null) return false;
+
+            bool changed = false;
+            var pending = _battleManager.GetPendingCasts();
+            var pendingById = pending.ToDictionary(c => c.CastId, c => c);
+            foreach (string existingId in ATB.GetCastIds())
+            {
+                if (pendingById.ContainsKey(existingId)) continue;
+                ATB.RemoveUnitIcon(existingId);
+                TurnOrderView?.RemoveCast(existingId);
+                changed = true;
+            }
+
+            var existing = new HashSet<string>(ATB.GetCastIds());
+            foreach (var cast in pending)
+            {
+                if (!existing.Contains(cast.CastId))
+                {
+                    string visualCardId = TempoPrototypeMode.ResolveVisualCardId(cast.Card.Id);
+                    string iconPath = Ashlight.Common.Utils.AssetPath.GetCardMiniSpriteAssetPath(visualCardId);
+                    ATB.AddCastIcon(cast.CastId, iconPath, cast.ResolveRound);
+                    changed = true;
+                }
+                else
+                {
+                    ATB.SetNextRound(cast.CastId, cast.ResolveRound);
+                }
+                TurnOrderView?.SetCast(cast.CastId, cast.Card);
+            }
+            return changed || pending.Count > 0;
+        }
+
+        /// <summary>
         /// 结束回合协程（真正的回合结束清理）
         /// </summary>
         private IEnumerator EndRoundCoroutine()
@@ -1339,31 +2578,46 @@ namespace Scripts.UI
                     if (currentTurnUnit != null && currentTurnUnit.IsPlayerUnit)
                     {
                         currentTurnUnit.CurrentEnergy = 0;
-                        _battleManager.DiscardCurrentHand();
-                        DisplayHandCards();
+                        // 当前角色弃牌后立刻补抽；其他角色的预览手牌保持不动。
+                        _battleManager.PrepareNextHandForPlayer(currentTurnUnit);
+                        RefreshHandPreviewAfterRedraw();
 
+                        // 新牌飞入、旧牌回收完成前保留当前回合，不能让 ATB 切到下一单位。
+                        // 否则动画层中的牌会跨回合悬在界面上。
+                        yield return WaitForCardFlowAnimations();
                         ClearHandExecutionSuppression();
 
-                        if (_battleManager.HasPendingPlayerExecutionCard(currentTurnUnitId))
-                        {
-                            _isProcessingPlayerExecutionTurn = true;
-                            // 图标可能已在 OnPlayerPlayedExecutionCard 时提前移入执行轨，避免重置位置
-                            if (!ATB.IsInExecutionTrack(currentTurnUnitId))
-                            {
-                                int executingCost = _battleManager.GetPendingPlayerExecutionCost(currentTurnUnitId);
-                                ATB.MoveToExecutingTrack(currentTurnUnitId, executingCost);
-                            }
-                            ATB.Resume();
-                            Debug.Log($"[UI_BattleScene] 玩家结束回合，执行轨开始推进: {currentTurnUnitId}");
-                            yield break;
-                        }
+                        // 过载次数要在 EndCurrentTurn 之前读取（= 下次行动的额外回合延迟）。
+                        int overloadDelay = currentTurnUnit.Overload != null ? currentTurnUnit.Overload.OverloadCountThisTurn : 0;
 
-                        ATB.SkipExecutingTrack(currentTurnUnitId);
+                        // 【真延迟】执行牌不在回合末结算——引线已挂在 ATB 时钟上，到点走 ResolveCastAtomicTurn。
+
+                        // 【推迟落账】本回合所有卡牌积累的行动推迟统一落到 ATB 调度。
+                        ApplyPendingScheduleChanges();
 
                         _playerPlayedExecutionCardThisAtbTurn = false;
                         _battleManager.EndCurrentTurn();
-                        ATB.Resume();
-                        Debug.Log($"[UI_BattleScene] 玩家回合结束并恢复ATB: {currentTurnUnitId}");
+
+                        // 结算执行牌可能打死敌人 → 战斗结束：停止推进，等结算面板。
+                        if (_battleManager.CurrentState.IsBattleEnded)
+                        {
+                            TurnOrderView?.CompleteCommittedActionPreview(currentTurnUnitId);
+                            ATB.AutoAdvanceSuspended = true;
+                            yield break;
+                        }
+
+                        // 【公共回合制】重排：下次行动 = 当前公共回合 + Speed + 过载次数。
+                        int actionDelay = TempoPrototypeMode.GetActionDelayForEndTurn(
+                            currentTurnUnitId,
+                            currentTurnUnit.Speed);
+                        int appliedOverloadDelay = TempoPrototypeMode.IsActive ? 0 : overloadDelay;
+                        ATB.Reschedule(currentTurnUnitId, actionDelay, appliedOverloadDelay);
+                        // 拖拽时已经完成插入预览；真实调度到位后让正式行动卡无缝接管预览卡。
+                        TurnOrderView?.CompleteCommittedActionPreview(currentTurnUnitId);
+                        // 记录已落账的过载负债，供肾上腺素（ClearOverload）拉回
+                        currentTurnUnit.AppliedOverloadRoundDelay = appliedOverloadDelay;
+                        ATB.TriggerNextUnit();
+                        Debug.Log($"[UI_BattleScene] 玩家回合结束，重排 {currentTurnUnitId} (speed={currentTurnUnit.Speed}, overload={overloadDelay})");
                         yield break;
                     }
                 }
@@ -1399,80 +2653,95 @@ namespace Scripts.UI
         }
 
         /// <summary>
-        /// 规划轨到点处理：
-        /// 1. 玩家到点必须始终能进入出牌阶段，并暂停整条 ATB（包括敌人执行轨）
-        /// 2. 敌人执行轨存在全局挂起状态，执行完成前不允许其他敌人再次进入规划完成逻辑
+        /// 【公共回合制·原子回合】轮到某单位行动（由 ATB.OnUnitTurn 触发）：
+        ///   · 玩家 → 进入出牌阶段，停下等玩家结束回合（EndRoundCoroutine 再重排+推进）。
+        ///   · 敌人 → 立即结算其预告意图 → 结束回合 → 重排(Speed+过载) → 预告下一次意图；
+        ///           全程在 TriggerNextUnit 的循环内同步完成，循环自动继续到下一单位。
         /// </summary>
-        private void HandleAtbPlanningComplete(string unitId, bool isPlayerUnit)
+        private void HandleAtbUnitTurn(string unitId, bool isPlayerUnit)
         {
-            if (ShouldIgnoreAtbPlanningComplete(isPlayerUnit))
+            if (_battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn)
             {
                 return;
             }
 
+            // 新单位的回合到来 = 上一个单位的演出已被 ATB 闸门等完 → 解冻顺序条，恢复实时刷新。
+            TurnOrderView?.UnfreezeOrder();
+
+            // 【死亡/结束保护】战斗已结束：不再开启回合。
+            if (_battleManager.CurrentState.IsBattleEnded)
+            {
+                Debug.Log($"[UI_BattleScene] 轮到 {unitId} 时战斗已结束，停止推进");
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+                return;
+            }
+
+            // 【天气虚拟单位】轮到天气结算（第三方阵营，无 UnitState）——
+            // 必须在下面的 GetUnitById 死亡保护之前拦截，否则会被当"已不存在"移除图标。
+            if (unitId == ATB.WeatherUnitId)
+            {
+                _isProcessingAtbTurn = true;
+                try
+                {
+                    ResolveWeatherAtomicTurn();
+                }
+                finally
+                {
+                    _isProcessingAtbTurn = false;
+                }
+                return;
+            }
+
+            // 【引线虚拟单位】轮到玩家在轨执行牌结算（同天气：无 UnitState，必须在死亡保护之前拦截）。
+            if (unitId.StartsWith(Ashlight.Battle.BattleManager.CastIdPrefix, System.StringComparison.Ordinal))
+            {
+                _isProcessingAtbTurn = true;
+                try
+                {
+                    ResolveCastAtomicTurn(unitId);
+                }
+                finally
+                {
+                    _isProcessingAtbTurn = false;
+                }
+                return;
+            }
+
+            var unit = _battleManager.CurrentState.GetUnitById(unitId);
+            if (unit == null || unit.IsDead)
+            {
+                Debug.Log($"[UI_BattleScene] 轮到 {unitId} 时单位已死亡，移除其ATB图标");
+                ATB?.RemoveUnitIcon(unitId);
+                return;
+            }
+
+            // 【公共回合镜像】原子回合开始：把最新调度同步进快照（Core 命令按此判「当前回合的敌人」）。
+            ATB?.SyncScheduleToState(_battleManager.CurrentState);
+
+            // 行动到来 = 过载负债已偿还，清零（此后肾上腺素无可拉回）
+            unit.AppliedOverloadRoundDelay = 0;
+
             _isProcessingAtbTurn = true;
             try
             {
-                if (ATB != null)
-                {
-                    ATB.Pause();
-                }
-
                 if (isPlayerUnit)
                 {
-                    _isProcessingPlayerExecutionTurn = false;
+                    // 玩家原子回合：进入出牌阶段并停下等输入。
+                    TurnOrderView?.SetActiveUnit(unitId);
+                    if (ATB != null) ATB.Pause();
                     _playerPlayedExecutionCardThisAtbTurn = false;
                     ClearHandExecutionSuppression();
                     _battleManager.StartPlayerTurn(unitId, false);
-                    DisplayHandCards();
+                    ApplyPendingScheduleChanges();
+                    // 全队下一手在上一次行动结束时已展示；开回合只需保留现有预览，不重播整手抽牌动画。
+                    RefreshHandFromData();
                     UpdateAllUnitsDisplay();
                     UpdateEnergyBarByUnitId(unitId);
-                    Debug.Log($"[UI_BattleScene] 玩家回合开始并暂停ATB: {unitId}");
+                    Debug.Log($"[UI_BattleScene] 玩家回合开始: {unitId} (公共回合 {ATB?.CurrentRound})");
                 }
                 else
                 {
-                    _battleManager.StartEnemyTurn(unitId);
-                    if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(unitId, out int executingCost, out EnemySkillInfo preparedSkill, out string targetUnitId))
-                    {
-                        if (ATB != null)
-                        {
-                            ATB.Resume();
-                        }
-                        return;
-                    }
-
-                    _enemiesInExecutionTrack.Add(unitId);
-
-                    var targetState = _battleManager.CurrentState.GetUnitById(targetUnitId);
-                    string targetName = targetState?.GetCharacterInfo()?.Name ?? "目标";
-                    var enemyUi = FindEnemyByUnitId(unitId);
-
-                    // 计算 Coord 目标位置（暗黑地牢式）
-                    var playerUnits = _battleManager.CurrentState.PlayerUnits;
-                    int totalSlots = playerUnits?.Count ?? 0;
-                    int targetSlot = -1;
-                    if (!string.IsNullOrEmpty(targetUnitId) && playerUnits != null)
-                    {
-                        for (int i = 0; i < playerUnits.Count; i++)
-                        {
-                            if (playerUnits[i] != null && playerUnits[i].UnitId == targetUnitId)
-                            {
-                                targetSlot = i;
-                                break;
-                            }
-                        }
-                    }
-                    bool isAoe = SkillIsAoe(preparedSkill);
-                    enemyUi?.SetIntentionExecuting(preparedSkill, targetSlot, totalSlots, isAoe);
-
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-
-                    if (ATB != null)
-                    {
-                        ATB.MoveToExecutingTrack(unitId, executingCost);
-                        ATB.Resume();
-                    }
+                    ResolveEnemyAtomicTurn(unitId, unit);
                 }
             }
             finally
@@ -1481,112 +2750,259 @@ namespace Scripts.UI
             }
         }
 
-        private bool ShouldIgnoreAtbPlanningComplete(bool isPlayerUnit)
-        {
-            // 只做重入保护和空值检查；不再因"敌人在执行轨中"而拦截任何单位的规划完成。
-            // 规则：任意单位（包括多个敌人）可以独立进入执行轨；
-            //       只有玩家到达规划轨终点时才全局暂停 ATB，冻结所有执行轨。
-            return _battleManager == null || _battleManager.CurrentState == null || _isProcessingAtbTurn;
-        }
-
         /// <summary>
-        /// 判断敌人技能是否是 AOE：
-        /// 1) TargetType 为 AllEnemy / AllAlly
-        /// 2) 任一 AttackEffect 的 IsAoe 为 true
+        /// 天气的原子回合（如雷暴落雷）：劈所有行动排在当前公共回合的真单位 → 检查战斗结束 → 按绝对节拍重排(+Period)。
+        /// 走普通伤害管线（吃易伤/减伤/护甲，不吃闪避）；空劈只有日志，节拍照常推进。
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，重排后循环自动继续。见 docs/天气系统设计_v1.md。
         /// </summary>
-        private static bool SkillIsAoe(EnemySkillInfo skill)
+        private void ResolveWeatherAtomicTurn()
         {
-            if (skill == null) return false;
-            if (skill.TargetType == cfg.TargetTypeEnum.AllEnemy
-                || skill.TargetType == cfg.TargetTypeEnum.AllAlly)
-                return true;
-            if (skill.Effects != null)
+            var weather = _battleManager?.CurrentWeather;
+            if (weather == null || ATB == null)
             {
-                foreach (var eff in skill.Effects)
-                {
-                    if (eff is cfg.AttackEffect atk && atk.IsAoe) return true;
-                }
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// 执行轨到达终点：结算敌人技能伤害，结束回合并恢复 ATB
-        /// </summary>
-        private void HandleAtbExecutionComplete(string unitId, bool isPlayerUnit)
-        {
-            if (_battleManager == null || _battleManager.CurrentState == null)
-            {
+                // 防御：无天气本不该有天气图标。兜底重排避免时钟反复选中它卡死。
+                ATB?.Reschedule(ATB.WeatherUnitId, weather != null ? weather.Period : 6, 0);
                 return;
             }
 
-            if (isPlayerUnit)
+            // 先取受劈名单再重排（GetUnitIdsAtRound 自带排除天气自身）。
+            var victims = ATB.GetUnitIdsAtRound(ATB.CurrentRound);
+            var results = _battleManager.ResolveWeatherStrike(victims);
+
+            // 掉血表现：飘字 + 全体状态刷新（v1 无全屏特效）。
+            foreach (var kv in results)
             {
-                bool hasPendingPlayerExecution = _battleManager.HasPendingPlayerExecutionCard(unitId);
-                if (!_isProcessingPlayerExecutionTurn && !hasPendingPlayerExecution)
+                var ui = FindUnitUiTransform(kv.Key);
+                if (ui != null)
                 {
-                    ClearHandExecutionSuppression();
-                    _playerPlayedExecutionCardThisAtbTurn = false;
-                    return;
+                    int armorDamage = _battleManager.CurrentState?.GetUnitById(kv.Key)?.LastArmorDamage ?? 0;
+                    if (armorDamage > 0)
+                    {
+                        _animationHandler?.ShowFloatingLabel(ui.position + new Vector3(-0.35f, 0f, 0f), armorDamage.ToString(), Color.gray);
+                    }
+                    if (kv.Value > 0)
+                    {
+                        _animationHandler?.ShowFloatingLabel(ui.position, $"-{kv.Value}", new Color(1f, 0.85f, 0.2f));
+                    }
                 }
+            }
+            UpdateAllUnitsDisplay();
+            Debug.Log($"[UI_BattleScene] [{weather.Name}] 公共回合 {ATB.CurrentRound} 结算：命中 {results.Count} 个单位");
 
-                if (ATB != null)
-                {
-                    ATB.Pause();
-                }
-
-                try
-                {
-                    _battleManager.ExecutePendingPlayerCardAfterExecutionTrack(unitId);
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-                    _battleManager.EndCurrentTurn();
-
-                    // 非 Swift（执行）牌结算完直接进入新回合：刷新能量、重抽手牌，
-                    // ATB 保持暂停由玩家继续操作，而不是回到规划轨起点重新等条。
-                    _battleManager.StartPlayerTurn(unitId, false);
-                    DisplayHandCards();
-                    UpdateAllUnitsDisplay();
-                    UpdateEnergyBarByUnitId(unitId);
-                    Debug.Log($"[UI_BattleScene] 执行牌结算后直接开启新回合: {unitId}");
-                }
-                finally
-                {
-                    _isProcessingPlayerExecutionTurn = false;
-                    _playerPlayedExecutionCardThisAtbTurn = false;
-                    ClearHandExecutionSuppression();
-                    // 不调用 ATB.Resume()：新回合需要全场暂停等待玩家操作。
-                }
-
+            // 劈死可能终结战斗（全灭=失败 / 最后一个敌人被劈死=胜利）。
+            if (_battleManager.CurrentState != null && _battleManager.CurrentState.IsBattleEnded)
+            {
+                ATB.AutoAdvanceSuspended = true;
                 return;
             }
 
+            // 绝对节拍：下次结算 = 当前回合 + Period（k, 2k, 3k, ...）。
+            ATB.Reschedule(ATB.WeatherUnitId, weather.Period, 0);
+            ATB.SyncScheduleToState(_battleManager.CurrentState);
+        }
+
+        /// <summary>
+        /// 引线的原子回合：玩家在轨执行牌到点结算（真延迟，见规则书 §3 / docs/卡组设计_法师战士主主题.md）。
+        /// 施法者已倒下则引线作废（规则书：结算前被击倒则取消）。结算完移除图标，
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，移除后循环自动继续。
+        /// </summary>
+        private void ResolveCastAtomicTurn(string castId)
+        {
+            // 【条子与演出同步】同敌人回合：结算会立刻移除引线图标/卡片，先冻结快照，
+            // 让引线卡在自己的结算演出期间仍显示在条头；下一回合开头解冻。
+            TurnOrderView?.FreezeOrder();
+
+            // 结算前同步调度镜像：引线卡的效果可能读「当前回合」（如条件伤害）。
+            ATB?.SyncScheduleToState(_battleManager.CurrentState);
+
+            bool resolved = _battleManager.ResolvePendingCast(castId);
+
+            // 图标与行动顺序卡一并移除（引线一次性）。
+            ATB?.RemoveUnitIcon(castId);
+            TurnOrderView?.RemoveCast(castId);
+
+            if (resolved)
+            {
+                UpdateAllUnitsDisplay();
+                // 引线效果可能带推迟/提前（如凝滞领域、冰封领域），立即落账到调度。
+                ApplyPendingScheduleChanges();
+            }
+
+            Debug.Log($"[UI_BattleScene] 引线结算{(resolved ? "完成" : "作废")}: {castId} (公共回合 {ATB?.CurrentRound})");
+
+            if (_battleManager.CurrentState != null && _battleManager.CurrentState.IsBattleEnded)
+            {
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+            }
+        }
+
+        /// <summary>本场的天气 HUD（常驻角标 + 开场横幅）。新战斗初始化时销毁重建。</summary>
+        private WeatherHud _weatherHud;
+
+        /// <summary>
+        /// 开场预告天气：创建常驻角标（hover 弹天气说明）并播一次开场横幅。
+        /// </summary>
+        private void ShowWeatherAnnouncement(cfg.WeatherInfo weather)
+        {
+            if (weather == null) return;
+
+            if (_weatherHud != null)
+            {
+                Destroy(_weatherHud.gameObject);
+                _weatherHud = null;
+            }
+
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) canvas = FindObjectOfType<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[UI_BattleScene] 找不到 Canvas，天气角标/横幅未创建");
+                return;
+            }
+
+            _weatherHud = WeatherHud.Create(canvas, weather);
+            Debug.Log($"[UI_BattleScene] 天气预告: {weather.Name}（每 {weather.Period} 回合结算）");
+        }
+
+        /// <summary>按 UnitId 找单位的 UI Transform（先查我方角色再查敌人），找不到返回 null。</summary>
+        private Transform FindUnitUiTransform(string unitId)
+        {
+            var ch = FindCharacterByUnitId(unitId);
+            if (ch != null) return ch.transform;
+            var en = FindEnemyByUnitId(unitId);
+            return en != null ? en.transform : null;
+        }
+
+        /// <summary>
+        /// 敌人的原子回合：结算其（此前已预告的）意图 → 结束回合 → 重排(Speed+过载) → 预告下一次意图。
+        /// 不调用 TriggerNextUnit —— 正处在其循环内，重排后循环会自动继续到下一单位。
+        /// 敌人意图选择/动态索敌逻辑沿用 BattleManager 现有实现，不在此改动。
+        /// </summary>
+        private void ResolveEnemyAtomicTurn(string unitId, UnitState enemyUnit)
+        {
+            // 【高亮与演出同步】回合一开始就点亮该敌人（金框），且结算后不清除——
+            // 它的攻击演出还在异步播放，ATB 会等演出结束才开下一个单位的回合，
+            // 届时由下一个单位（玩家/敌人）的回合开头覆盖高亮。
+            TurnOrderView?.SetActiveUnit(unitId);
+
+            // 【条子与演出同步】结算马上会同步 Reschedule（条头瞬间翻页成后续单位）——
+            // 先冻结顺序条快照（此刻该敌人在条头），演出期间条子保持不动；下一回合开头解冻。
+            TurnOrderView?.FreezeOrder();
+
+            // 【回合开始持续伤害】中毒/燃烧等在该敌人自己的原子回合开始结算：掉血 + 数值衰减 1（中毒 V→V-1，归零移除）。
+            // 放在最前（晕眩之前）——持续伤害不因晕眩而停。毒发身亡则中止本回合后续行动：
+            // UpdateAllUnitsDisplay 会播死亡演出并把它从 ATB/顺序条移除，ATB 循环自动继续下一单位（无需重排）。
+            if (_battleManager.ProcessTurnStartBuffs(unitId))
+            {
+                UpdateAllUnitsDisplay();
+                if (_battleManager.CurrentState.IsBattleEnded && ATB != null)
+                    ATB.AutoAdvanceSuspended = true;
+                return;
+            }
+            UpdateAllUnitsDisplay(); // 未死也刷新血条/buff 图标，反映本次掉血与衰减
+
+            // 【晕眩】带 Stun buff 的敌人跳过本次行动：扣 1 层、照常重排，预告的意图保留到下次。
+            var stun = enemyUnit.GetBuff("Stun");
+            if (stun != null)
+            {
+                stun.Value -= 1f;
+                stun.StackCount = Mathf.Max(0, Mathf.RoundToInt(stun.Value));
+                if (stun.Value <= 0f)
+                {
+                    enemyUnit.RemoveBuff("Stun");
+                }
+
+                var stunUi = FindEnemyByUnitId(unitId);
+                if (stunUi != null)
+                    _animationHandler?.ShowFloatingLabel(stunUi.transform.position, "晕眩", new Color(1f, 0.9f, 0.3f));
+
+                Debug.Log($"[UI_BattleScene] {unitId} 晕眩中，跳过本次行动 (剩余 {Mathf.Max(0, Mathf.RoundToInt(stun.Value))} 回合)");
+
+                UpdateAllUnitsDisplay();
+                if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, 0);
+                if (!_battleManager.HasPendingEnemyIntent(unitId))
+                {
+                    DeclareEnemyIntent(unitId);
+                }
+                return;
+            }
+
+            // 若尚无预告意图（理论上 bootstrap/上一次已预告），当场补一次。
             if (!_battleManager.HasPendingEnemyIntent(unitId))
             {
+                if (!DeclareEnemyIntent(unitId))
+                {
+                    // 无技能可用：直接重排到下一轮，避免卡死。
+                    if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, 0);
+                    return;
+                }
+            }
+
+            // 【动态索敌 + 空排 miss】命中一刻按当前站位重算目标；目标区空排则打空。
+            var result = _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
+            if (result == Ashlight.Battle.EnemyIntentResolveResult.Missed)
+            {
+                var missUi = FindEnemyByUnitId(unitId);
+                if (missUi != null)
+                    _animationHandler?.ShowFloatingLabel(missUi.transform.position, "MISS", Color.white);
+            }
+
+            // 【推迟落账】敌技若带推迟效果（推玩家），在此落到 ATB 调度。
+            ApplyPendingScheduleChanges();
+
+            // 注意：不在此清除 SetActiveUnit —— 演出还在播，高亮保持到下一个单位的回合开头被覆盖。
+            TurnOrderView?.SetExecuting(unitId, false);
+            UpdateAllUnitsDisplay();
+            UpdateEnergyBarByUnitId(unitId);
+
+            // 结算可能打死玩家 → 战斗结束：停止推进。
+            if (_battleManager.CurrentState.IsBattleEnded)
+            {
+                if (ATB != null) ATB.AutoAdvanceSuspended = true;
+                _battleManager.EndCurrentTurn();
                 return;
             }
 
-            if (ATB != null)
+            int overloadDelay = enemyUnit.Overload != null ? enemyUnit.Overload.OverloadCountThisTurn : 0;
+            _battleManager.EndCurrentTurn();
+
+            // 【公共回合制】重排：下次行动 = 当前公共回合 + Speed + 过载次数。
+            if (ATB != null) ATB.Reschedule(unitId, enemyUnit.Speed, overloadDelay);
+            enemyUnit.AppliedOverloadRoundDelay = overloadDelay;
+
+            // 预告下一次意图（telegraph），供行动顺序视图显示。
+            DeclareEnemyIntent(unitId);
+            UpdateAllUnitsDisplay();
+        }
+
+        /// <summary>
+        /// 让敌人当场准备并公示下一次意图（刷新能量 → 选技能+锁目标 → 亮意图图标/坐标）。
+        /// 仅做「预告」，不涉及回合调度（种子/重排由 ATB 的公共回合负责）。
+        /// 敌人意图与选目标逻辑沿用 BattleManager 现有实现，不在此改动。
+        /// 返回 false = 无技能可用。
+        /// </summary>
+        private bool DeclareEnemyIntent(string unitId)
+        {
+            if (_battleManager?.CurrentState == null) return false;
+
+            var enemy = _battleManager.CurrentState.GetUnitById(unitId);
+            if (enemy == null || enemy.IsDead || enemy.IsPlayerUnit) return false;
+
+            // 「预告即准备」：刷新能量后选技能+锁目标。
+            _battleManager.StartEnemyTurn(unitId);
+
+            if (!_battleManager.TryPrepareEnemyIntentAfterPlanning(
+                    unitId, out int _, out EnemySkillInfo preparedSkill, out string targetUnitId))
             {
-                ATB.Pause();
+                return false;
             }
 
-            try
-            {
-                _battleManager.ExecutePendingEnemyAfterExecutionTrack(unitId);
-                FindEnemyByUnitId(unitId)?.SetIntentionThinking();
-                UpdateAllUnitsDisplay();
-                UpdateEnergyBarByUnitId(unitId);
-                _battleManager.EndCurrentTurn();
-            }
-            finally
-            {
-                _enemiesInExecutionTrack.Remove(unitId);
-                if (ATB != null)
-                {
-                    ATB.Resume();
-                }
-            }
+            // 意图显示：无合法目标（目标区空排，targetUnitId==null）→ 思考态 intention_think，否则攻击意图。
+            ApplyEnemyIntentDisplay(unitId, preparedSkill, targetUnitId);
+
+            UpdateAllUnitsDisplay();
+            UpdateEnergyBarByUnitId(unitId);
+            return true;
         }
 
         private void UpdateEnergyBarByUnitId(string unitId)
@@ -1640,6 +3056,8 @@ namespace Scripts.UI
                 if (cardView != null)
                 {
                     cardView.RefreshEnergyAffordability();
+                    cardView.RefreshConditionHighlight(); // 条件牌描边随站位/移动状态刷新
+                    cardView.RefreshDynamicDescription(); // 隧穿/铁蒺藜卡面「本回合已移动 N 次」计数刷新
                 }
             }
         }
@@ -1681,6 +3099,15 @@ namespace Scripts.UI
                 Debug.LogWarning($"[UI_BattleScene] 未找到目标角色UI: {evt.TargetUnitId}");
             }
 
+            // 兼容事件驱动的旧意图生成路径：意图一经选定就立即更新敌人头顶显示并播放箭头。
+            if (attacker != null)
+            {
+                if (target != null)
+                    attacker.SetIntentionExecuting(evt.SkillInfo, evt.TargetUnitId);
+                else
+                    attacker.SetIntentionThinking();
+            }
+
             // 直接在敌人时间轴上放置 EnemyTimeSlot，传递攻击者和目标
             _enemyTimeline.PlaceEnemyTimeSlot(evt.SkillInfo, evt.TimeSlotPosition, attacker, target);
         }
@@ -1714,7 +3141,12 @@ namespace Scripts.UI
             }
 
             // 委托给动画处理器缓存伤害
-            _animationHandler.CacheDamage(evt.AttackerId, evt.TargetId, evt.ActualDamage);
+            _animationHandler.CacheDamage(
+                evt.AttackerId,
+                evt.TargetId,
+                evt.ActualDamage,
+                evt.ArmorDamage,
+                evt.IsAoe);
         }
 
         /// <summary>
@@ -1736,8 +3168,8 @@ namespace Scripts.UI
 
             Debug.Log($"[UI_BattleScene] 卡片执行: {evt.CasterId} -> {evt.TargetId}, 攻击卡片={evt.IsAttackCard}");
 
-            // 委托给动画处理器播放动画
-            StartCoroutine(_animationHandler.PlayBattleAnimation(evt));
+            // 同步占用 ATB 演出闸门，再启动协程；不能让下一回合抢在协程首帧前推进。
+            _animationHandler.QueueBattleAnimation(evt);
         }
 
         /// <summary>
@@ -1861,50 +3293,229 @@ namespace Scripts.UI
         {
             Debug.Log($"[UI_BattleScene] 收到战斗结束事件，玩家胜利: {evt.IsPlayerVictory}");
 
-            // 暂停 ATB（冻结规划轨/执行轨），避免关闭弹窗前继续推进
-            if (ATB != null)
+            // 战斗结束：清除所有单位残留的 buff/debuff（数据层清空 + 刷新图标），
+            // 否则战斗中的增益/减益会残留在胜利结算/升级界面的角色身上（以及同场景复用未重载时的下一场）。
+            try
             {
-                ATB.Pause();
+                ClearAllUnitBuffs();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 清除战斗结束 buff/debuff 时异常: {e}");
+            }
+
+            // 【关键】先弹结算面板，且每个步骤独立 try/catch：
+            // 之前任一前置步骤（暂停 ATB / 停止预测）抛异常都会挡住 WinPanel，导致只看到“收到战斗结束事件”。
+            // 把面板放最前面并隔离异常，确保面板一定会尝试弹出；异常也会被完整打印出来定位。
+            try
+            {
+                if (evt.IsPlayerVictory)
+                {
+                    HandleVictory();
+                }
+                else
+                {
+                    HandleDefeat();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 处理胜负面板时异常（这就是没弹 WinPanel 的原因）: {e}");
+            }
+
+            // 暂停 ATB（冻结规划轨/执行轨），避免关闭弹窗前继续推进
+            try
+            {
+                if (ATB != null)
+                {
+                    ATB.Pause();
+                    // 【回合制】中止 TriggerNextUnit 的自动连续推进：
+                    // 结算中途打死单位触发战斗结束时，循环不应再触发后续回合。
+                    ATB.AutoAdvanceSuspended = true;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UI_BattleScene] 暂停 ATB 时异常: {e}");
             }
 
             // 停止血量预测显示
-            if (_battleManager?.PredictionManager != null)
+            try
             {
-                _battleManager.PredictionManager.StopPrediction();
+                if (_battleManager?.PredictionManager != null)
+                {
+                    _battleManager.PredictionManager.StopPrediction();
+                }
             }
-
-            if (evt.IsPlayerVictory)
+            catch (System.Exception e)
             {
-                HandleVictory();
-            }
-            else
-            {
-                HandleDefeat();
+                Debug.LogError($"[UI_BattleScene] 停止血量预测时异常: {e}");
             }
         }
 
         /// <summary>
-        /// 胜利分支：测试模式按序列自动跳下一关；非测试模式或序列耗尽则走 VictoryPanel
+        /// 战斗结束时清空所有单位（玩家 + 敌人）的 buff/debuff 数据，并刷新显示让图标立即消失。
+        /// 单一入口在 OnBattleEnded 调用，胜负两条分支都会经过，保证结算/升级界面上不再残留战斗中的增益减益。
+        /// </summary>
+        private void ClearAllUnitBuffs()
+        {
+            var state = _battleManager?.CurrentState;
+            if (state == null) return;
+
+            if (state.PlayerUnits != null)
+            {
+                foreach (var u in state.PlayerUnits)
+                {
+                    if (u == null) continue;
+                    u.Buffs?.Clear();
+                    u.Defense = 0;
+                }
+            }
+            if (state.EnemyUnits != null)
+            {
+                foreach (var u in state.EnemyUnits)
+                {
+                    if (u == null) continue;
+                    u.Buffs?.Clear();
+                    u.Defense = 0;
+                }
+            }
+
+            // 刷新 UI，被清空的 buff 图标随之移除
+            UpdateAllUnitsDisplay();
+        }
+
+        /// <summary>
+        /// 胜利分支：【WinPanel 优先】胜利一律尝试弹出结算面板，由玩家点击「继续」进下一关；
+        /// 仅当场景内/Resources 都找不到任何结算面板时，才退回测试自动跳关逻辑。
         /// </summary>
         private void HandleVictory()
         {
-            string nextEncounterId = GetNextEncounterId(_currentEncounterId);
+            // 新流程：先移除所有敌人 -> 玩家点选一名角色（indicator 指示）-> 弹 ChoosePanel 三选一升级 -> 再走原结算面板。
+            // 具体实现见 UI_BattleScene.UpgradeFlow.cs。
+            StartVictoryUpgradeFlow();
+        }
 
-            if (testAutoAdvance && !string.IsNullOrEmpty(nextEncounterId))
+        /// <summary>
+        /// 显示胜利结算面板（原 HandleVictory 逻辑）：WinPanel 优先，其次 VictoryPanel，最后退回测试自动跳关。
+        /// 由升级三选一流程结束（或无可选升级/无法点选）后调用。
+        /// </summary>
+        private void ShowVictorySettlementPanel()
+        {
+            // WinPanel 优先：自动解析引用（Inspector 未绑定也能复用场景实例或从 Resources 实例化）
+            var panel = ResolveWinPanel();
+            if (panel != null)
             {
-                Debug.Log($"[UI_BattleScene] 胜利，自动跳关：{_currentEncounterId} -> {nextEncounterId}（延迟 {testAutoAdvanceDelay}s）");
-                ScheduleSceneReload(nextEncounterId, testAutoAdvanceDelay);
+                panel.SetNextEncounterId(GetNextEncounterId(_currentEncounterId));
+                Debug.Log("[UI_BattleScene] 胜利，弹出 WinPanel");
+                panel.Show();
                 return;
             }
 
             if (victoryPanel != null)
             {
+                victoryPanel.SetNextEncounterId(GetNextEncounterId(_currentEncounterId));
+                Debug.Log("[UI_BattleScene] 胜利，弹出 VictoryPanel（无 WinPanel）");
                 victoryPanel.Show(true);
+                return;
+            }
+
+            // 没有任何结算面板可用：退回测试自动跳关
+            string nextEncounterId = GetNextEncounterId(_currentEncounterId);
+            if (testAutoAdvance && !string.IsNullOrEmpty(nextEncounterId))
+            {
+                Debug.Log($"[UI_BattleScene] 无结算面板，自动跳关：{_currentEncounterId} -> {nextEncounterId}（延迟 {testAutoAdvanceDelay}s）");
+                ScheduleSceneReload(nextEncounterId, testAutoAdvanceDelay);
+                return;
+            }
+
+            Debug.LogWarning("[UI_BattleScene] WinPanel/VictoryPanel 均不可用，且未启用自动跳关；战斗已结束停在原场景");
+        }
+
+        /// <summary>
+        /// 解析胜利面板引用，保证 HandleVictory 一定能拿到可用面板：
+        ///   1. Inspector 已绑定 → 直接用；
+        ///   2. 场景内查找（含未激活实例）→ 复用并缓存；
+        ///   3. 从 Resources 实例化 WinPanel 预制体作为兜底。
+        /// </summary>
+        private WinPanel ResolveWinPanel()
+        {
+            if (winPanel != null)
+                return EnsurePanelUnderCanvas(winPanel);
+
+            // 场景里通常已有一个未激活的 WinPanel 实例（prefab 实例），直接复用
+            winPanel = FindObjectOfType<WinPanel>(true);
+            if (winPanel != null)
+            {
+                Debug.Log("[UI_BattleScene] winPanel 未在 Inspector 绑定，已自动复用场景内 WinPanel 实例");
+                return EnsurePanelUnderCanvas(winPanel);
+            }
+
+            // 兜底：从 Resources 实例化（路径对应 Assets/Resources/UI/BattleScene/WinPanel.prefab）
+            var prefab = Resources.Load<GameObject>("UI/BattleScene/WinPanel");
+            if (prefab != null)
+            {
+                Transform parent = FindBattleCanvas()?.transform;
+                GameObject go = parent != null ? Instantiate(prefab, parent, false) : Instantiate(prefab);
+                go.SetActive(false); // 由 WinPanel.Show() 负责激活并播放演出
+                winPanel = go.GetComponent<WinPanel>();
+                Debug.Log($"[UI_BattleScene] 场景内无 WinPanel，已从 Resources 实例化 WinPanel 预制体 (parent={(parent != null ? parent.name : "无Canvas")})");
+                return EnsurePanelUnderCanvas(winPanel);
+            }
+
+            Debug.LogError("[UI_BattleScene] 无法解析 WinPanel：Inspector 未绑定、场景内无实例、且 Resources(UI/BattleScene/WinPanel) 加载失败");
+            return null;
+        }
+
+        /// <summary>
+        /// 确保 WinPanel 挂在某个 Canvas 下，否则它不会被渲染（UI 元素必须在 Canvas 子树里）。
+        /// 若当前没有 Canvas 祖先，则重挂到战斗场景的 Canvas，并置于最上层。
+        /// </summary>
+        private WinPanel EnsurePanelUnderCanvas(WinPanel panel)
+        {
+            if (panel == null) return null;
+
+            if (panel.GetComponentInParent<Canvas>() != null)
+            {
+                panel.transform.SetAsLastSibling(); // 已在 Canvas 下，仅确保渲染在最上层
+                return panel;
+            }
+
+            var canvas = FindBattleCanvas();
+            if (canvas != null)
+            {
+                panel.transform.SetParent(canvas.transform, false);
+                panel.transform.SetAsLastSibling();
+                // 锚定铺满父级，避免预制体自带的局部坐标把它推到屏幕外
+                var rt = panel.transform as RectTransform;
+                if (rt != null)
+                {
+                    rt.anchorMin = Vector2.zero;
+                    rt.anchorMax = Vector2.one;
+                    rt.offsetMin = Vector2.zero;
+                    rt.offsetMax = Vector2.zero;
+                }
+                Debug.Log($"[UI_BattleScene] WinPanel 原本不在 Canvas 下，已重挂到 Canvas: {canvas.name}");
             }
             else
             {
-                Debug.LogWarning("[UI_BattleScene] VictoryPanel 未绑定，且未启用自动跳关；战斗已结束停在原场景");
+                Debug.LogError("[UI_BattleScene] 找不到任何 Canvas，WinPanel 无法显示！请确认战斗场景里有 Canvas。");
             }
+            return panel;
+        }
+
+        /// <summary>
+        /// 查找战斗场景的 Canvas：UI_BattleScene 本体可能不在 Canvas 下，
+        /// 因此优先借用已知 UI 元素（CardContainer / PlayerPosition）的 Canvas，兜底取场景内任意 Canvas。
+        /// </summary>
+        private Canvas FindBattleCanvas()
+        {
+            Canvas c = null;
+            if (CardContainer != null) c = CardContainer.GetComponentInParent<Canvas>();
+            if (c == null && PlayerPosition != null) c = PlayerPosition.GetComponentInParent<Canvas>();
+            if (c == null) c = GetComponentInParent<Canvas>();
+            if (c == null) c = FindObjectOfType<Canvas>();
+            return c;
         }
 
         /// <summary>

@@ -5,6 +5,38 @@ using Scripts.UI;
 
 namespace Ashlight.Common.Events
 {
+    /// <summary>拼图成功放置后发布；MapPanel 用于创建或刷新地块视图。</summary>
+    public struct MapTilePlacedEvent
+    {
+        public Ashlight.State.Runtime.MapPlacedTileState Tile;
+    }
+
+    /// <summary>战斗 Tile 已落到地图，等待道路显现后再进入战斗。</summary>
+    public struct MapTileEncounterQueuedEvent
+    {
+        public string EncounterId;
+    }
+
+    /// <summary>非战斗地块的即时内容结算通知。</summary>
+    public struct MapContentResolvedEvent
+    {
+        public Ashlight.State.Runtime.MapTileContent Content;
+        public Ashlight.State.Runtime.MapGridPosition Position;
+    }
+
+    /// <summary>地图请求进入战斗；场景/流程层决定如何加载 BattleScene。</summary>
+    public struct MapBattleRequestedEvent
+    {
+        public Ashlight.State.Runtime.MapBattleKind Kind;
+        public string EncounterId;
+    }
+
+    /// <summary>地图状态变更；UI 只能读取此状态，不得直接修改。</summary>
+    public struct MapRunStateChangedEvent
+    {
+        public Ashlight.State.Runtime.MapRuntimeState State;
+    }
+
     public struct SelectCardToDeckEvent
     {
         public CardInfo cardInfo;
@@ -58,6 +90,9 @@ namespace Ashlight.Common.Events
         /// 实际造成的伤害值（已扣除护甲）
         /// </summary>
         public int ActualDamage;
+
+        /// <summary>Damage absorbed by armor during this hit.</summary>
+        public int ArmorDamage;
 
         /// <summary>
         /// 是否为AOE伤害
@@ -165,6 +200,12 @@ namespace Ashlight.Common.Events
         /// 为 true 时不播放战斗演出（例如 ATB 下打出执行牌仅宣告出牌，效果在执行轨再结算）
         /// </summary>
         public bool SkipBattleAnimation;
+
+        /// <summary>
+        /// 为 true 时使用"中央舞台"演出（双方抽离到屏幕中央播放），否则使用原地播放。
+        /// 玩家执行牌结算、敌人技能执行时为 true；迅捷牌等普通打牌保持原地。
+        /// </summary>
+        public bool UseCenterStage;
     }
 
     /// <summary>
@@ -207,5 +248,25 @@ namespace Ashlight.Common.Events
         /// 玩家是否胜利（true=全部敌人死亡且至少一个玩家存活）
         /// </summary>
         public bool IsPlayerVictory;
+    }
+
+    /// <summary>
+    /// 换位事件
+    /// 当 MovePositionCommand 让施法者和一名友方交换前/后排时发布，用于驱动 UI 交换二者的
+    /// sibling 顺序（由 HorizontalLayoutGroup 完成实际重排）。
+    /// 逻辑层（阵营列表顺序，索引 0 = 前排）是唯一真相源，UI 收到事件后只做视觉交换。
+    /// </summary>
+    public struct PositionSwappedEvent
+    {
+        /// <summary>
+        /// 交换双方的单位ID（A 通常是施法者）
+        /// </summary>
+        public string UnitIdA;
+        public string UnitIdB;
+
+        /// <summary>
+        /// 是否为预解算模式（预解算时不实际移动角色）
+        /// </summary>
+        public bool IsPrediction;
     }
 }

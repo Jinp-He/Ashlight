@@ -116,29 +116,48 @@ namespace Scripts.UI
 
             foreach (var cardState in allCards)
             {
-                var cardInfo = ConfigLoader.Tables.TbCardInfo.GetOrDefault(cardState.CardId);
-                if (cardInfo == null)
-                {
-                    Debug.LogWarning($"[BattleCardPoolManager] 未找到卡牌配置: {cardState.CardId}");
-                    continue;
-                }
-
-                // 实例化到抽牌堆容器
-                GameObject cardObj = Object.Instantiate(_cardViewControllerPrefab, _deckContainer);
-                CardViewController cardView = cardObj.GetComponent<CardViewController>();
-
-                if (cardView != null)
-                {
-                    // 使用 Reinitialize 初始化
-                    cardView.Reinitialize(cardInfo, cardState.InstanceId, DescriptionMode.Battle);
-                    cardView.Hide(); // 初始隐藏
-
-                    _cardPool[cardState.InstanceId] = cardView;
-                    _deckCards.Add(cardView);
-                }
+                CreatePooledCard(cardState);
             }
 
             Debug.Log($"[BattleCardPoolManager] 卡牌池初始化完成，共 {_cardPool.Count} 张卡牌 UI");
+        }
+
+        /// <summary>
+        /// 为一张 CardRuntimeState 创建 UI 并注册进池（放入抽牌堆容器、初始隐藏）。
+        /// </summary>
+        /// <param name="cardState">卡牌运行时状态</param>
+        /// <returns>新建的 CardViewController，失败返回 null</returns>
+        private CardViewController CreatePooledCard(CardRuntimeState cardState)
+        {
+            if (cardState == null)
+            {
+                return null;
+            }
+
+            var cardInfo = ConfigLoader.Tables.TbCardInfo.GetOrDefault(cardState.CardId);
+            if (cardInfo == null)
+            {
+                Debug.LogWarning($"[BattleCardPoolManager] 未找到卡牌配置: {cardState.CardId}");
+                return null;
+            }
+
+            // 实例化到抽牌堆容器
+            GameObject cardObj = Object.Instantiate(_cardViewControllerPrefab, _deckContainer);
+            CardViewController cardView = cardObj.GetComponent<CardViewController>();
+
+            if (cardView == null)
+            {
+                Object.Destroy(cardObj);
+                return null;
+            }
+
+            // 使用 Reinitialize 初始化
+            cardView.Reinitialize(cardInfo, cardState.InstanceId, DescriptionMode.Battle);
+            cardView.Hide(); // 初始隐藏
+
+            _cardPool[cardState.InstanceId] = cardView;
+            _deckCards.Add(cardView);
+            return cardView;
         }
 
         /// <summary>
@@ -154,6 +173,28 @@ namespace Scripts.UI
                 return null;
             }
             return _cardPool.TryGetValue(instanceId, out var card) ? card : null;
+        }
+
+        /// <summary>
+        /// 获取或按需创建卡牌 UI。
+        /// 运行时产出的卡（如 AddToHand 生成的 token）不在初始池中，此处按需补建其 UI。
+        /// </summary>
+        /// <param name="cardState">卡牌运行时状态</param>
+        /// <returns>对应的 CardViewController，失败返回 null</returns>
+        public CardViewController GetOrCreateCard(CardRuntimeState cardState)
+        {
+            if (cardState == null || string.IsNullOrEmpty(cardState.InstanceId))
+            {
+                Debug.LogWarning("[BattleCardPoolManager] GetOrCreateCard: cardState 或 InstanceId 为空");
+                return null;
+            }
+
+            if (_cardPool.TryGetValue(cardState.InstanceId, out var existing) && existing != null)
+            {
+                return existing;
+            }
+
+            return CreatePooledCard(cardState);
         }
 
         /// <summary>

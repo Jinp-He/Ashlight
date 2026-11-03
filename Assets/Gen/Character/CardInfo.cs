@@ -29,6 +29,13 @@ public sealed partial class CardInfo : Luban.BeanBase
         { if(!_buf["IsLocked"].IsBoolean) { throw new SerializationException(); }  IsLocked = _buf["IsLocked"]; }
         { if(!_buf["Energy"].IsNumber) { throw new SerializationException(); }  Energy = _buf["Energy"]; }
         { if(!_buf["ExecutingCost"].IsNumber) { throw new SerializationException(); }  ExecutingCost = _buf["ExecutingCost"]; }
+        { if(!_buf["IsEthereal"].IsBoolean) { throw new SerializationException(); }  IsEthereal = _buf["IsEthereal"]; }
+        { if(!_buf["IsExhaust"].IsBoolean) { throw new SerializationException(); }  IsExhaust = _buf["IsExhaust"]; }
+        { if(!_buf["TargetZone"].IsNumber) { throw new SerializationException(); }  TargetZone = (TargetZoneEnum)_buf["TargetZone"].AsInt; }
+        { if(!_buf["CastZone"].IsNumber) { throw new SerializationException(); }  CastZone = (TargetZoneEnum)_buf["CastZone"].AsInt; }
+        { if(!_buf["IsInUpgrade"].IsBoolean) { throw new SerializationException(); }  IsInUpgrade = _buf["IsInUpgrade"]; }
+        { var __json0 = _buf["ChargeStartEffects"]; if(!__json0.IsArray) { throw new SerializationException(); } ChargeStartEffects = new System.Collections.Generic.List<Effect>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { Effect __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.Effect.DeserializeEffect(__e0);  }  ChargeStartEffects.Add(__v0); }   }
+        { var __json0 = _buf["ChargeWhileEffects"]; if(!__json0.IsArray) { throw new SerializationException(); } ChargeWhileEffects = new System.Collections.Generic.List<Effect>(__json0.Count); foreach(JSONNode __e0 in __json0.Children) { Effect __v0;  { if(!__e0.IsObject) { throw new SerializationException(); }  __v0 = global::cfg.Effect.DeserializeEffect(__e0);  }  ChargeWhileEffects.Add(__v0); }   }
     }
 
     public static CardInfo DeserializeCardInfo(JSONNode _buf)
@@ -48,6 +55,13 @@ public sealed partial class CardInfo : Luban.BeanBase
     public readonly bool IsLocked;
     public readonly int Energy;
     public readonly int ExecutingCost;
+    public readonly bool IsEthereal;
+    public readonly bool IsExhaust;
+    public readonly TargetZoneEnum TargetZone;
+    public readonly TargetZoneEnum CastZone;
+    public readonly bool IsInUpgrade;
+    public readonly System.Collections.Generic.List<Effect> ChargeStartEffects;
+    public readonly System.Collections.Generic.List<Effect> ChargeWhileEffects;
    
     public const int __ID__ = 804331843;
     public override int GetTypeId() => __ID__;
@@ -55,6 +69,8 @@ public sealed partial class CardInfo : Luban.BeanBase
     public  void ResolveRef(Tables tables)
     {
         foreach (var _e in Effects) { _e?.ResolveRef(tables); }
+        foreach (var _e in ChargeStartEffects) { _e?.ResolveRef(tables); }
+        foreach (var _e in ChargeWhileEffects) { _e?.ResolveRef(tables); }
     }
 
     public override string ToString()
@@ -72,6 +88,13 @@ public sealed partial class CardInfo : Luban.BeanBase
         + "IsLocked:" + IsLocked + ","
         + "Energy:" + Energy + ","
         + "ExecutingCost:" + ExecutingCost + ","
+        + "IsEthereal:" + IsEthereal + ","
+        + "IsExhaust:" + IsExhaust + ","
+        + "TargetZone:" + TargetZone + ","
+        + "CastZone:" + CastZone + ","
+        + "IsInUpgrade:" + IsInUpgrade + ","
+        + "ChargeStartEffects:" + Luban.StringUtil.CollectionToString(ChargeStartEffects) + ","
+        + "ChargeWhileEffects:" + Luban.StringUtil.CollectionToString(ChargeWhileEffects) + ","
         + "}";
     }
 }

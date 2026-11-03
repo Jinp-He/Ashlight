@@ -7,17 +7,18 @@
       "Rocket001",
       "Rocket001",
       "Rocket001",
+      "Rocket001",
+      "Rocket001",
       "Rocket005",
       "Rocket005",
-      "Rocket003",
-      "Rocket010",
-      "Rocket011",
-      "Rocket012",
-      "Rocket013"
+      "Rocket005",
+      "Rocket005",
+      "Rocket005"
     ],
-    "Speed": 5,
+    "Speed": 4,
     "Draw": 4,
-    "Energy": 5
+    "Energy": 4,
+    "Trait": "FirstPushFree"
   },
   {
     "Character": 0,
@@ -27,17 +28,18 @@
       "Irene001",
       "Irene001",
       "Irene001",
-      "Irene004",
-      "Irene004",
-      "Irene003",
-      "Irene013",
-      "Irene014",
-      "Irene015",
-      "Irene016"
+      "Irene001",
+      "Irene001",
+      "Irene002",
+      "Irene002",
+      "Irene002",
+      "Irene002",
+      "Irene002"
     ],
-    "Speed": 4,
-    "Draw": 4,
-    "Energy": 4
+    "Speed": 5,
+    "Draw": 5,
+    "Energy": 5,
+    "Trait": "DoubleExecution"
   },
   {
     "Character": 2,
@@ -47,16 +49,17 @@
       "Zhouzhou001",
       "Zhouzhou001",
       "Zhouzhou001",
-      "Zhouzhou006",
-      "Zhouzhou006",
-      "Zhouzhou010",
-      "Zhouzhou013",
-      "Zhouzhou014",
-      "Zhouzhou015",
-      "Zhouzhou016"
+      "Zhouzhou001",
+      "Zhouzhou001",
+      "Zhouzhou007",
+      "Zhouzhou007",
+      "Zhouzhou007",
+      "Zhouzhou007",
+      "Zhouzhou007"
     ],
     "Speed": 3,
-    "Draw": 4,
-    "Energy": 3
+    "Draw": 3,
+    "Energy": 3,
+    "Trait": "MoveAllyGrantMorale"
   }
 ]

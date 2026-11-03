@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using _Scripts.UI;
 using Spine.Unity;
+
 namespace Scripts.UI
 {
     /// <summary>
@@ -14,6 +15,8 @@ namespace Scripts.UI
 
         public Image Fill_Hp;
         public TextMeshProUGUI Txt_Hp;
+        public Image Fill_Exp;
+        public TextMeshProUGUI Txt_Exp;
         public RectTransform Shield;
         public TextMeshProUGUI Txt_Shield;
         public SkeletonGraphic Skeleton_Unit;
@@ -45,6 +48,12 @@ namespace Scripts.UI
                         break;
                     case "Txt_Hp":
                         Txt_Hp = bind.GetComponent<TextMeshProUGUI>();
+                        break;
+                    case "Fill_Exp":
+                        Fill_Exp = bind.GetComponent<Image>();
+                        break;
+                    case "Txt_Exp":
+                        Txt_Exp = bind.GetComponent<TextMeshProUGUI>();
                         break;
                     case "Shield":
                         Shield = bind.GetComponent<RectTransform>();

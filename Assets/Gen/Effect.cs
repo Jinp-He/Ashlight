@@ -27,6 +27,7 @@ public abstract partial class Effect : Luban.BeanBase
             case "AttackEffect": return new AttackEffect(_buf);
             case "AttackExtraEffect": return new AttackExtraEffect(_buf);
             case "AttackConditionalEffect": return new AttackConditionalEffect(_buf);
+            case "DefenseConditionalEffect": return new DefenseConditionalEffect(_buf);
             case "DefenseEffect": return new DefenseEffect(_buf);
             case "InterceptEffect": return new InterceptEffect(_buf);
             case "HealEffect": return new HealEffect(_buf);
@@ -35,9 +36,39 @@ public abstract partial class Effect : Luban.BeanBase
             case "TimeShiftAllEffect": return new TimeShiftAllEffect(_buf);
             case "CollisionEffect": return new CollisionEffect(_buf);
             case "SwiftEffect": return new SwiftEffect(_buf);
+            case "MovePositionEffect": return new MovePositionEffect(_buf);
+            case "AddToHandEffect": return new AddToHandEffect(_buf);
+            case "AddRandomToHandEffect": return new AddRandomToHandEffect(_buf);
             case "ChannelEffect": return new ChannelEffect(_buf);
             case "TauntEffect": return new TauntEffect(_buf);
             case "BuffEffect": return new BuffEffect(_buf);
+            case "BuffConditionalEffect": return new BuffConditionalEffect(_buf);
+            case "DrawEffect": return new DrawEffect(_buf);
+            case "OverloadEffect": return new OverloadEffect(_buf);
+            case "MoveSelfEffect": return new MoveSelfEffect(_buf);
+            case "ClearOverloadEffect": return new ClearOverloadEffect(_buf);
+            case "OnMoveDamageEffect": return new OnMoveDamageEffect(_buf);
+            case "AttackCurrentRoundEffect": return new AttackCurrentRoundEffect(_buf);
+            case "StunCurrentRoundEffect": return new StunCurrentRoundEffect(_buf);
+            case "MoveRowEffect": return new MoveRowEffect(_buf);
+            case "OnMoveAddCardEffect": return new OnMoveAddCardEffect(_buf);
+            case "BuffPerCurrentRoundEnemyEffect": return new BuffPerCurrentRoundEnemyEffect(_buf);
+            case "EnergyEffect": return new EnergyEffect(_buf);
+            case "MoveOnArmorBreakEffect": return new MoveOnArmorBreakEffect(_buf);
+            case "ChargedAttackEffect": return new ChargedAttackEffect(_buf);
+            case "CastShiftEffect": return new CastShiftEffect(_buf);
+            case "CastDamageBonusEffect": return new CastDamageBonusEffect(_buf);
+            case "CastResolveDrawEffect": return new CastResolveDrawEffect(_buf);
+            case "CastResolveBuffEffect": return new CastResolveBuffEffect(_buf);
+            case "CastImmediateEffect": return new CastImmediateEffect(_buf);
+            case "CastEchoEffect": return new CastEchoEffect(_buf);
+            case "WeatherConditionalAttackEffect": return new WeatherConditionalAttackEffect(_buf);
+            case "DelayScaledAttackEffect": return new DelayScaledAttackEffect(_buf);
+            case "WeatherSyncEnergyEffect": return new WeatherSyncEnergyEffect(_buf);
+            case "AlignToWeatherEffect": return new AlignToWeatherEffect(_buf);
+            case "WeatherGuardEffect": return new WeatherGuardEffect(_buf);
+            case "WeatherShiftEffect": return new WeatherShiftEffect(_buf);
+            case "CastShiftAllEffect": return new CastShiftAllEffect(_buf);
             default: throw new SerializationException();
         }
     }

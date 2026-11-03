@@ -15,6 +15,10 @@ namespace Scripts.UI
         private List<Character> _allPlayerCharacters = new List<Character>();
         private List<Enemy> _allEnemies = new List<Enemy>();
 
+        // 战斗场景引用：名单的权威来源。缓存的名单可能在初始化过早时为空/过期，
+        // 因此改为按需从场景重新拉取（见 RefreshRosterFromScene）。
+        private UI_BattleScene _battleScene;
+
         /// <summary>
         /// 初始化管理器
         /// </summary>
@@ -25,7 +29,25 @@ namespace Scripts.UI
             _allPlayerCharacters = playerCharacters ?? new List<Character>();
             _allEnemies = enemies ?? new List<Enemy>();
 
+            if (_battleScene == null) _battleScene = FindObjectOfType<UI_BattleScene>();
+
             Debug.Log($"[TargetSelectionManager] 初始化完成: {_allPlayerCharacters.Count}个玩家角色, {_allEnemies.Count}个敌人");
+        }
+
+        /// <summary>
+        /// 从战斗场景重新拉取当前角色/敌人名单。
+        /// 解决 InitializeTargetSelection 由第一张卡懒创建、可能早于战斗单位生成而抓到空名单、
+        /// 之后又永不刷新的问题——凡是用到全体名单的地方先刷一次即可。
+        /// </summary>
+        private void RefreshRosterFromScene()
+        {
+            if (_battleScene == null) _battleScene = FindObjectOfType<UI_BattleScene>();
+            if (_battleScene == null) return;
+
+            var players = _battleScene.GetAllPlayerCharacters();
+            var enemies = _battleScene.GetAllEnemies();
+            if (players != null) _allPlayerCharacters = players;
+            if (enemies != null) _allEnemies = enemies;
         }
 
         /// <summary>
@@ -82,9 +104,12 @@ namespace Scripts.UI
         /// </summary>
         /// <param name="target">目标GameObject</param>
         /// <param name="targetType">卡牌目标类型</param>
-        /// <param name="ownerId">卡牌所有者ID</param>
+        /// <param name="ownerCharacterId">卡牌所有者ID</param>
+        /// <param name="targetZone">卡牌 TargetZone：单体牌（SingleEnemy/SingleAlly）声明 Front/Back 时
+        /// 目标必须在对应排（【近战】/【远程】）；群体牌的 TargetZone 是 AOE 扩散分区，不限制载体点击。</param>
         /// <returns>是否为合法目标</returns>
-        public bool IsValidTarget(GameObject target, TargetTypeEnum targetType, CharacterEnum ownerCharacterId)
+        public bool IsValidTarget(GameObject target, TargetTypeEnum targetType, CharacterEnum ownerCharacterId,
+            TargetZoneEnum targetZone = TargetZoneEnum.Any)
         {
             if (target == null)
             {
@@ -94,7 +119,7 @@ namespace Scripts.UI
             switch (targetType)
             {
                 case TargetTypeEnum.SingleAlly:
-                    return ValidateSingleAlly(target, ownerCharacterId);
+                    return ValidateSingleAlly(target, ownerCharacterId) && IsTargetInZone(target, targetZone);
 
                 case TargetTypeEnum.AllAlly:
                     return ValidateAllAlly(target, ownerCharacterId);
@@ -103,7 +128,7 @@ namespace Scripts.UI
                     return ValidateSelf(target, ownerCharacterId);
 
                 case TargetTypeEnum.SingleEnemy:
-                    return ValidateSingleEnemy(target);
+                    return ValidateSingleEnemy(target) && IsTargetInZone(target, targetZone);
 
                 case TargetTypeEnum.AllEnemy:
                     return ValidateAllEnemy(target);
@@ -118,12 +143,29 @@ namespace Scripts.UI
         }
 
         /// <summary>
+        /// 【近战/远程】目标是否处于卡牌限制的分区（Any 恒为 true）
+        /// </summary>
+        private static bool IsTargetInZone(GameObject target, TargetZoneEnum zone)
+        {
+            if (zone != TargetZoneEnum.Front && zone != TargetZoneEnum.Back)
+            {
+                return true;
+            }
+
+            UnitState state = target.GetComponent<Character>()?.GetUnitState()
+                              ?? target.GetComponent<Enemy>()?.GetUnitState();
+            return ZoneTargeting.IsUnitInZone(state, zone);
+        }
+
+        /// <summary>
         /// 获取所有合法的队友
         /// </summary>
         /// <param name="ownerId">卡牌所有者ID</param>
         /// <returns>合法的队友列表</returns>
         public List<Character> GetAllValidAllies(CharacterEnum ownerCharacterId)
         {
+            RefreshRosterFromScene(); // 名单按需刷新，避免用到初始化过早留下的空名单
+
             List<Character> validAllies = new List<Character>();
 
             foreach (var character in _allPlayerCharacters)
@@ -149,6 +191,8 @@ namespace Scripts.UI
         /// <returns>合法的敌人列表</returns>
         public List<Enemy> GetAllValidEnemies()
         {
+            RefreshRosterFromScene(); // 名单按需刷新，避免用到初始化过早留下的空名单
+
             List<Enemy> validEnemies = new List<Enemy>();
 
             foreach (var enemy in _allEnemies)
