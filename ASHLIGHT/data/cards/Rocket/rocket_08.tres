@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_yncmk"]
+
+[resource]
+script = ExtResource("1_yncmk")
+id = "rocket_08"
+card_name = "震地"
+belong_to = "Rocket"
+cost_value = 5
+scope = "群体"
+effect_id = "damage_all"
+key_value = 1
+art_id = "Rocket001.png"
+description = "效果值 = 点数 × 1"
+uno_color = 3
+base_number = 5

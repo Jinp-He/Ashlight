@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_1ugsq"]
+
+[resource]
+script = ExtResource("1_1ugsq")
+id = "zhouzhou_03"
+card_name = "坚壁"
+belong_to = "Zhouzhou"
+card_type = 2
+cost_value = 5
+target_faction = "我方"
+effect_id = "shield"
+art_id = "Zhouzhou001.png"
+description = "效果值 = 点数 × 2"
+uno_color = 2
+base_number = 5

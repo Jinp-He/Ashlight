@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_2f6u4"]
+
+[resource]
+script = ExtResource("1_2f6u4")
+id = "rocket_06"
+card_name = "连打"
+belong_to = "Rocket"
+cost_value = 4
+effect_id = "damage_multi"
+key_value = 1
+hits = 2
+art_id = "Rocket001.png"
+description = "效果值 = 点数 × 1"
+uno_color = 1
+base_number = 4

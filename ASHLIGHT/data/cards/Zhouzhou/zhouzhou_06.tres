@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_13ypd"]
+
+[resource]
+script = ExtResource("1_13ypd")
+id = "zhouzhou_06"
+card_name = "盾反"
+belong_to = "Zhouzhou"
+card_type = 1
+cost_value = 3
+target_type = "Self"
+target_faction = "我方"
+effect_id = "counter"
+key_value = 5
+art_id = "Zhouzhou001.png"
+target_self = true
+description = "效果值固定"
+uno_color = 1
+base_number = 3
+scales_with_number = false
+counter_color = 1

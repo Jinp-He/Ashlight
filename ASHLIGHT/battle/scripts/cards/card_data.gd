@@ -2,24 +2,30 @@ class_name CardData
 extends Resource
 
 
+## 下拉框字段在 .tres 里仍存数字 / 字符串；选项值与旧数据一一对应，改选项时不要改动已有的值。
 @export var id: String = ""
 @export var card_name: String = ""
-@export var belong_to: String = ""            # Zhouzhou / Irene / Rocket
-@export var card_type: int = 0                # 0=攻击 1=状态 2=防御/功能（仅供美术态/兜底；效果以 effect_id 为准）
-@export var cost_type: int = 0                # 0=即时 1=执行（玩法字段，菱形色由 cost_color 驱动）
+@export_enum("Zhouzhou", "Irene", "Rocket") var belong_to: String = "Zhouzhou"
+## 仅供美术态/兜底；效果以 effect_id 为准。
+@export_enum("攻击:0", "状态:1", "防御/功能:2") var card_type: int = 0
+## 玩法字段，菱形色由 cost_color 驱动。
+@export_enum("即时:0", "执行:1") var cost_type: int = 0
 @export var cost_value: int = 1
-@export var cost_color: int = 0                # 费用色(菱形色+1+1匹配轴)：0蓝(00a1ff) 1橙(ff8c33) 2绿(70ab3b)
-@export var target_type: String = "SingleEnemy"   # 兼容性保留字段，目标由阵营与范围决定
-@export var scope: String = "单体"             # 单体/群体
+## 费用色(菱形色+1+1匹配轴)：蓝(00a1ff) 橙(ff8c33) 绿(70ab3b)。
+@export_enum("蓝:0", "橙:1", "绿:2") var cost_color: int = 0
+## 兼容性保留字段，目标由阵营与范围决定。
+@export_enum("SingleEnemy", "Self") var target_type: String = "SingleEnemy"
+@export_enum("单体", "群体") var scope: String = "单体"
 ## target_faction 相对施法者：敌方(对立阵营) / 我方(同阵营) / 全场(全部)。
 ## 范围多名目标时：怪物=随机选一(att/bleed)；角色卡=玩家点选(蓝卡手动)；无有效目标→角色卡灰掉不可打(全场卡恒可打)。
-@export var target_faction: String = "敌方"
+@export_enum("敌方", "我方", "全场") var target_faction: String = "敌方"
 ## effect_id 指向 EFFECT_ARCHETYPES 中的原型 key；关键数值落在 key_value
 ## effects_text 由 derived_effect_text() 自动重建，不再手填原始标签。
-@export var effect_id: String = ""
+## 新增原型时同步补进这里的选项。
+@export_enum("damage_single", "damage_multi", "damage_all", "shield", "heal", "haste", "slow", "draw", "move", "morale", "bleed", "counter") var effect_id: String = "damage_single"
 @export var key_value: int = 2
 @export var hits: int = 1
-@export var rarity: int = 1                    # 1/2/3
+@export_enum("1:1", "2:2", "3:3") var rarity: int = 1
 @export var enhanced: bool = false
 @export var art_id: String = ""                # 卡面文件名（无下划线，如 Zhouzhou001.png）
 @export var effects_text: String = ""          # 效果标签（derived_effect_text 重建后的展示文案，解析兜底用）
@@ -29,14 +35,14 @@ extends Resource
 @export var target_self: bool = false
 @export var exclude_self: bool = false
 @export var description: String = ""
-## 接牌玩法：颜色(0红 1蓝 2黄 3绿) + 基础点数。抽到手时在 ±number_spread 内浮动一次。
-@export var uno_color: int = 0
+## 接牌玩法：颜色 + 基础点数。抽到手时在 ±number_spread 内浮动一次。
+@export_enum("红:0", "蓝:1", "黄:2", "绿:3") var uno_color: int = 0
 @export var base_number: int = 1
 @export var number_spread: int = 1
 ## true：效果值 = 点数 × key_value；false：效果值固定为 key_value（如抽牌）。
 @export var scales_with_number: bool = true
-## 反制牌：敌人下个动作若是这个颜色的攻击（-1 = 任意颜色）则反制，并造成 key_value 点伤害。
-@export var counter_color: int = -1
+## 反制牌：敌人下个动作若是这个颜色的攻击（任意 = -1）则反制，并造成 key_value 点伤害。
+@export_enum("任意:-1", "红:0", "蓝:1", "黄:2", "绿:3") var counter_color: int = -1
 
 const NUMBER_MIN: int = 1
 const NUMBER_MAX: int = 5

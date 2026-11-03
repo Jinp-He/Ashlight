@@ -18,7 +18,7 @@ func check(condition: bool, message: String) -> void:
 		print("PASS: " + message)
 
 func card_named(card_name: String) -> CardData:
-	for card in PlaceholderCards.all_cards():
+	for card in CardDatabase.new().get_all():
 		if card.card_name == card_name:
 			return card
 	return null

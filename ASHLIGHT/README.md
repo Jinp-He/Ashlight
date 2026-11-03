@@ -21,7 +21,7 @@
 - `battle/scripts/battle_root.gd`：出牌 / 摸牌 / 补牌流程、敌人当场出手与反制牌结算、目标、胜负与 HUD。
 - `battle/scripts/cards/hand_manager.gd`：公共手牌、可出判定显示、卡面刷新、卡牌交互及动画。
 - `battle/scripts/cards/deck_manager.gd`：公共抽牌堆与弃牌堆。
-- `battle/scripts/v2/placeholder_cards.gd`：24 张占位卡。正式表通过 `CardDatabase.get_all()` 接入。
+- `data/cards/<角色>/*.tres`：卡牌数据（CardData 资源，24 张占位卡）。新增或改卡直接在编辑器里改资源，`CardDatabase` 自动读取整个文件夹。
 - `battle/scripts/monster_database.gd`：占位敌人的倒计时与出牌循环。
 - `battle/scripts/v2/ally_skills.gd`：友方技能的名字、效果与冷却。
 - `battle/scripts/cutscene/`：原有战斗演出组件。

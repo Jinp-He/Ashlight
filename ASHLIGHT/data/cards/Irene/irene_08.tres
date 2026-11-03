@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_dp8pc"]
+
+[resource]
+script = ExtResource("1_dp8pc")
+id = "irene_08"
+card_name = "拆招"
+belong_to = "Irene"
+card_type = 1
+target_type = "Self"
+target_faction = "我方"
+effect_id = "counter"
+key_value = 3
+art_id = "Irene001.png"
+target_self = true
+description = "效果值固定"
+uno_color = 3
+scales_with_number = false
