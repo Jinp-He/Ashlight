@@ -1,22 +1,17 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://denu70wlww3ty"]
 
-[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_kgk2w"]
-[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_kgk2w"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
 
 [sub_resource type="Resource" id="CardEffect_main"]
 script = ExtResource("2_effect")
-kind = "damage"
-target = "选中敌人"
-amount = 2
-scales_with_number = true
-hits = 1
 
 [resource]
 script = ExtResource("1_kgk2w")
 id = "rocket_04"
 card_name = "突刺"
 belong_to = "Rocket"
+art_path = "res://assets/cards/faces/Rocket001.png"
 uno_color = 3
 base_number = 2
-art_path = "res://assets/cards/faces/Rocket001.png"
 effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

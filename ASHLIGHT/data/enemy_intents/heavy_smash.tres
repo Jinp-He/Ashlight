@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemyIntentData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="1_intent"]
+
+[resource]
+script = ExtResource("1_intent")
+id = "heavy_smash"
+intent_name = "粉碎"
+color = 0
+number = 7
+stat = "damage"
+value = 16
+delay = 1

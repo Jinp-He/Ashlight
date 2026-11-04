@@ -1,21 +1,16 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://brpmrxcn46xl3"]
 
-[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_p1rw5"]
-[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_p1rw5"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
 
 [sub_resource type="Resource" id="CardEffect_main"]
 script = ExtResource("2_effect")
-kind = "damage"
-target = "选中敌人"
-amount = 2
-scales_with_number = true
-hits = 1
 
 [resource]
 script = ExtResource("1_p1rw5")
 id = "rocket_01"
 card_name = "重拳"
 belong_to = "Rocket"
-base_number = 3
 art_path = "res://assets/cards/faces/Rocket001.png"
+base_number = 3
 effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

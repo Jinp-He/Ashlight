@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MonsterData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/monsters/monster_data.gd" id="1_monster"]
+[ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="2_intent"]
+[ext_resource type="Resource" path="res://data/enemy_intents/heavy_hammer.tres" id="intent_0"]
+[ext_resource type="Resource" path="res://data/enemy_intents/heavy_smash.tres" id="intent_1"]
+[ext_resource type="Resource" path="res://data/enemy_intents/heavy_armor.tres" id="intent_2"]
+
+[resource]
+script = ExtResource("1_monster")
+id = "Mafe"
+monster_name = "Mafe"
+max_hp = 99.0
+countdown = 3
+intents = Array[ExtResource("2_intent")]([ExtResource("intent_0"), ExtResource("intent_1"), ExtResource("intent_2")])

@@ -1,16 +1,13 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dd0p80ltbtewr"]
 
-[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_uhii3"]
-[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_uhii3"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
 
 [sub_resource type="Resource" id="CardEffect_main"]
 script = ExtResource("2_effect")
 kind = "apply_status"
 target = "全体敌人"
 amount = 1
-scales_with_number = true
-hits = 1
-status_id = "bleed"
 
 [resource]
 script = ExtResource("1_uhii3")
@@ -18,6 +15,6 @@ id = "irene_05"
 card_name = "血雾"
 belong_to = "Irene"
 card_type = 1
-base_number = 4
 art_path = "res://assets/cards/faces/Irene001.png"
+base_number = 4
 effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

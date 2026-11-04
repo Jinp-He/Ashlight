@@ -20,7 +20,9 @@ var rules := ChainRules.new()
 var clock_busy: bool = false
 var skip_battle_animations: bool = false
 var _battle_ended: bool = false
-## 敌人 uid → 预告牌（MonsterDatabase 卡牌 + 锁定目标 target）。
+## 敌人 uid → 只读 MonsterData。生命、倒计时、循环进度均留在运行时。
+var _monster_data: Dictionary = {}
+## 敌人 uid → 意图资源生成的独立预告快照（含锁定目标 target）。
 var _v2_intents: Dictionary = {}
 var _countdown_labels: Dictionary = {}
 var _countdown_art_tops: Dictionary = {}
@@ -54,9 +56,11 @@ func _ready() -> void:
 			if not AllySkills.get_skill(unit.unit_id).is_empty():
 				rules.skill_cooldowns[unit.unit_id] = 0
 		else:
-			var data: Dictionary = MonsterDatabase.get_data(unit.unit_id)
-			unit.set_max_hp(float(data.get("max_hp", 60)))
-			rules.enemies[unit.unit_id] = int(data.get("countdown", 4))
+			var data := MonsterDatabase.get_data(unit.unit_id)
+			if data == null: return
+			_monster_data[unit.unit_id] = data
+			unit.set_max_hp(data.max_hp)
+			rules.enemies[unit.unit_id] = data.countdown
 			_v2_next_intent(unit)
 		var label := Label.new()
 		label.name = "OverheadCountdown"
@@ -600,17 +604,16 @@ func _v2_slot_priority(uid: String) -> float:
 	return unit.position.x
 
 func _v2_next_intent(caster: UnitRoot) -> void:
-	var cards: Array = MonsterDatabase.get_data(caster.unit_id).get("cards", [])
-	if cards.is_empty():
-		return
-	var card: Dictionary = (cards[int(caster.ai_memory.get("v2_actions", 0)) % cards.size()] as Dictionary).duplicate()
+	var data: MonsterData = _monster_data.get(caster.unit_id)
+	if data == null: return
+	var intent := data.intent_at(int(caster.ai_memory.get("v2_actions", 0)))
+	if intent == null: return
 	var target := caster
-	if card.stat == "damage":
+	if intent.stat == "damage":
 		var candidates := resolve_targets(caster, "敌方")
 		if not candidates.is_empty():
 			target = candidates.pick_random()
-	card["target"] = target.unit_id
-	card["uid"] = caster.unit_id
+	var card := intent.make_payload(caster.unit_id, target.unit_id)
 	_v2_intents[caster.unit_id] = card
 	var shield: bool = card.stat == "shield"
 	caster.set_intent("shield" if shield else "att", str(card.value), "我方" if shield else "敌方", "单体", "",
@@ -647,8 +650,9 @@ func _end_enemy_action(card: Dictionary) -> void:
 	var caster := _find_unit(card.uid)
 	if not is_instance_valid(caster) or caster.get_current_hp() <= 0 or _battle_ended:
 		return
-	var data: Dictionary = MonsterDatabase.get_data(card.uid)
-	rules.enemies[card.uid] = int(data.get("countdown", 4)) + int(card.get("delay", 0))
+	var data: MonsterData = _monster_data.get(card.uid)
+	if data == null: return
+	rules.enemies[card.uid] = data.countdown + int(card.get("delay", 0))
 	caster.ai_memory["v2_actions"] = int(caster.ai_memory.get("v2_actions", 0)) + 1
 	_v2_next_intent(caster)
 
@@ -670,6 +674,8 @@ func _v2_finish() -> void:
 	_v2_set_busy(false)
 
 func _display_name(uid: String) -> String:
+	var data: MonsterData = _monster_data.get(uid)
+	if data != null and not data.monster_name.is_empty(): return data.monster_name
 	return DISPLAY_NAMES.get(uid, uid)
 
 func _v2_refresh_hud() -> void:

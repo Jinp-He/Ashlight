@@ -1,18 +1,14 @@
-[gd_resource type="Resource" script_class="StartingDeckData" format=3]
+[gd_resource type="Resource" script_class="StartingDeckData" format=3 uid="uid://b4ypmolhr0c6d"]
 
-[ext_resource type="Script" path="res://battle/scripts/cards/starting_deck_data.gd" id="1_deck"]
-[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="2_card"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_01.tres" id="card_1"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_02.tres" id="card_2"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_03.tres" id="card_3"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_04.tres" id="card_4"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_05.tres" id="card_5"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_06.tres" id="card_6"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_07.tres" id="card_7"]
-[ext_resource type="Resource" path="res://data/cards/Zhouzhou/zhouzhou_08.tres" id="card_8"]
+[ext_resource type="Script" uid="uid://puw1l6wwxln4" path="res://battle/scripts/cards/starting_deck_data.gd" id="1_deck"]
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="2_card"]
+[ext_resource type="Resource" uid="uid://b5sl2v5ld0e5" path="res://data/cards/Zhouzhou/zhouzhou_01.tres" id="card_1"]
+[ext_resource type="Resource" uid="uid://rs5e6d7tcgrv" path="res://data/cards/Zhouzhou/zhouzhou_02.tres" id="card_2"]
+[ext_resource type="Resource" uid="uid://40i3llytsl41" path="res://data/cards/Zhouzhou/zhouzhou_03.tres" id="card_3"]
+[ext_resource type="Resource" uid="uid://bqjb7ucim0tyv" path="res://data/cards/Zhouzhou/zhouzhou_04.tres" id="card_4"]
+[ext_resource type="Resource" uid="uid://b40th5yu4dqir" path="res://data/cards/Zhouzhou/zhouzhou_05.tres" id="card_5"]
 
 [resource]
 script = ExtResource("1_deck")
-role_id = "Zhouzhou"
 deck_name = "周周初始卡组"
-cards = Array[ExtResource("2_card")]([ExtResource("card_1"), ExtResource("card_2"), ExtResource("card_3"), ExtResource("card_4"), ExtResource("card_5"), ExtResource("card_6"), ExtResource("card_7"), ExtResource("card_8")])
+cards = Array[ExtResource("2_card")]([ExtResource("card_1"), ExtResource("card_2"), ExtResource("card_3"), ExtResource("card_4"), ExtResource("card_5")])

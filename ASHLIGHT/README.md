@@ -24,10 +24,20 @@
 - `battle/scripts/cards/deck_manager.gd`：公共抽牌堆与弃牌堆。
 - `data/cards/<角色>/*.tres`：完整卡牌库（CardData 资源），新建或改卡直接在编辑器里操作。
 - `data/starting_decks/*.tres`：角色初始卡组（StartingDeckData 资源），显式引用开局要加入公共牌库的卡牌。
-- `battle/scripts/monster_database.gd`：占位敌人的倒计时与出牌循环。
+- `battle/scripts/monster_database.gd`：按场景单位 ID 加载、校验怪物资源。
+- `data/monsters/*.tres`：怪物生命、基础倒计时和有序意图循环。
+- `data/enemy_intents/*.tres`：可共享的敌方意图配置（颜色、点数、伤害/护盾、额外恢复时间）。
 - `battle/scripts/v2/ally_skills.gd`：友方技能的名字、效果与冷却。
 - `battle/scripts/cutscene/`：原有战斗演出组件。
 - `battle/scripts/_archive/`：旧 EP / 费用倒计时代码存档（Godot 忽略）。
+
+## 怪物与意图
+
+在 Inspector 编辑 `data/monsters/remy.tres`、`wangg.tres`、`grey.tres`、`mafe.tres`：`max_hp` 决定初始生命，`countdown` 决定基础倒计时，`intents` 是按顺序循环的意图清单。场景敌人的 `unit_id` 对应资源 `id`，文件名为 ID 的 snake_case。
+
+意图本身保存在 `data/enemy_intents/`，可直接拖入怪物的 `intents` 数组。`intent_name / color / number` 控制显示和牌堆顶，`stat / value` 控制伤害或护盾，`delay` 控制这次出手后额外的恢复格数。伤害预告时随机锁定存活对手，护盾作用于自身；被反制也会推进循环及应用 delay。
+
+Grey 与 Mafe 共享重锤、粉碎、装甲三份意图；修改共享资源会同时生效。只改某种怪物时，复制意图 `.tres` 后替换其引用。怪物静态配置不保存当前生命、剩余倒计时或锁定目标，运行时不会写回资源。详细字段与数值见战斗设计文档第 4 节。
 
 ## 角色初始卡组
 

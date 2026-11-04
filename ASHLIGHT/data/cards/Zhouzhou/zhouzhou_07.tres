@@ -1,23 +1,20 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://se6ljp6mtbyi"]
 
-[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_2emj8"]
-[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_2emj8"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
 
 [sub_resource type="Resource" id="CardEffect_main"]
 script = ExtResource("2_effect")
 kind = "shield"
 target = "全体友方"
 amount = 1
-scales_with_number = true
-hits = 1
 
 [resource]
 script = ExtResource("1_2emj8")
 id = "zhouzhou_07"
 card_name = "屏障"
-belong_to = "Zhouzhou"
 card_type = 2
+art_path = "res://assets/cards/faces/Zhouzhou001.png"
 uno_color = 2
 base_number = 2
-art_path = "res://assets/cards/faces/Zhouzhou001.png"
 effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

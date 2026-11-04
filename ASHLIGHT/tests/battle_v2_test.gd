@@ -47,8 +47,47 @@ func clear_hand() -> void:
 func set_top(color: int, number: int) -> void:
 	br.rules.place_player_card(color, number, "", "测试")
 
+func test_monster_resources() -> void:
+	var expected: Dictionary = {"Remy": [30.0, 3, 2], "Wangg": [30.0, 4, 3], "Grey": [40.0, 5, 3], "Mafe": [99.0, 3, 3]}
+	for uid in expected:
+		var data := MonsterDatabase.get_data(uid)
+		var values: Array = expected[uid]
+		check(data != null and data.validation_errors().is_empty() and data.max_hp == values[0] and data.countdown == values[1] and data.intents.size() == values[2], uid + " monster tres preserves HP, countdown and intent count")
+	var grey_config := MonsterDatabase.get_data("Grey")
+	var mafe_config := MonsterDatabase.get_data("Mafe")
+	check(grey_config.intents[1] == mafe_config.intents[1], "different monsters can share the same intent resource")
+	check(grey_config.intent_at(0).intent_name == "重锤" and grey_config.intent_at(1).intent_name == "粉碎" and grey_config.intent_at(2).stat == "shield" and grey_config.intent_at(3) == grey_config.intent_at(0), "intent array cycles in resource order")
+	var smash := grey_config.intent_at(1)
+	check(smash.value == 16 and smash.color == 0 and smash.number == 7 and smash.delay == 1, "smash tres retains its attack and recovery delay")
+	var first := smash.make_payload("Grey", "Irene")
+	var second := smash.make_payload("Mafe", "Rocket")
+	first.value = 999
+	first.target = "Zhouzhou"
+	check(second.value == 16 and second.target == "Rocket" and second.uid == "Mafe" and smash.value == 16, "runtime intent snapshots never mutate shared resources or each other")
+	var invalid_monster := grey_config.duplicate() as MonsterData
+	invalid_monster.intents = []
+	check(not invalid_monster.validation_errors().is_empty(), "empty monster intent cycle is rejected")
+	invalid_monster.intents = [null]
+	check(not invalid_monster.validation_errors().is_empty(), "null intent slots are rejected")
+	invalid_monster = grey_config.duplicate() as MonsterData
+	invalid_monster.countdown = 0
+	check(not invalid_monster.validation_errors().is_empty(), "non-positive monster countdown is rejected")
+	invalid_monster.countdown = 5
+	invalid_monster.max_hp = 0
+	check(not invalid_monster.validation_errors().is_empty(), "non-positive monster HP is rejected")
+	var invalid_intent := smash.duplicate() as EnemyIntentData
+	invalid_intent.stat = "invalid"
+	check(not invalid_intent.validation_errors().is_empty(), "unknown intent kind cannot silently become a shield")
+	invalid_intent.stat = "damage"
+	invalid_intent.color = 4
+	check(not invalid_intent.validation_errors().is_empty(), "invalid intent color is rejected")
+	invalid_intent.color = 0
+	invalid_intent.delay = -1
+	check(not invalid_intent.validation_errors().is_empty(), "negative intent recovery delay is rejected")
+
 func run() -> void:
 	seed(22)
+	test_monster_resources()
 	# 初始卡组是独立资源；牌库里的卡必须显式列入才能成为初始牌。
 	var starting_decks: Array[StartingDeckData] = []
 	for role in ["zhouzhou", "irene", "rocket"]:
@@ -87,6 +126,21 @@ func run() -> void:
 	await get_tree().create_timer(0.2).timeout
 	check(rules.ticks == 0 and rules.enemies == initial, "idle does not advance countdowns")
 	check(initial.Remy == 3 and initial.Wangg == 4 and initial.Grey == 5, "enemy countdowns come from MonsterDatabase")
+	check(br._find_unit("Remy").get_current_hp() == 30 and br._find_unit("Grey").get_current_hp() == 40, "battle HP initializes from monster resources")
+	var grey_unit := br._find_unit("Grey")
+	var grey_data := MonsterDatabase.get_data("Grey")
+	grey_unit.ai_memory["v2_actions"] = 1
+	br._v2_next_intent(grey_unit)
+	var smash_snapshot: Dictionary = br._v2_intents.Grey
+	check(smash_snapshot.name == "粉碎" and smash_snapshot.value == 16 and smash_snapshot.delay == 1 and br.resolve_targets(grey_unit, "敌方").has(br._find_unit(smash_snapshot.target)), "resource intent is previewed with a locked living opponent")
+	br._end_enemy_action(smash_snapshot)
+	check(rules.enemies.Grey == 6 and br._v2_intents.Grey.stat == "shield" and br._v2_intents.Grey.target == "Grey", "finishing smash adds recovery delay and previews next self-shield intent")
+	br._end_enemy_action(br._v2_intents.Grey)
+	check(rules.enemies.Grey == 5 and br._v2_intents.Grey.name == "重锤", "finishing shield restores base countdown and wraps resource intent cycle")
+	check(grey_data.countdown == 5 and grey_data.intents[1].delay == 1, "battle countdowns and cycle progress do not modify monster or intent resources")
+	grey_unit.ai_memory["v2_actions"] = 0
+	br._v2_next_intent(grey_unit)
+
 
 	# --- 纯规则：接牌、Combo ---
 	var r := ChainRules.new()

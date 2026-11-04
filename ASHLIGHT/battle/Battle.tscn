@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://c8klgfp6swmo2" path="res://battle/scripts/battle_root.gd" id="1_battle"]
 [ext_resource type="Script" uid="uid://bn5kefrv7qs8t" path="res://battle/scripts/units/unit_root.gd" id="3_unitroot"]
 [ext_resource type="Texture2D" uid="uid://bq7a7cv34cx8h" path="res://assets/battle/background/background_001.png" id="bg_tex"]
+[ext_resource type="FontFile" uid="uid://dmarc6c4cghrt" path="res://assets/fonts/Biantao.ttf" id="biantao_font"]
 [ext_resource type="PackedScene" path="res://battle/scripts/ui/DeckButton.tscn" id="deck_scene"]
 [ext_resource type="PackedScene" path="res://battle/scripts/ui/DiscardButton.tscn" id="discard_scene"]
 [ext_resource type="Texture2D" uid="uid://c0sopexpf8erk" path="res://assets/battle/foreground/foreground_001.png" id="fg_tex"]
@@ -10,7 +11,6 @@
 [ext_resource type="Texture2D" uid="uid://dgot1g87ca78t" path="res://assets/battle/midground/midground_001.png" id="mg_tex"]
 [ext_resource type="Script" uid="uid://cyh8o1jqijr3" path="res://battle/scripts/cards/redraw_button.gd" id="redraw_btn"]
 [ext_resource type="Script" uid="uid://car3vfygao2hd" path="res://battle/scripts/wind_particles.gd" id="wind_particles"]
-[ext_resource type="FontFile" path="res://assets/fonts/Biantao.ttf" id="biantao_font"]
 
 [node name="BattleRoot" type="Node2D" unique_id=1472562332]
 script = ExtResource("1_battle")
@@ -42,7 +42,6 @@ texture = ExtResource("fg_tex")
 z_index = 1
 position = Vector2(310, 510)
 script = ExtResource("3_unitroot")
-unit_id = "Zhouzhou"
 max_hp = 99.0
 current_hp = 99.0
 
@@ -53,7 +52,7 @@ script = ExtResource("3_unitroot")
 unit_id = "Remy"
 unit_faction = "enemy"
 
-[node name="UnitL2" type="Node2D" parent="Units"]
+[node name="UnitL2" type="Node2D" parent="Units" unique_id=408892844]
 z_index = 1
 position = Vector2(480, 510)
 script = ExtResource("3_unitroot")
@@ -61,7 +60,7 @@ unit_id = "Irene"
 max_hp = 100.0
 current_hp = 100.0
 
-[node name="UnitL3" type="Node2D" parent="Units"]
+[node name="UnitL3" type="Node2D" parent="Units" unique_id=1793422028]
 z_index = 1
 position = Vector2(650, 510)
 script = ExtResource("3_unitroot")
@@ -69,14 +68,14 @@ unit_id = "Rocket"
 max_hp = 100.0
 current_hp = 100.0
 
-[node name="UnitR2" type="Node2D" parent="Units"]
+[node name="UnitR2" type="Node2D" parent="Units" unique_id=861603062]
 z_index = 2
 position = Vector2(1120, 510)
 script = ExtResource("3_unitroot")
 unit_id = "Wangg"
 unit_faction = "enemy"
 
-[node name="UnitR3" type="Node2D" parent="Units"]
+[node name="UnitR3" type="Node2D" parent="Units" unique_id=684652307]
 z_index = 2
 position = Vector2(1290, 510)
 script = ExtResource("3_unitroot")
@@ -111,10 +110,10 @@ offset_top = 810.0
 offset_right = 1403.0
 offset_bottom = 810.0
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1659022564]
 layer = 100
 
-[node name="PileTop" type="Control" parent="HUD"]
+[node name="PileTop" type="Control" parent="HUD" unique_id=765946934]
 layout_mode = 3
 anchors_preset = 0
 offset_left = 800.0
@@ -123,7 +122,7 @@ offset_right = 800.0
 offset_bottom = 70.0
 mouse_filter = 2
 
-[node name="Outline" type="ColorRect" parent="HUD/PileTop"]
+[node name="Outline" type="ColorRect" parent="HUD/PileTop" unique_id=2111862756]
 layout_mode = 0
 offset_left = -39.0
 offset_top = -39.0
@@ -134,7 +133,7 @@ pivot_offset = Vector2(39, 39)
 mouse_filter = 2
 color = Color(0, 0, 0, 1)
 
-[node name="Diamond" type="ColorRect" parent="HUD/PileTop"]
+[node name="Diamond" type="ColorRect" parent="HUD/PileTop" unique_id=2097571985]
 layout_mode = 0
 offset_left = -35.0
 offset_top = -35.0
@@ -145,7 +144,7 @@ pivot_offset = Vector2(35, 35)
 mouse_filter = 2
 color = Color(0.3, 0.3, 0.3, 1)
 
-[node name="Number" type="Label" parent="HUD/PileTop"]
+[node name="Number" type="Label" parent="HUD/PileTop" unique_id=2017536785]
 layout_mode = 0
 offset_left = -50.0
 offset_top = -32.0
@@ -159,7 +158,7 @@ text = "?"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="InfoPanel" type="VBoxContainer" parent="HUD"]
+[node name="InfoPanel" type="VBoxContainer" parent="HUD" unique_id=1630272104]
 offset_left = 20.0
 offset_top = 150.0
 offset_right = 230.0
@@ -167,7 +166,7 @@ offset_bottom = 420.0
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="ComboLabel" type="Label" parent="HUD/InfoPanel"]
+[node name="ComboLabel" type="Label" parent="HUD/InfoPanel" unique_id=1782227909]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -176,7 +175,7 @@ theme_override_fonts/font = ExtResource("biantao_font")
 theme_override_font_sizes/font_size = 44
 text = "COMBO ×1"
 
-[node name="CounterLabel" type="Label" parent="HUD/InfoPanel"]
+[node name="CounterLabel" type="Label" parent="HUD/InfoPanel" unique_id=703576980]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.85, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -184,7 +183,7 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 18
 autowrap_mode = 3
 
-[node name="ActionLog" type="Label" parent="HUD/InfoPanel"]
+[node name="ActionLog" type="Label" parent="HUD/InfoPanel" unique_id=250027857]
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
