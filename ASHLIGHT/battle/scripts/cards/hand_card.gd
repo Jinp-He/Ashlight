@@ -18,7 +18,7 @@ var cost_color: int = 0                          # 接牌颜色(0红/1蓝/2黄/3
 var base_number: int = 1                         # 抽到手时浮动确定的基础点数，离开手牌前不变
 var state: int = STATE_IDLE
 var order: int = 0
-## 关联的卡牌静态数据（由 HandManager 从 CardDatabase 填充），打出时解析 effects_text 用。
+## 关联的卡牌静态数据（由 HandManager 从 CardDatabase 填充），打出时依次执行原子效果。
 var data: CardData = null
 var is_flashback: bool = false
 ## 布局还原用：base_z=常态层级（layout 写入），home_pos=常态位置（layout 写入）。

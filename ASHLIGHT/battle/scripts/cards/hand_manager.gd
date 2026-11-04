@@ -125,7 +125,7 @@ var _combo_pointer_inside: bool = false
 var _combo_cur_x: float = 0.0
 var _combo_cur_y: float = 0.0
 ## _combo_ring_count = 当前链环数（= 链长-1，锚点不计）；_combo_pending_boost = 已加链但文字尚未在「背面」替换。
-## 加链时置 pending；_combo_spin_integrate 在旋转至背面(正面不可见)时一次性替换为 boosted_text，正面转回时无缝显示新值。
+## 加链时置 pending；_combo_spin_integrate 在旋转至背面(正面不可见)时一次性重建原子效果文案，正面转回时无缝显示新值。
 var _combo_ring_count: int = 0
 var _combo_pending_boost: bool = false
 ## 当前伪3D 快照卡中心（全局坐标）：_combo_unpackage 时记录，供「取消飞回手牌 / 打出飞弃牌」都从快照原位起步，
@@ -265,17 +265,8 @@ func generate_flashback(owner_role: String, pool_scope: String, count: int) -> v
 ## 由 CardData 构造一张 HandCard 入树（STATE_HAND），不做定位（由调用方负责位置与 _cards 登记）。
 func _spawn_card_for_role(cd: CardData, role: String, is_flashback: bool = false) -> HandCard:
 	var card := CardRoot.new()
-	card.card_name = cd.card_name
-	card.card_type = cd.card_type
-	card.cost_type = cd.cost_type
 	var base_number: int = cd.roll_number()
-	card.cost_color = cd.uno_color
-	card.cost_value = base_number
-	card.rarity = cd.rarity
-	card.enhanced = cd.enhanced
-	card.card_desc = cd.description
-	if cd.art_id != "":
-		card.set_face_by_file(cd.art_id)    # 文档 art_id 即卡面文件名
+	card.apply_data(cd, base_number)
 	var hc := HandCard.new()
 	hc.setup(card, _cards.size(), role)
 	hc.data = cd                            # 关联静态数据，打出时解析用
@@ -312,20 +303,6 @@ func discard_random_for_role(role: String, count: int) -> void:
 		recycle_card(hc, float(i) * 0.05, false)
 		print("[HM-loot] 赃物惩罚：%s 随机弃 %d 张（共 %d）" % [role, n, hand.size()])
 	# 弃牌后剩余手牌重排（避免空位残留）。
-	layout(true, false, [], false)
-
-## 弃掉全部手牌（满手接不上时重抽用）：进弃牌堆并播放回收动画。
-func discard_hand() -> void:
-	var i := 0
-	for hc in _cards.duplicate():
-		if not (is_instance_valid(hc) and hc.state == HandCard.STATE_HAND):
-			continue
-		if deck != null and not hc.is_flashback and is_instance_valid(hc.data):
-			deck.discard_card(hc.owner_group, hc.data)
-		_cards.erase(hc)
-		recycle_card(hc, float(i) * 0.05, false)
-		i += 1
-	_hovered = null
 	layout(true, false, [], false)
 
 ## 双轨抽牌·角色池主动抽：供「角色使用某效果(如带抽牌/闪回关键词的卡结算时)」调用，
@@ -695,8 +672,7 @@ func refresh_numbers() -> void:
 
 ## 卡面效果文字：单次触发的效果值由点数决定；所属角色已倒下时注明无效果。
 func _effect_text(hc: HandCard) -> String:
-	var value: int = hc.data.effect_value(hc.base_number)
-	var text: String = hc.data.derived_effect_text(value, -1, _morale_bonus_for(hc.owner_group, hc.data.card_type), value)
+	var text: String = hc.data.effect_text(hc.base_number, _morale_bonus_for(hc.owner_group))
 	var br := _get_battle_root()
 	var owner := br._find_unit(hc.owner_group) if is_instance_valid(br) else null
 	if is_instance_valid(br) and (not is_instance_valid(owner) or owner.get_current_hp() <= 0):
@@ -847,9 +823,6 @@ func _draw_common_pool(count: int) -> void:
 	if count <= 0:
 		return
 	_ensure_decks()
-	count = mini(count, ChainRules.HAND_CAP - _hand_count())
-	if count <= 0:
-		return
 	var drawn: Array[HandCard] = []
 	for cd in deck.draw_common(count):
 		var hc := _spawn_card_for_role(cd, cd.belong_to)
@@ -1011,7 +984,7 @@ func _build_combo_glossary(hc: HandCard) -> void:
 	var snap_w := COMBO_CARD_W * combo_snap_scale
 	var snap_h := COMBO_CARD_H * combo_snap_scale
 	# 强制放快照右侧（用户要求无视右缘溢出风险）
-	_combo_glossary.build_from_text(hc.card.card_effect, snap_w, snap_h, false)
+	_combo_glossary.build_from_data(hc.data, snap_w, snap_h, false)
 
 
 ## 销毁快照右侧词条解释面板（取消/打出 → _combo_unpackage 时调用）。
@@ -1151,14 +1124,14 @@ func _combo_spin_refresh() -> void:
 		_combo_anchor.card.play_card_flash()
 
 
-## 连锁数值升级：在「旋转至背面」时把首张快照内的 CardRoot 文字改为提升后数值。
+## 旋转快照刷新：按锚点当前点数重建全部原子效果，Combo 不再改变单次效果数值。
 ## front_viewport 以 UPDATE_ALWAYS 实时渲染该 CardRoot，改其文字即实时刷新快照纹理；
 ## 于「正面不可见」的背面相位替换 → 正面转回时无缝显示新值（不卡壳、不闪烁）。
 func _apply_combo_boost() -> void:
 	if not (is_instance_valid(_combo_anchor) and is_instance_valid(_combo_anchor.card) and is_instance_valid(_combo_anchor.data)):
 		return
-	var bonus: int = _morale_bonus_for(_combo_anchor.owner_group, _combo_anchor.data.card_type)
-	_combo_anchor.card.set_effect_text(_combo_anchor.data.boosted_text(_combo_ring_count, bonus))
+	var bonus: int = _morale_bonus_for(_combo_anchor.owner_group)
+	_combo_anchor.card.set_effect_text(_combo_anchor.data.effect_text(_combo_anchor.base_number, bonus))
 
 
 ## 每帧积分首张伪3D快照旋转（复用 cardtest 旋转物理）：SPINNING 段角速度指数衰减；跌破阈值切弹簧回正(SETTLING)；
@@ -1257,13 +1230,11 @@ func _shift_card_to(c: HandCard, target: Vector2) -> void:
 
 ## 取代旧版从 effects_text 正则解析；单标签模型下数据即唯一真相来源，无需归一化（同排/异排为合法标签）。
 
-## 选靶效果用：直接读 CardData 的 scope（单体/群体），取代旧版从 effects_text 解析。
+## 目标规则直接读取 CardEffect，不从卡面文字反向解析。
 
-## 该角色当前士气提供的关键数值加成（仅「攻击」分类 card_type==0 的卡牌享受，其余分类返回 0）。
+## 该角色当前士气加成；CardEffect 仅将其用于伤害效果。
 ## 取 BattleRoot.morale_bonus_for_role（= 士气层数 × MORALE_PER_LAYER），找不到角色/战斗根时返回 0。
-func _morale_bonus_for(owner_group: String, card_type: int) -> int:
-	if card_type != 0:
-		return 0
+func _morale_bonus_for(owner_group: String) -> int:
 	var br := _get_battle_root()
 	if is_instance_valid(br):
 		return br.morale_bonus_for_role(owner_group)
@@ -1282,9 +1253,9 @@ func refresh_morale_text_for_role(role: String) -> void:
 ## 对非目标单位盖黑幕剪影来体现；玩家点选后若无候选则效果 no-op（见 BattleRoot.apply_card_effect 兜底）。
 ## （旧 _card_playable 整卡灰掉逻辑已移除。）
 
-## 蓝卡是否需玩家点选目标（手动索敌）：执行/引导卡自动结算；全场/自身牌无需点选；其余蓝卡(敌/友非自身)需点选。
+## 只有存在选中目标的原子效果才显示瞄准线；自身/群体效果各自索敌。
 func _needs_manual_target(hc: HandCard) -> bool:
-	return is_instance_valid(hc) and is_instance_valid(hc.data) and not hc.data.target_self
+	return is_instance_valid(hc) and is_instance_valid(hc.data) and hc.data.needs_selection()
 
 
 ## 自动结算占位：执行/引导卡(及全场/自身蓝卡)选中后无需玩家点选，立即按首候选打出。

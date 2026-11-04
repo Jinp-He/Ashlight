@@ -14,7 +14,7 @@ func _ready() -> void:
 	get_tree().create_timer(45.0, true, false, true).timeout.connect(func() -> void: get_tree().quit(2))
 
 func find_card(card_name: String) -> CardData:
-	for cd in PlaceholderCards.all_cards():
+	for cd in CardDatabase.new().get_all():
 		if cd.card_name == card_name:
 			return cd
 	return null

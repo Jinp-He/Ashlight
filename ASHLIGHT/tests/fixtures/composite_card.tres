@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1_card"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2_effect")
+kind = "damage"
+target = "选中敌人"
+amount = 2
+
+[sub_resource type="Resource" id="Shield"]
+script = ExtResource("2_effect")
+kind = "shield"
+target = "自身"
+amount = 3
+scales_with_number = false
+
+[sub_resource type="Resource" id="Poison"]
+script = ExtResource("2_effect")
+kind = "apply_status"
+target = "选中敌人"
+amount = 1
+scales_with_number = false
+status_id = "poison"
+
+[sub_resource type="Resource" id="Draw"]
+script = ExtResource("2_effect")
+kind = "draw"
+target = "自身"
+amount = 1
+scales_with_number = false
+
+[resource]
+script = ExtResource("1_card")
+id = "composite_example"
+card_name = "攻守兼备"
+belong_to = "Rocket"
+base_number = 3
+number_spread = 0
+art_path = "res://assets/cards/faces/Rocket006.png"
+effects = Array[ExtResource("2_effect")]([SubResource("Damage"), SubResource("Shield"), SubResource("Poison"), SubResource("Draw")])

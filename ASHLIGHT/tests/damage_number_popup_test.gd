@@ -1,10 +1,5 @@
 extends Node
 var failures: int = 0
-var sampled_number: DamageNumber
-var sampled_peak: float = 1.0
-func _process(_delta: float) -> void:
-	if is_instance_valid(sampled_number):
-		sampled_peak = maxf(sampled_peak, sampled_number.scale.x)
 func check(ok: bool, message: String) -> void:
 	print("PASS POPUP: " if ok else "FAIL POPUP: ", message)
 	if not ok:
@@ -47,10 +42,16 @@ func run() -> void:
 		used.append(point)
 		check(number.position.is_equal_approx(number.popup_anchor + Vector2(0, 15)), "popup begins 15px below anchor")
 	check(numbers[0].visible and not numbers[1].visible, "later segments wait for their stagger")
-	sampled_number = numbers[0]
-	await get_tree().create_timer(0.22 * numbers[0].duration_multiplier).timeout
-	check(sampled_peak > 1.18 and sampled_peak <= 1.20001, "rise reaches 20 percent overshoot")
-	await get_tree().create_timer(0.23 * numbers[0].duration_multiplier).timeout
+	var peak_probe := DamageNumber.new()
+	br.add_child(peak_probe)
+	peak_probe.play_popup(Vector2.ZERO)
+	peak_probe._popup_tween.pause()
+	peak_probe._popup_tween.custom_step(peak_probe.popup_rise_time * peak_probe.duration_multiplier)
+	check(peak_probe.scale.is_equal_approx(Vector2.ONE * 1.2), "rise reaches 20 percent overshoot")
+	peak_probe._popup_tween.kill()
+	peak_probe.remove_from_group("blocking_damage_numbers")
+	peak_probe.queue_free()
+	await get_tree().create_timer(0.45 * numbers[0].duration_multiplier).timeout
 	check(numbers[0].scale.is_equal_approx(Vector2.ONE), "settle restores original size")
 	check(numbers[0].position.is_equal_approx(numbers[0].popup_anchor), "rise ends at selected anchor")
 	check(numbers[0].popup_settled and not numbers[0].is_in_group("blocking_damage_numbers"), "number hold begins after settle without blocking progression")

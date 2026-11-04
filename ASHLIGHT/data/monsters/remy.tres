@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MonsterData" format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/monsters/monster_data.gd" id="1_monster"]
+[ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="2_intent"]
+[ext_resource type="Resource" path="res://data/enemy_intents/remy_slash.tres" id="intent_0"]
+[ext_resource type="Resource" path="res://data/enemy_intents/remy_heavy_slash.tres" id="intent_1"]
+
+[resource]
+script = ExtResource("1_monster")
+id = "Remy"
+monster_name = "Remy"
+max_hp = 30.0
+countdown = 3
+intents = Array[ExtResource("2_intent")]([ExtResource("intent_0"), ExtResource("intent_1")])

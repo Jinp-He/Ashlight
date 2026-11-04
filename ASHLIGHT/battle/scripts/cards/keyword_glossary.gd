@@ -1,9 +1,10 @@
+@tool
 class_name KeywordGlossary
 extends RefCounted
 
 ## 卡牌词条 / Buff 文案 单一来源（真源）。
 ## 两份消费方共享同一份文字，杜绝日后分叉：
-##  - combo_glossary.gd（卡牌快照右侧词条面板）按卡面【…】显示名查 ENTRIES
+##  - combo_glossary.gd（卡牌快照右侧词条面板）按 CardEffect 导出的关键词查 ENTRIES
 ##  - unit_buff.gd（单位 buff 悬停提示框）按 buff_id 经 ID_TO_NAME → ENTRIES 解析
 ##
 ## 设计纪律（游戏设计师视角）：词条只解释「机制内核」，不堆修饰词。每条回答同一个玩家问题——

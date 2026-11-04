@@ -69,6 +69,27 @@ func run() -> void:
 	check(not flags.old_group, "legacy insert group is disconnected")
 	await br._v2_finish()
 	check(not br.clock_busy, "queue releases input after completion")
+	# Resource-based composite cards must preserve the new presentation while resolving each atom.
+	var composite := load("res://tests/fixtures/composite_card.tres") as CardData
+	var before_hp: float = target.get_current_hp()
+	var before_shield: float = ally.get_shield()
+	var before_poison: int = target.get_buff_stacks("poison")
+	var presented: Array[int] = []
+	var chains: Array[int] = []
+	var seen_groups: Array[int] = []
+	var capture := func() -> void:
+		for child in br.get_children():
+			if child is CutsceneGroup2 and child._playing and not seen_groups.has(child.get_instance_id()):
+				seen_groups.append(child.get_instance_id())
+				presented.append(child._kind)
+				chains.append(child._chain)
+	get_tree().process_frame.connect(capture)
+	await br._v2_play_effect({"uid": "Rocket", "selected": "Remy", "cd": composite}, 3, 2)
+	get_tree().process_frame.disconnect(capture)
+	check(presented.size() == 4 and presented.all(func(kind: int) -> bool: return kind == composite.card_type), "each resource atom uses card presentation type exactly once")
+	check(chains == [2, 2, 2, 2], "all atom animations receive Combo scale")
+	check(target.get_current_hp() == before_hp - 12 and ally.get_shield() == before_shield + 6, "animated composite resolves selected damage and self defense")
+	check(target.get_buff_stacks("poison") == before_poison + 2, "animated composite preserves status across Combo repetitions")
 	br.queue_free()
 	await get_tree().process_frame
 	print("BATTLE_GROUP2_TEST failures=", failures)

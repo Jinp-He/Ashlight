@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://ciska6mcywym3"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_ci17q"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "apply_status"
+
+[resource]
+script = ExtResource("1_ci17q")
+id = "irene_03"
+card_name = "放血"
+belong_to = "Irene"
+card_type = 1
+art_path = "res://assets/cards/faces/Irene001.png"
+uno_color = 2
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

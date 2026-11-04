@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bf5h8ueh1hle5"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_qf6lj"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+amount = 1
+
+[resource]
+script = ExtResource("1_qf6lj")
+id = "irene_06"
+card_name = "刺击"
+belong_to = "Irene"
+art_path = "res://assets/cards/faces/Irene001.png"
+uno_color = 1
+base_number = 5
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

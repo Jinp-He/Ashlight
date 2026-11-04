@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://b6ma0pcse4hpq"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_yncmk"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+target = "全体敌人"
+amount = 1
+
+[resource]
+script = ExtResource("1_yncmk")
+id = "rocket_08"
+card_name = "震地"
+belong_to = "Rocket"
+art_path = "res://assets/cards/faces/Rocket001.png"
+uno_color = 3
+base_number = 5
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])
