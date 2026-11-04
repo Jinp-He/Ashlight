@@ -14,7 +14,7 @@ func run() -> void:
 	check(flame.size == Vector2(322, 90), "flame keeps original dimensions")
 	check(flame.global_position.is_equal_approx(Vector2(639, 0)), "flame is flush top and horizontally centered")
 	check(br.get_node_or_null("HUD/PileTop/Outline") == null and br.get_node_or_null("HUD/PileTop/Diamond") == null, "old diamond fill and border are removed")
-	check(br._top_number.position == Vector2(-50, -32) and br._top_number.get_theme_font_size("font_size") == 44, "central number retains position and style")
+	check(absf(br._top_number.position.x + 50.0) <= 3.01 and absf(br._top_number.position.y + 32.0) <= 3.01 and br._top_number.get_theme_font_size("font_size") == 44, "central number floats within its 3px anchor bounds and retains style")
 	check(flame.front.texture == flame.back.texture, "both layers use synchronized animation frames")
 	var previous_frame: int = flame._frame
 	await get_tree().create_timer(0.11).timeout

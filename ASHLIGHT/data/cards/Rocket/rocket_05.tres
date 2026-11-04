@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://uw0tplasnkyw"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_x1ll5"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+
+[resource]
+script = ExtResource("1_x1ll5")
+id = "rocket_05"
+card_name = "爆破"
+belong_to = "Rocket"
+art_path = "res://assets/cards/faces/Rocket001.png"
+base_number = 5
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

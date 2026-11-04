@@ -4,7 +4,7 @@ extends Node2D
 ## 卡牌快照右侧「词条解释」面板（2026-10-07 新增）。
 ## 视觉上完全复用 UnitBuffTooltip 的「名字（金 #9c660a）+ 说明（白）+ 黑圆角底框」组合，
 ## 即玩家在战斗单位上悬停 buff 时看到的那个描述框——只是这里不靠悬停、而是常显在快照右侧。
-## 关键词来源：解析锚点卡卡面效果文字中的【...】标签，过滤到 KeywordGlossary 字典存在的、去重保序后逐条生成。
+## 关键词来源：CardData 的原子效果和状态 ID，去重保序。
 ## 仅在首张锚点卡进入托盘（= 生成快照）时构建一次；取消/打出时随 _combo_unpackage 整体销毁。
 
 const UnitBuffTooltipScript: Script = preload("res://battle/scripts/units/unit_buff_tooltip.gd")
@@ -17,13 +17,12 @@ const UnitBuffTooltipScript: Script = preload("res://battle/scripts/units/unit_b
 
 var _entries: Array[Control] = []
 
-## 根据卡面效果文字构建词条面板。
-## effect_text 取锚点卡 card_effect（已渲染的卡面文案，含【...】标签）；
+## 根据卡牌原子效果构建词条面板。
 ## snap_w / snap_h 为快照显示层尺寸（COMBO_CARD_W/H * combo_snap_scale），用于把面板锚到快照旁；
 ## place_left=true 时改放快照左侧（右缘放不下时避免溢出/遮挡），默认放右侧。
-func build_from_text(effect_text: String, snap_w: float, snap_h: float, place_left: bool = false) -> void:
+func build_from_data(data: CardData, snap_w: float, snap_h: float, place_left: bool = false) -> void:
 	_clear()
-	var keywords := _extract_keywords(effect_text)
+	var keywords := data.keyword_names()
 	if keywords.is_empty():
 		return
 	# 快照在托盘内居中于托盘原点：右缘 = +snap_w/2，左缘 = -snap_w/2，顶部 = -snap_h/2（托盘原点即快照中心）
@@ -54,18 +53,6 @@ func _clear() -> void:
 		if is_instance_valid(e):
 			e.queue_free()
 	_entries.clear()
-
-## 从效果文字提取【...】关键词，仅保留词条字典中存在者，去重保序。
-func _extract_keywords(text: String) -> Array[String]:
-	var out: Array[String] = []
-	var re := RegEx.new()
-	re.compile("【([^】]+)】")
-	var results := re.search_all(text)
-	for r in results:
-		var kw: String = r.get_string(1)
-		if KeywordGlossary.ENTRIES.has(kw) and not out.has(kw):
-			out.append(kw)
-	return out
 
 ## 估算说明文字换行行数（与 UnitBuffTooltip._estimate_desc_lines 一致：CJK 字形≈1em 宽）。
 func _estimate_lines(p_text: String, p_inner_w: float) -> int:

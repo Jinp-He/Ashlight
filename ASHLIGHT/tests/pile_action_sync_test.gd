@@ -20,7 +20,7 @@ func run() -> void:
 	br._v2_refresh_hud()
 	await get_tree().create_timer(0.4).timeout
 	var data: CardData
-	for card in PlaceholderCards.all_cards():
+	for card in CardDatabase.new().get_all():
 		if card.card_name == "重拳":
 			data = card
 	var hand_card := hm._spawn_card_for_role(data, "Rocket")

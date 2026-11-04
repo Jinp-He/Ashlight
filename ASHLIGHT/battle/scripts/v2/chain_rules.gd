@@ -7,9 +7,7 @@ const COLOR_NAMES: Array[String] = ["红", "蓝", "黄", "绿"]
 const ANY_COLOR: int = -1
 const MAX_COMBO: int = 4
 const HAND_START: int = 5
-const HAND_CAP: int = 10
 const DRAW_TICKS: int = 1
-const REFILL_TICKS: int = 1
 
 ## Combo ×N：下一张牌的效果触发 N 次。每接上一张 +1，断链回到 ×1。
 var combo: int = 1
@@ -39,6 +37,10 @@ func combo_up() -> void:
 
 func reset_combo() -> void:
 	combo = 1
+
+## 每次敌方攻击造成实际掉血时下降一级，最低仍触发一次效果。
+func combo_down() -> void:
+	combo = maxi(1, combo - 1)
 
 func tick() -> void:
 	ticks += 1

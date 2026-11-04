@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://b40th5yu4dqir"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_7gg0e"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "draw"
+target = "自身"
+scales_with_number = false
+
+[resource]
+script = ExtResource("1_7gg0e")
+id = "zhouzhou_05"
+card_name = "侦察"
+card_type = 1
+art_path = "uid://cakpu187uk6v6"
+base_number = 2
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])

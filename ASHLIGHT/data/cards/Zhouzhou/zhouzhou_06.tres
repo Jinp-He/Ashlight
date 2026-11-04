@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://2wcvf31kjsln"]
+
+[ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="1_13ypd"]
+[ext_resource type="Script" uid="uid://04703geu3mkr" path="res://battle/scripts/cards/card_effect.gd" id="2_effect"]
+
+[sub_resource type="Resource" id="CardEffect_main"]
+script = ExtResource("2_effect")
+kind = "counter"
+target = "自身"
+amount = 5
+scales_with_number = false
+counter_color = 1
+
+[resource]
+script = ExtResource("1_13ypd")
+id = "zhouzhou_06"
+card_name = "盾反"
+card_type = 1
+art_path = "res://assets/cards/faces/Zhouzhou001.png"
+uno_color = 1
+base_number = 3
+effects = Array[ExtResource("2_effect")]([SubResource("CardEffect_main")])
