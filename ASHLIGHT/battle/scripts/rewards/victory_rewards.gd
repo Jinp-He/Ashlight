@@ -25,6 +25,10 @@ var _hover_index := -1
 var _started := false
 var _exiting := false
 var _fade_timer: Timer
+var _xp_entry_timer: Timer
+var _choice_entry_timer: Timer
+var _xp_entry_pending := true
+var _shade_tween: Tween
 func _ready() -> void:
 	layer=120
 	shade=ColorRect.new();shade.color=Color(0,0,0,0.6);shade.mouse_filter=Control.MOUSE_FILTER_STOP;shade.visible=false;add_child(shade)
@@ -65,6 +69,7 @@ func begin() -> void:
 		if unit.unit_faction=="player":unit.toggle_bar_display(true)
 		else:unit.hide()
 	if RunProgress.battle.phase=="done":await _finish();return
+	_xp_entry_pending=RunProgress.battle.phase=="xp"
 	_rebuild_xp()
 	await _next()
 func _show_buttons(value:bool) -> void:
@@ -90,10 +95,13 @@ func _next() -> void:
 		RunProgress.battle.role=active_role;RunProgress.battle.phase=phase
 		await _open_choice()
 	elif int(RunProgress.battle.remaining)>0:
+		busy=true
 		phase="xp";RunProgress.battle.phase=phase;
 		for xp_card in xp_cards:xp_card.show()
 		_show_buttons(false);title.text="分配经验：选择经验牌，再点击角色"
 		await _fade_shade_out()
+		if _exiting:return
+		if _xp_entry_pending:await _play_xp_entry()
 		if _exiting:return
 		busy=false
 	else:await _finish()
@@ -110,7 +118,7 @@ func _open_choice() -> void:
 	busy=true;selected_index=-1;_hover_index=-1;_tip.hide_tooltip();
 	for xp_card in xp_cards:xp_card.hide()
 	_set_character_outlines_blocked(true)
-	shade.modulate.a=1.0;shade.show();_show_buttons(true)
+	_show_buttons(true)
 	for button in buttons:button.disabled=true
 	title.text="选择1张牌加入牌库" if phase=="cards" else "选择1种百相"
 	var choices:Array=[]
@@ -124,6 +132,7 @@ func _open_choice() -> void:
 	RunProgress.battle.candidates=[]
 	for item in choices:RunProgress.battle.candidates.append(item.resource_path if phase=="cards" else item)
 	_clear_candidates()
+	_fade_shade_in()
 	for i in choices.size():
 		var candidate:=RewardCandidate.new();candidate.config=config
 		if phase=="cards":candidate.card_data=choices[i]
@@ -138,8 +147,11 @@ func _open_choice() -> void:
 		var tween:=candidate.create_tween()
 		if phase=="cards":tween.tween_property(candidate,"position",candidate.base_position,config.card_entry_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		else:tween.tween_property(candidate,"modulate:a",1.0,config.aspect_entry_duration)
-	await get_tree().create_timer(config.card_entry_duration if phase=="cards" else config.aspect_entry_duration).timeout
-	if not is_inside_tree():return
+	var entry_timer:=Timer.new();entry_timer.one_shot=true;add_child(entry_timer)
+	_choice_entry_timer=entry_timer;entry_timer.start(maxf(0.001,maxf(config.shade_fade_in_duration,config.card_entry_duration if phase=="cards" else config.aspect_entry_duration)))
+	await entry_timer.timeout
+	_choice_entry_timer=null;entry_timer.queue_free()
+	if _exiting or not is_inside_tree():return
 	for candidate in candidates:candidate.ready_input=true
 	busy=false;_update_buttons()
 func _update_buttons() -> void:
@@ -328,8 +340,9 @@ func _set_character_outlines_blocked(blocked: bool) -> void:
 
 func _fade_shade_out() -> void:
 	if shade.visible:
-		var tween:=create_tween()
-		tween.tween_property(shade,"modulate:a",0.0,config.shade_fade_duration)
+		if is_instance_valid(_shade_tween):_shade_tween.kill()
+		_shade_tween=create_tween()
+		_shade_tween.tween_property(shade,"modulate:a",0.0,config.shade_fade_duration)
 		var fade_timer:=Timer.new();fade_timer.one_shot=true;add_child(fade_timer);fade_timer.start(maxf(config.shade_fade_duration,0.001))
 		_fade_timer=fade_timer
 		await fade_timer.timeout
@@ -343,4 +356,34 @@ func _exit_tree() -> void:
 	_exiting=true
 	# 退出前结束淡出等待，使上层阶段协程有机会收尾。
 	if is_instance_valid(_fade_timer):_fade_timer.timeout.emit()
+	if is_instance_valid(_xp_entry_timer):_xp_entry_timer.timeout.emit()
+	if is_instance_valid(_choice_entry_timer):_choice_entry_timer.timeout.emit()
 	_set_character_outlines_blocked(false)
+
+func _fade_shade_in() -> void:
+	# 连续选牌、百相与刷新沿用现有遮罩，不重复闪回透明。
+	if shade.visible:return
+	if is_instance_valid(_shade_tween):_shade_tween.kill()
+	shade.modulate.a=0.0;shade.show()
+	_shade_tween=create_tween()
+	_shade_tween.tween_property(shade,"modulate:a",1.0,config.shade_fade_in_duration)
+
+func _play_xp_entry() -> void:
+	_xp_entry_pending=false
+	if xp_cards.is_empty():return
+	var white:=ShaderMaterial.new();white.shader=preload("res://battle/scripts/rewards/xp_reveal.gdshader")
+	white.set_shader_parameter("white_amount",1.0)
+	var tween:=create_tween().set_parallel(true)
+	for card in xp_cards:
+		var art:=card.get_child(0) as Sprite2D
+		art.material=white;art.scale=Vector2(config.xp_card_scale,0.0)
+		tween.tween_property(art,"scale:y",config.xp_card_scale,config.xp_expand_duration)
+	tween.chain().tween_method(func(value:float):white.set_shader_parameter("white_amount",value),1.0,0.0,config.xp_restore_duration)
+	var timer:=Timer.new();timer.one_shot=true;add_child(timer)
+	_xp_entry_timer=timer;timer.start(maxf(config.xp_expand_duration+config.xp_restore_duration,0.001))
+	await timer.timeout
+	_xp_entry_timer=null;timer.queue_free()
+	if _exiting:return
+	for card in xp_cards:
+		var art:=card.get_child(0) as Sprite2D
+		art.scale=Vector2.ONE*config.xp_card_scale;art.material=null
