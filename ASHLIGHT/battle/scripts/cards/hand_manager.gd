@@ -285,8 +285,8 @@ func expire_flashbacks() -> void:
 	layout(true, false)
 
 ## 只复制当前抽牌堆的匹配模板，可重复采样，不取走原牌、不洗牌。
-func generate_color_flashbacks(color: int, count: int) -> void:
-	_generate_pile_flashbacks(count, color, false)
+func generate_color_flashbacks(color: int, count: int) -> int:
+	return _generate_pile_flashbacks(count, color, false)
 
 ## 牌顶在数组尾部。倒序按原始索引处理，移走蓝牌不会扰乱未取走牌的顺序。
 func observe_blue_cards(count: int) -> void:
@@ -315,14 +315,14 @@ func observe_blue_cards(count: int) -> void:
 func generate_attack_flashbacks(count: int) -> void:
 	_generate_pile_flashbacks(count, -1, true)
 
-func _generate_pile_flashbacks(count: int, color: int, attack_only: bool) -> void:
+func _generate_pile_flashbacks(count: int, color: int, attack_only: bool) -> int:
 	_ensure_decks()
 	var candidates: Array[CardData] = []
 	for cd in deck.draw_pile:
 		if (attack_only and cd.effects.any(func(e: CardEffect) -> bool: return e != null and e.kind == "damage")) or (not attack_only and cd.uno_color == color):
 			candidates.append(cd)
 	if candidates.is_empty():
-		return
+		return 0
 	var drawn: Array[HandCard] = []
 	for i in count:
 		var template: CardData = candidates.pick_random()
@@ -336,6 +336,7 @@ func _generate_pile_flashbacks(count: int, color: int, attack_only: bool) -> voi
 		drawn.append(hc)
 	_deal_cards(drawn)
 	_refresh_inactive()
+	return drawn.size()
 
 func generate_flashback(owner_role: String, pool_scope: String, count: int) -> void:
 	if not ROLES.has(owner_role) or count <= 0:
@@ -556,7 +557,8 @@ func _finish_draw_insert(hc: HandCard, visual: Node2D) -> void:
 	hc.remove_meta("draw_flip_started")
 	_unlock_flyin(hc.get_instance_id())
 	hc.clear_select_frame()
-	layout(true, false, [], true)
+	# 翻面临时置顶结束，同步归入整手牌的扇形位置与层级。
+	layout(false, false)
 
 func _update_draw_flight(progress: float, hc: HandCard, start: Vector2) -> void:
 	if not is_instance_valid(hc):

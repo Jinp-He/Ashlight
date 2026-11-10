@@ -661,6 +661,7 @@ func _effect_targets(effect: CardEffect, caster: UnitRoot, selected: UnitRoot = 
 	if effect.target == "随机敌方" and selected != null and not targets.is_empty():
 		targets = [targets.pick_random()]
 	if effect.needs_selection() and selected != null and not (effect.target == "选中友方" and caster.unit_faction == "player"):
+		if selected.unit_faction == "player": selected = _team
 		var valid: bool = targets.has(selected)
 		targets.clear()
 		if valid: targets.append(selected)
@@ -681,12 +682,20 @@ func v2_targets(cd: CardData, caster: UnitRoot) -> Array[UnitRoot]:
 				if not targets.has(unit): candidates.erase(unit)
 		selecting = true
 	if selecting:
-		return candidates
+		return _visible_target_units(candidates)
 	# 无手选效果时允许点击任意实际作用单位；抽牌、反制可点击施法者。
 	for effect in cd.effects:
 		if effect == null: continue
 		for unit in _effect_targets(effect, caster):
 			if not candidates.has(unit): candidates.append(unit)
+	return _visible_target_units(candidates)
+
+## 共享效果只结算一次，但每位存活队员都可以作为选靶入口。
+func _visible_target_units(candidates: Array[UnitRoot]) -> Array[UnitRoot]:
+	if candidates.has(_team):
+		for unit in _get_units():
+			if unit.unit_faction == "player" and unit.get_current_hp() > 0 and not candidates.has(unit):
+				candidates.append(unit)
 	return candidates
 
 func effective_number(card: HandCard) -> int:
@@ -957,24 +966,40 @@ func _enemy_attack(caster: UnitRoot, card: Dictionary) -> bool:
 ## 反制成功：取消这次攻击，并对出手的敌人造成反制牌的伤害（多张反制叠加）。
 func _counter_attack(enemy: UnitRoot, counters: Array[Dictionary]) -> void:
 	var total: int = 0
+	var adjustment: int = 0
+	var flashbacks: int = 0
+	var cards: PackedStringArray = []
+	var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	for counter in counters:
+		var title := str(counter.get("name", "反制牌"))
+		if not cards.has(title): cards.append(title)
 		if counter.get("morale_on_success", false):
 			total += (int(counter.value) + _morale_bonus(_team)) * int(counter.combo)
 		else:
 			total += int(counter.value)
-		if counter.has("adjustment"):
-			_team.add_buff("adjustment", int(counter.adjustment), 1)
-		if counter.has("blue_flashback"):
-			var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
-			hand.generate_color_flashbacks(1, int(counter.blue_flashback))
-	_spawn_card_played_prompt(enemy.unit_id, "反制！", "player")
-	print("[Battle] 反制 %s：%d 张反制牌，共 %d 伤害" % [enemy.unit_id, counters.size(), total])
-	if total <= 0:
-		return
+		adjustment += int(counter.get("adjustment", 0))
+		flashbacks += int(counter.get("blue_flashback", 0))
+	var results: PackedStringArray = []
+	if total > 0:
+		results.append("反击 %d 点" % total)
+	if adjustment > 0:
+		_team.add_buff("adjustment", adjustment, 1)
+		results.append("获得 %d 层调节" % adjustment)
+	if flashbacks > 0:
+		var gained := hand.generate_color_flashbacks(1, flashbacks)
+		results.append("获得 %d 张蓝色闪回牌" % gained if gained > 0 else "牌库没有蓝牌可闪回")
 	var owner := _find_unit(counters[0].uid)
+	var action := str(_v2_intents.get(enemy.unit_id, {}).get("name", "行动"))
+	var message := "%s反制成功，打断%s的%s" % ["、".join(cards), _display_name(enemy.unit_id), action]
+	if not results.is_empty():
+		message += "，" + "，".join(results)
+	_spawn_card_played_prompt(counters[0].uid, message, "player")
 	if is_instance_valid(owner) and owner.get_current_hp() > 0:
 		var targets: Array[UnitRoot] = [enemy]
-		await _v2_animate({"caster": owner, "targets": targets, "stat": "damage", "value": total, "hits": 1})
+		await _v2_animate({"caster": owner, "targets": targets, "stat": "damage" if total > 0 else "counter", "value": total, "hits": 1})
+	hand.layout(true, false, [], true)
+	if total <= 0:
+		return
 	enemy.damage(total)
 	if counters.any(func(counter: Dictionary) -> bool: return counter.get("morale_on_success", false)):
 		_team.remove_buff("morale")
