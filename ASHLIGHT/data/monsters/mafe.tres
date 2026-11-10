@@ -9,6 +9,7 @@
 [resource]
 script = ExtResource("1_monster")
 id = "Mafe"
+monster_type = 2
 monster_name = "马匪"
 max_hp = 100.0
 balance_provisional = true

@@ -23,7 +23,13 @@ func init_decks(roles: Array[String]) -> bool:
 			push_error("DeckManager: 初始卡组类型或角色ID不匹配：" + path)
 			return false
 		configs.append(config)
-	return init_from_starting_decks(configs)
+	var initialized := init_from_starting_decks(configs)
+	RunProgress.ensure()
+	if initialized and not RunProgress.cards.is_empty():
+		draw_pile.assign(RunProgress.cards);discard_pile.clear();draw_pile.shuffle()
+	elif initialized:
+		RunProgress.cards.assign(draw_pile)
+	return initialized
 
 ## 支持自定义战斗传入卡组资源；验证完成后再替换运行时牌堆，不修改原始资源。
 func init_from_starting_decks(configs: Array[StartingDeckData]) -> bool:

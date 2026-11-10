@@ -702,7 +702,7 @@ func add_xp(amount: float) -> void:
 	if not is_instance_valid(_xp_component):
 		return
 	_xp_component.add_xp(amount)
-	if _xp_component.check_level_up():
+	while _xp_component.check_level_up():
 		var new_level := _xp_component.do_level_up()
 		current_level = new_level
 		xp_to_next = _get_xp_for_level(new_level)  # 从数据表取新等级所需经验

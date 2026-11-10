@@ -5,6 +5,7 @@ extends Resource
 ## 怪物配置。场景中的 unit_id 对应 id，意图数组按顺序循环，可重复引用同一意图。
 @export var id: String = ""
 @export var monster_name: String = ""
+@export_enum("普通:1", "精英:2", "Boss:3") var monster_type: int = 1
 @export_range(1, 99999) var max_hp: float = 30.0
 @export_range(1, 99) var countdown: int = 3
 @export_enum("沿用旧配置:0", "快:1", "中:2", "慢:3") var speed_tier: int = 0

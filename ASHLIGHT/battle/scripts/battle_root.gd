@@ -38,6 +38,10 @@ var debug_card_browser_open: bool = false
 var skip_battle_animations: bool = false
 var _team: UnitRoot
 var _battle_ended: bool = false
+var _defeated_xp: int = 0
+var _rewarded_enemy_ids: Dictionary = {}
+var _victory_rewards: VictoryRewards
+@export var reward_config: RewardConfig = preload("res://data/rewards/default_rewards.tres")
 @export var reserve_fade_duration: float = 0.3
 var _mafe_reserve_used: bool = false
 var damage_records: Dictionary = {}
@@ -69,6 +73,7 @@ var _spot_uid: String = ""
 
 func _ready() -> void:
 	add_to_group("battle_root")
+	RunProgress.ensure()
 	_apply_layer_order()
 	_units = get_node("Units") as Node2D
 	cutscene_director = CUTSCENE_DIRECTOR_SCRIPT.new() as CutsceneDirector
@@ -89,6 +94,11 @@ func _ready() -> void:
 		unit.buffs_changed.connect(_on_unit_buffs_changed)
 		if unit.unit_faction == "player":
 			roles.append(unit.unit_id)
+			var growth: Dictionary = RunProgress.roles[unit.unit_id]
+			unit.current_level = int(growth.level)
+			unit.xp_to_next = float(unit.current_level * 2)
+			unit._xp_component.setup_stats(unit.xp_to_next, float(growth.xp), unit.current_level)
+
 			if not AllySkills.get_skill(unit.unit_id).is_empty():
 				rules.skill_cooldowns[unit.unit_id] = 0
 		else:
@@ -134,9 +144,12 @@ func _ready() -> void:
 	hm.card_selected.connect(func(_card: HandCard) -> void: _close_skill_panel())
 	hm.init_decks(roles)
 	_flip_starting_top(hm)
-	hm.draw_opening()
+	if not RunProgress.battle.claimed: hm.draw_opening()
 	_bind_hud()
 	_v2_refresh(false)
+	if RunProgress.battle.claimed:
+		_battle_ended = true
+		_start_victory_rewards()
 
 ## 开局从牌库翻一张作为牌堆顶（进入弃牌堆），与 UNO 一致。
 func _setup_team_hud() -> void:
@@ -245,6 +258,10 @@ func _assign_faction_slots(order: Array[String], slots: Array[int], animate: boo
 			unit.position = dest
 
 func _on_unit_died(uid: String) -> void:
+	if not _rewarded_enemy_ids.has(uid) and _monster_data.has(uid):
+		_rewarded_enemy_ids[uid] = true
+		var defeated: MonsterData = _monster_data[uid]
+		_defeated_xp += reward_config.normal_xp if defeated.monster_type == 1 else (reward_config.elite_xp if defeated.monster_type == 2 else reward_config.boss_xp)
 	var departing := _find_unit(uid)
 	if uid in ["Remy", "Grey", "Wangg"] and not _mafe_reserve_used and not _battle_ended and is_instance_valid(_team) and _team.get_current_hp() > 0:
 		_spawn_mafe_reserve(departing.position if is_instance_valid(departing) else Vector2(1120, 510))
@@ -277,6 +294,7 @@ func _check_battle_end() -> void:
 	if enemy_alive == 0:
 		_battle_ended = true
 		print("[Battle] 战斗胜利：敌方单位全灭。")
+		call_deferred("_start_victory_rewards")
 	elif not is_instance_valid(_team) or _team.get_current_hp() <= 0.0:
 		_battle_ended = true
 		print("[Battle] 战斗失败：玩家单位全灭。")
@@ -424,6 +442,11 @@ func _grant_player_blue_reward() -> void:
 	if is_instance_valid(unit) and is_instance_valid(_team) and _team.get_current_hp() > 0:
 		_team.add_buff("morale", unit.get_mastery(), 1)
 		_spawn_card_played_prompt("Zhouzhou", str(AllySkills.get_skill("Zhouzhou").passive), "player")
+		if RunProgress.has_aspect("comrades"):
+			var shield: int = unit.get_mastery() * 5
+			_team.gain_shield(shield)
+			var number := DamageNumber.new();number.z_index=47;add_child(number);number.spawn({"type":"shield","value":shield});number.play_on_unit(_team)
+
 
 func _on_irene_buff_removed(unit: UnitRoot) -> void:
 	var irene := _find_unit("Irene")
@@ -489,7 +512,7 @@ func use_zhouzhou_skill() -> bool:
 	_spawn_card_played_prompt("Zhouzhou", str(AllySkills.get_skill("Zhouzhou").name), "player")
 	hand.clear_selection()
 	rules.top.color = 1
-	_grant_player_blue_reward()
+	_handle_blue_change(true)
 	_v2_refresh()
 	var unit := _find_unit("Zhouzhou")
 	if not skip_battle_animations:
@@ -698,7 +721,7 @@ func effective_number(card: HandCard) -> int:
 func v2_payload(card: HandCard, target: UnitRoot) -> Dictionary:
 	return {"uid": card.owner_group, "selected": target.unit_id if is_instance_valid(target) else "",
 		"cd": card.data, "color": card.cost_color, "base": effective_number(card), "original_base": card.base_number, "previous_number": int(rules.top.get("number", 0)),
-		"hand_card": card, "charge": card.charge_points}
+		"hand_card": card, "charge": card.charge_points, "is_flashback": card.is_flashback}
 
 func _v2_resolve_effect(payload: Dictionary, atom: CardEffect, number: int, morale_bonus: int) -> Dictionary:
 	var caster := _find_unit(payload.uid)
@@ -804,6 +827,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 		push_error("CardData %s：%s" % [cd.id, "；".join(errors)])
 		return
 	var morale_bonus: int = _morale_bonus(caster)
+	payload.morale_used = morale_bonus
 	if not summon.is_empty() and ((cd.card_type == 0 and summon.kind != "summon_snake") or (cd.card_type == 1 and summon.kind == "summon_snake")):
 		await _act_summon()
 	if cd.rocket_number > 0:
@@ -864,7 +888,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 			if cd.blue_status_counter:
 				rules.counters.append({"uid": caster.unit_id, "color": 1, "value": 7,
 					"name": cd.card_name, "combo": maxi(times, 1),
-					"behavior_type": 2, "morale_on_success": true})
+					"behavior_type": 2, "morale_on_success": true, "is_flashback": bool(payload.get("is_flashback", false))})
 			elif cd.blue_counter_flashback:
 				rules.counters.append({"uid": caster.unit_id, "color": 1, "value": 0,
 					"name": cd.card_name, "combo": maxi(times, 1),
@@ -880,7 +904,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 			if is_instance_valid(presentation) and presentation._playing:
 				await presentation.finished
 	if damage_resolved:
-		caster.remove_buff("morale")
+		_settle_attack_morale(payload)
 	_tick_poison(caster)
 
 ## 出牌：接牌判定 → 卡牌效果 × Combo → Combo +1 → 倒计时 -1 → 归零敌人出牌 → 手牌打空则奖励补牌。
@@ -910,7 +934,7 @@ func play_card(payload: Dictionary) -> void:
 	_finish_charge_play(payload)
 	if cd.id != "rocket_18": hand.grow_charge_cards(previous_charge_cards)
 	if switched_blue:
-		_grant_player_blue_reward()
+		_handle_blue_change(true)
 	rules.combo_up()
 	await _after_action()
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
@@ -977,7 +1001,7 @@ func _counter_attack(enemy: UnitRoot, counters: Array[Dictionary]) -> void:
 		await _v2_animate({"caster": owner, "targets": targets, "stat": "damage", "value": total, "hits": 1})
 	enemy.damage(total)
 	if counters.any(func(counter: Dictionary) -> bool: return counter.get("morale_on_success", false)):
-		_team.remove_buff("morale")
+		_settle_attack_morale({"cd": null, "morale_used": _morale_bonus(_team), "counter_flash": counters.any(func(c:Dictionary)->bool:return c.get("morale_on_success",false) and c.get("is_flashback",false))})
 	if enemy.get_current_hp() <= 0:
 		enemy.die()
 	_check_battle_end()
@@ -1084,7 +1108,9 @@ func _enemy_play(uid: String) -> void:
 		rules.combo_up()
 	else:
 		rules.reset_combo()
+	var switched_blue: bool = int(card.color) == 1 and int(rules.top.get("color", -1)) != 1
 	rules.place_enemy_card(card, uid)
+	if switched_blue: _handle_blue_change(false)
 	_v2_refresh_hud()
 	_spawn_card_played_prompt(uid, "%s %s%d" % [card.name, ChainRules.color_name(card.color), card.number], "enemy")
 	var countered := rules.take_counters(card)
@@ -1436,7 +1462,7 @@ func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 			var presentation := _v2_start_animation(effect)
 			_v2_apply_resolved(effect)
 			if is_instance_valid(presentation) and presentation._playing: await presentation.finished
-			_team.remove_buff("morale")
+			_settle_attack_morale(payload)
 	if is_instance_valid(status_presentation) and status_presentation._playing: await status_presentation.finished
 	if n == 16 and int(payload.base) == int(payload.get("previous_number", -1)):
 		_team.add_buff("adjustment", 1, 1)
@@ -1540,3 +1566,29 @@ func _spawn_mafe_reserve(spawn_position: Vector2) -> void:
 		unit.set_dimmed(not v2_targets(selected.data, _find_unit(selected.owner_group)).has(unit))
 	var fade := unit.create_tween()
 	fade.tween_property(unit, "modulate:a", 1.0, reserve_fade_duration)
+
+func _start_victory_rewards() -> void:
+	if is_instance_valid(_victory_rewards): return
+	_victory_rewards = VictoryRewards.new()
+	_victory_rewards.battle_root=self;_victory_rewards.config=reward_config
+	add_child(_victory_rewards)
+	_victory_rewards.begin()
+
+func _handle_blue_change(player_event: bool) -> void:
+	if player_event or RunProgress.has_aspect("borrow"): _grant_player_blue_reward()
+	if not RunProgress.has_aspect("sleeve"):return
+	var hand:=get_tree().get_first_node_in_group("hand_manager") as HandManager
+	if hand._cards.any(func(hc:HandCard)->bool:return is_instance_valid(hc) and hc.cost_color==1):return
+	hand.generate_color_flashbacks(1,1)
+
+func _settle_attack_morale(payload: Dictionary) -> void:
+	var before: int = _team.get_buff_stacks("morale")
+	var cd: CardData = payload.get("cd") as CardData
+	var flash_attack: bool = bool(payload.get("counter_flash", false)) or (cd != null and cd.card_type == 0 and bool(payload.get("is_flashback", false)))
+	var retained: int = floori(float(int(payload.get("morale_used", before))) / 2.0) if flash_attack and RunProgress.has_aspect("flash_return") else 0
+	var spent: int = maxi(0, before - mini(before,retained))
+	if retained > 0: _team.remove_buff_stacks("morale",spent)
+	else: _team.remove_buff("morale")
+	if spent > 0 and RunProgress.has_aspect("echo"):
+		rules.skill_cooldowns.Zhouzhou = maxi(0,int(rules.skill_cooldowns.get("Zhouzhou",0))-1)
+		_v2_refresh()

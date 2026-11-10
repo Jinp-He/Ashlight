@@ -1868,3 +1868,15 @@ func _update_held_sway(delta: float, pointer: Vector2) -> void:
 		if not is_instance_valid(display): continue
 		display.pivot_offset = Vector2(display.size.x * 0.5, 0)
 		display.rotation = _held_sway_angle
+
+## 胜利专用：保留普通牌入弃牌堆，闪回销毁；不触发出牌、抽牌或角色被动。
+func collect_for_rewards() -> void:
+	set_hand_locked(true);set_cutscene_lock(true)
+	_reset_keyword_hover();clear_selection(true)
+	for hc in _cards.duplicate():
+		if not is_instance_valid(hc):continue
+		_cards.erase(hc)
+		if not hc.is_flashback:deck.discard_card(hc.owner_group,hc.data)
+		recycle_card(hc,0,false)
+	_hovered=null
+	await get_tree().create_timer(maxf(discard_flip_duration+discard_flight_duration,flashback_dissolve_duration)+0.1).timeout
