@@ -1869,7 +1869,27 @@ func _update_held_sway(delta: float, pointer: Vector2) -> void:
 		display.pivot_offset = Vector2(display.size.x * 0.5, 0)
 		display.rotation = _held_sway_angle
 
-## 胜利专用：保留普通牌入弃牌堆，闪回销毁；不触发出牌、抽牌或角色被动。
+## 胜利专用：普通牌翻背后飞入牌库；内部牌堆归属保持原规则，闪回溶解。
+func _recycle_victory_card(hc: HandCard) -> void:
+	if hc.is_flashback:
+		_dissolve_flashback(hc)
+		return
+	_kill_card_tween(hc)
+	hc.state=HandCard.STATE_PLAYED;hc.clear_select_frame();hc.modulate=Color.WHITE
+	var visual:=preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
+	hc.add_child(visual);visual.setup(hc.card);visual.set_flip(0.0)
+	for side in [visual._front,visual._back]:
+		side.material.set_shader_parameter("x_rot",0.0)
+		side.material.set_shader_parameter("rect_size",Vector2(400,576))
+	var tween:=hc.create_tween()
+	tween.tween_method(visual.set_flip,0.0,180.0,discard_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(hc,"position",to_local(_flyin_origin()),discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(hc,"scale",Vector2.ONE*hand_scale*0.3,discard_flight_duration)
+	tween.parallel().tween_property(hc,"rotation",0.0,discard_flight_duration)
+	tween.tween_callback(hc.queue_free)
+	_card_tweens[hc]=[tween]
+
+## 不触发出牌、抽牌或角色被动。
 func collect_for_rewards() -> void:
 	set_hand_locked(true);set_cutscene_lock(true)
 	_reset_keyword_hover();clear_selection(true)
@@ -1877,6 +1897,6 @@ func collect_for_rewards() -> void:
 		if not is_instance_valid(hc):continue
 		_cards.erase(hc)
 		if not hc.is_flashback:deck.discard_card(hc.owner_group,hc.data)
-		recycle_card(hc,0,false)
+		_recycle_victory_card(hc)
 	_hovered=null
 	await get_tree().create_timer(maxf(discard_flip_duration+discard_flight_duration,flashback_dissolve_duration)+0.1).timeout

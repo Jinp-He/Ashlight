@@ -14,6 +14,8 @@ var selected_index := -1
 var busy := true
 var phase := "waiting"
 var active_role := ""
+var _xp_hovered: Node2D
+var _masked_units: Array[UnitRoot] = []
 var _xp_selected: Node2D
 var _pointer_down := false
 var _dragging := false
@@ -21,6 +23,8 @@ var _press_position := Vector2.ZERO
 var _tip: UnitBuffTooltip
 var _hover_index := -1
 var _started := false
+var _exiting := false
+var _fade_timer: Timer
 func _ready() -> void:
 	layer=120
 	shade=ColorRect.new();shade.color=Color(0,0,0,0.6);shade.mouse_filter=Control.MOUSE_FILTER_STOP;shade.visible=false;add_child(shade)
@@ -60,7 +64,7 @@ func begin() -> void:
 	for unit in battle_root._get_units():
 		if unit.unit_faction=="player":unit.toggle_bar_display(true)
 		else:unit.hide()
-	if RunProgress.battle.phase=="done":_finish();return
+	if RunProgress.battle.phase=="done":await _finish();return
 	_rebuild_xp()
 	await _next()
 func _show_buttons(value:bool) -> void:
@@ -68,12 +72,15 @@ func _show_buttons(value:bool) -> void:
 func _rebuild_xp() -> void:
 	for card in xp_cards:
 		if is_instance_valid(card):card.queue_free()
-	xp_cards.clear()
+	xp_cards.clear();_xp_hovered=null
 	var amount:int=RunProgress.battle.remaining
 	for i in amount:
 		var card:=Node2D.new();card.name="ExperienceCard";root.add_child(card)
 		var art:=Sprite2D.new();art.texture=preload("res://assets/rewards/experience_card.png");art.scale=Vector2.ONE*config.xp_card_scale;card.add_child(art)
-		card.position=Vector2(800+(i-(amount-1)*0.5)*minf(100.0,700.0/maxi(amount,1)),config.xp_hand_y)
+		card.position=Vector2(800+(i-(amount-1)*0.5)*config.xp_center_spacing,config.xp_hand_y)
+		card.rotation=deg_to_rad(config.xp_fan_degrees*(float(i)/maxi(amount-1,1)*2.0-1.0)) if amount>1 else 0.0
+		card.z_index=i
+		card.set_meta("home_rotation",card.rotation);card.set_meta("base_z",i)
 		card.set_meta("home",card.position);xp_cards.append(card)
 func _next() -> void:
 	if not is_inside_tree():return
@@ -85,10 +92,15 @@ func _next() -> void:
 	elif int(RunProgress.battle.remaining)>0:
 		phase="xp";RunProgress.battle.phase=phase;
 		for xp_card in xp_cards:xp_card.show()
-		shade.hide();_show_buttons(false);title.text="分配经验：选择经验牌，再点击角色";busy=false
-	else:_finish()
+		_show_buttons(false);title.text="分配经验：选择经验牌，再点击角色"
+		await _fade_shade_out()
+		if _exiting:return
+		busy=false
+	else:await _finish()
 func _finish() -> void:
-	_clear_candidates();phase="done";RunProgress.battle.phase="done";busy=true;shade.hide();_show_buttons(false);title.text="经验分配完成";_tip.hide_tooltip()
+	_clear_candidates();phase="done";RunProgress.battle.phase="done";busy=true;_show_buttons(false);title.text="经验分配完成";_tip.hide_tooltip()
+	await _fade_shade_out()
+	if _exiting:return
 	RunProgress.save_deck(hand)
 func _generate() -> Array:
 	if phase=="cards":return config.sample_cards(active_role,int(RunProgress.roles[active_role].level))
@@ -97,7 +109,8 @@ func _generate() -> Array:
 func _open_choice() -> void:
 	busy=true;selected_index=-1;_hover_index=-1;_tip.hide_tooltip();
 	for xp_card in xp_cards:xp_card.hide()
-	shade.show();_show_buttons(true)
+	_set_character_outlines_blocked(true)
+	shade.modulate.a=1.0;shade.show();_show_buttons(true)
 	for button in buttons:button.disabled=true
 	title.text="选择1张牌加入牌库" if phase=="cards" else "选择1种百相"
 	var choices:Array=[]
@@ -145,6 +158,7 @@ func _process(_delta:float) -> void:
 	if not is_instance_valid(root):return
 	_resize()
 	if is_instance_valid(_xp_selected):_xp_selected.position=_mouse()+Vector2(35,45)
+	if phase=="xp" and not busy:_update_xp_hover(_delta)
 	if busy or phase not in ["cards","aspects"]:return
 	var hit:=-1
 	var point:=root.to_global(_mouse())
@@ -191,16 +205,15 @@ func _input(event:InputEvent) -> void:
 	if mouse.pressed:
 		if is_instance_valid(_xp_selected):
 			_try_assign(mouse.position);get_viewport().set_input_as_handled();return
-		for i in range(xp_cards.size()-1,-1,-1):
-			var card:=xp_cards[i]
-			if Rect2(card.position-Vector2(45,105),Vector2(90,210)).has_point(_mouse()):
-				_xp_selected=card;card.scale=Vector2.ONE*0.5;card.z_index=20;_pointer_down=true;_dragging=false;_press_position=mouse.position;get_viewport().set_input_as_handled();return
+		var card:=_xp_card_at(_mouse())
+		if is_instance_valid(card):
+			_xp_selected=card;_xp_hovered=null;card.rotation=0.0;card.scale=Vector2.ONE*0.5;card.z_index=20;_pointer_down=true;_dragging=false;_press_position=mouse.position;get_viewport().set_input_as_handled();return
 	elif _pointer_down:
 		_pointer_down=false
 		if _dragging:_try_assign(mouse.position)
 func _cancel_xp() -> void:
 	if is_instance_valid(_xp_selected):
-		_xp_selected.position=_xp_selected.get_meta("home");_xp_selected.scale=Vector2.ONE;_xp_selected.z_index=0
+		_xp_selected.position=_xp_selected.get_meta("home");_xp_selected.scale=Vector2.ONE;_xp_selected.z_index=int(_xp_selected.get_meta("base_z"));_xp_selected.rotation=float(_xp_selected.get_meta("home_rotation"))
 	_xp_selected=null;_pointer_down=false;_dragging=false
 func _try_assign(canvas_point:Vector2) -> void:
 	var point: Vector2 = battle_root.get_canvas_transform().affine_inverse()*canvas_point
@@ -274,3 +287,60 @@ func _complete_choice() -> void:
 	_clear_candidates()
 	await _next()
 
+func _xp_contains(card: Node2D, point: Vector2) -> bool:
+	var size:Vector2=Vector2(276,680)*config.xp_card_scale
+	return Rect2(-size*0.5,size).has_point(card.to_local(root.to_global(point)))
+
+func _xp_card_at(point: Vector2) -> Node2D:
+	if is_instance_valid(_xp_hovered) and _xp_contains(_xp_hovered,point):return _xp_hovered
+	for i in range(xp_cards.size()-1,-1,-1):
+		if _xp_contains(xp_cards[i],point):return xp_cards[i]
+	return null
+
+func _update_xp_hover(delta: float) -> void:
+	if is_instance_valid(_xp_selected):return
+	var hit:=_xp_card_at(_mouse())
+	_xp_hovered=hit
+	var blend:=1.0-exp(-18.0*delta)
+	for card in xp_cards:
+		var hovered:bool=card==hit
+		var target_scale:float=config.xp_hover_scale if hovered else 1.0
+		card.scale=card.scale.lerp(Vector2.ONE*target_scale,blend)
+		card.rotation=lerp_angle(card.rotation,0.0 if hovered else float(card.get_meta("home_rotation")),blend)
+		var target:Vector2=card.get_meta("home")
+		if hovered:
+			target.y=900.0-config.xp_hover_bottom_margin-680.0*config.xp_card_scale*target_scale*0.5
+		card.position=card.position.lerp(target,blend)
+		card.z_index=20 if hovered else int(card.get_meta("base_z"))
+		if hovered:
+			var extent:float=config.xp_card_scale*card.scale.y*(absf(sin(card.rotation))*276.0+absf(cos(card.rotation))*680.0)*0.5
+			card.position.y=minf(card.position.y,900.0-config.xp_hover_bottom_margin-extent)
+
+func _set_character_outlines_blocked(blocked: bool) -> void:
+	if blocked:
+		_masked_units.clear()
+		for unit in battle_root._get_units():
+			if unit.unit_faction=="player":_masked_units.append(unit);unit.set_reward_outline_blocked(true)
+	else:
+		for unit in _masked_units:
+			if is_instance_valid(unit):unit.set_reward_outline_blocked(false)
+		_masked_units.clear()
+
+func _fade_shade_out() -> void:
+	if shade.visible:
+		var tween:=create_tween()
+		tween.tween_property(shade,"modulate:a",0.0,config.shade_fade_duration)
+		var fade_timer:=Timer.new();fade_timer.one_shot=true;add_child(fade_timer);fade_timer.start(maxf(config.shade_fade_duration,0.001))
+		_fade_timer=fade_timer
+		await fade_timer.timeout
+		_fade_timer=null
+		fade_timer.queue_free()
+		if _exiting or not is_inside_tree():return
+		shade.hide();shade.modulate.a=1.0
+	_set_character_outlines_blocked(false)
+
+func _exit_tree() -> void:
+	_exiting=true
+	# 退出前结束淡出等待，使上层阶段协程有机会收尾。
+	if is_instance_valid(_fade_timer):_fade_timer.timeout.emit()
+	_set_character_outlines_blocked(false)

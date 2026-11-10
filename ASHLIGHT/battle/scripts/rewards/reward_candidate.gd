@@ -21,7 +21,7 @@ var _hover_outline: ShaderMaterial
 var _aspect_flag: Sprite2D
 func _ready() -> void:
 	_visual = Node2D.new(); add_child(_visual)
-	_hover_outline=ShaderMaterial.new();_hover_outline.shader=preload("res://battle/scripts/units/outline.gdshader");_hover_outline.set_shader_parameter("outline_color",Color.WHITE);_hover_outline.set_shader_parameter("outline_thickness",3.0)
+	_hover_outline=ShaderMaterial.new();_hover_outline.shader=preload("res://battle/scripts/units/outline.gdshader");_hover_outline.set_shader_parameter("outline_color",Color.WHITE);_hover_outline.set_shader_parameter("outline_thickness",config.choice_outline_pixels)
 	if card_data != null:
 		_card = CardRoot.new(); _card.apply_data(card_data,card_data.base_number)
 		_visual.add_child(_card)

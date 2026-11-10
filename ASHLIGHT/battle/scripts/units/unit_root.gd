@@ -162,6 +162,7 @@ var _art_sprite: Sprite2D
 var _outline_material: ShaderMaterial
 var _back_row_material: ShaderMaterial
 var _hovering: bool = false
+var _reward_outline_blocked: bool = false
 ## 选靶黑幕状态：true=美术已变纯黑剪影（由 set_dimmed 驱动）。
 var _dimmed: bool = false
 ## 死亡标记：die() 已触发一次，防止重复播放死亡演出（黑幕淡出期间重复掉血不再二次触发）。
@@ -593,6 +594,10 @@ func is_point_inside(global_pos: Vector2) -> bool:
 	var half := activation_size * 0.5
 	return Rect2(center - half, activation_size).has_point(global_pos)
 
+func set_reward_outline_blocked(blocked: bool) -> void:
+	_reward_outline_blocked=blocked
+	_refresh_materials()
+
 func set_external_highlight(on: bool) -> void:
 	_externally_highlighted = on
 	_refresh_materials()
@@ -642,7 +647,7 @@ func _refresh_materials() -> void:
 	if not is_instance_valid(_art_sprite):
 		return
 	var mask_on := is_back_row and is_instance_valid(_back_row_material)
-	var out_on := not _dimmed and (_hovering or _externally_highlighted) and is_instance_valid(_outline_material)
+	var out_on := not _reward_outline_blocked and not _dimmed and (_hovering or _externally_highlighted) and is_instance_valid(_outline_material)
 	if is_instance_valid(_outline_material):
 		_outline_material.next_pass = null
 	if is_instance_valid(_back_row_material):
