@@ -5,9 +5,10 @@
 [resource]
 script = ExtResource("1_intent")
 id = "wangg_shield"
-intent_name = "护体"
-color = 3
+intent_name = "夺盾"
+color = 1
 number = 2
-stat = "shield"
-value = 5
+stat = "steal_shield"
+value = 0
 delay = 0
+behavior_type = 2

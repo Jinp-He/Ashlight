@@ -4,7 +4,7 @@ extends Control
 ## Buff 描述框（悬停提示）。Step 1 · 6d。
 ## 鼠标悬停于 buff icon 时显示：左上角 buff 名字（字魂扁桃体 25 / #9c660a / 靠左）
 ## + 下方说明文字（抖音美好体 16 / 白 / 靠左 / 自动换行 / 行间距 2px）。
-## 背景为代码绘制的圆角矩形（左上角不圆角、其余三角 10px 圆角，宽度固定 200px），
+## 背景为代码绘制的圆角矩形（左上角不圆角、其余三角 10px 圆角，宽度固定 250px），
 ## 纯黑不透明、无描边。高度按确定性公式：基础 80px + 每行说明 +30px，向下延展（不裁切）。
 ## 出现/消失带淡入淡出（默认各 0.1s）。复用实例：淡出后仅 hide，不 free 重建。
 
@@ -21,8 +21,8 @@ const FONT_DESC_PATH: String = "res://assets/fonts/DouyinSansBold.otf"  # 抖音
 @export var desc_line_spacing: int = 2
 ## 说明文字颜色（白）
 @export var desc_color: Color = Color(1.0, 1.0, 1.0, 1.0)
-## 描述框显示尺寸。宽度固定 200px（不随文本变化）；高度按说明换行行数自动撑高。
-@export var box_size: Vector2 = Vector2(200.0, 120.0)
+## 描述框显示尺寸。宽度固定 250px（不随文本变化）；高度按说明换行行数自动撑高。
+@export var box_size: Vector2 = Vector2(250.0, 120.0)
 ## 文字相对底图内边距（x=左右 / y=上下）
 @export var padding: Vector2 = Vector2(16.0, 14.0)
 ## 背景填充色（圆角矩形；纯黑不透明）
@@ -38,6 +38,12 @@ const FONT_DESC_PATH: String = "res://assets/fonts/DouyinSansBold.otf"  # 抖音
 ## 淡出时长（秒）
 @export var fade_out_duration: float = 0.1
 
+@export var section_gap: float = 5.0
+@export var scene_height: float = 900.0
+@export var bottom_margin: float = 50.0
+var _requested_anchor: Vector2
+var _section_boxes: Array[UnitBuffTooltip] = []
+
 var _name_lbl: Label
 var _desc_lbl: Label
 var _desc_font: Font
@@ -46,6 +52,7 @@ var _tween: Tween
 var _is_visible: bool = false
 
 func _ready() -> void:
+	resized.connect(_layout_sections)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE  # 描述框自身不挡鼠标，避免悬停闪烁
 	_name_font = load(FONT_NAME_PATH) as Font
 	_desc_font = load(FONT_DESC_PATH) as Font
@@ -84,9 +91,16 @@ func _ready() -> void:
 ## instant=true 时跳过淡入、直接置不透明显示（调试常显用）；否则从当前透明度淡入 fade_in_duration 秒。
 ## 若描述框已显示（如从相邻 icon 滑入），tween 从当前透明度平滑过渡到 1，不归零重淡入，避免闪烁。
 func show_tooltip(buff_name: String, description: String, local_top_left: Vector2, instant: bool = false) -> void:
+	if description.begins_with("["):
+		var parsed = JSON.parse_string(description)
+		if parsed is Array and not parsed.is_empty() and parsed[0] is Dictionary and parsed[0].has("title"):
+			show_sections(parsed, local_top_left, instant)
+			return
+	for box in _section_boxes: box.hide_tooltip()
 	_name_lbl.text = buff_name
 	_desc_lbl.text = description
 	# 定位：左上角锚点直接置于传入的局部坐标
+	_requested_anchor = local_top_left
 	position = local_top_left
 	show()
 	queue_redraw()
@@ -184,7 +198,7 @@ func _estimate_desc_lines(p_text: String, p_inner_w: float) -> int:
 	var lines := ceili(float(n) / float(per_line))
 	return maxi(1, lines)
 
-## 绘制圆角矩形背景：左上角不圆角，其余三角取 bg_corner_radius，宽度固定 200px。
+## 绘制圆角矩形背景：左上角不圆角，其余三角取 bg_corner_radius，宽度固定 250px。
 ## 背景绘制在 Control 自身画布（子 Label 之下），故文字始终浮于背景之上。
 func _draw() -> void:
 	var sb := StyleBoxFlat.new()
@@ -194,3 +208,34 @@ func _draw() -> void:
 	sb.corner_radius_bottom_right = bg_corner_radius
 	sb.corner_radius_bottom_left = bg_corner_radius
 	draw_style_box(sb, Rect2(Vector2.ZERO, box_size))
+
+## 复用附加框；整组由父框统一定位和淡入淡出，不拦截鼠标。
+func show_sections(sections: Array, anchor: Vector2, instant: bool = false) -> void:
+	show_tooltip(str(sections[0].title), str(sections[0].description), anchor, instant)
+	for i in range(1, sections.size()):
+		if _section_boxes.size() < i:
+			var box := UnitBuffTooltip.new()
+			box.box_size.x = box_size.x
+			add_child(box)
+			box.resized.connect(_layout_sections)
+			_section_boxes.append(box)
+		_section_boxes[i - 1].show_tooltip(str(sections[i].title), str(sections[i].description), Vector2.ZERO, true)
+	call_deferred("_layout_sections")
+
+func _layout_sections() -> void:
+	var next_y := box_size.y + section_gap
+	for box in _section_boxes:
+		if not box.visible: continue
+		box.position = Vector2(0, next_y)
+		next_y += box.box_size.y + section_gap
+
+	# 附加框由主框统一约束，避免各个框独立上移而破坏排列。
+	if get_parent() is UnitBuffTooltip: return
+	position = _requested_anchor
+	var total_height := next_y - section_gap
+	var canvas_bottom := get_global_transform_with_canvas() * Vector2(0, total_height)
+	var overflow := canvas_bottom.y - (scene_height - bottom_margin)
+	if overflow > 0:
+		var transform := get_global_transform_with_canvas()
+		var local_shift := transform.affine_inverse() * (canvas_bottom - Vector2(0, overflow)) - Vector2(0, total_height)
+		position += get_transform().basis_xform(local_shift)

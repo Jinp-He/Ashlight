@@ -2,6 +2,9 @@ class_name DamageNumber
 extends Node2D
 
 signal hold_finished
+
+const BASE_SCALE := Vector2(1.2, 1.2)
+const POPUP_OFFSET := Vector2(0, 50)
 @export_range(0.1, 3.0, 0.05) var duration_multiplier: float = 1.0
 @export var popup_peak_scale: float = 1.2
 @export var popup_rise: float = 15.0
@@ -32,12 +35,12 @@ func play_on_unit(unit: Node2D, delay: float = 0.0) -> void:
 func play_popup(anchor: Vector2, delay: float = 0.0) -> void:
 	if is_instance_valid(_popup_tween):
 		_popup_tween.kill()
-	popup_anchor = anchor
+	popup_anchor = anchor + POPUP_OFFSET
 	popup_delay = delay
 	popup_fading = false
 	popup_settled = false
-	position = anchor + Vector2(0, popup_rise)
-	scale = Vector2.ONE
+	position = popup_anchor + Vector2(0, popup_rise)
+	scale = BASE_SCALE
 	modulate.a = 1.0
 	visible = delay <= 0.0
 	add_to_group("blocking_damage_numbers")
@@ -46,9 +49,9 @@ func play_popup(anchor: Vector2, delay: float = 0.0) -> void:
 	if delay > 0:
 		_popup_tween.tween_interval(delay)
 	_popup_tween.tween_callback(show)
-	_popup_tween.tween_property(self, "position", anchor, popup_rise_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_popup_tween.parallel().tween_property(self, "scale", Vector2.ONE * popup_peak_scale, popup_rise_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_popup_tween.tween_property(self, "scale", Vector2.ONE, popup_settle_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_popup_tween.tween_property(self, "position", popup_anchor, popup_rise_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_popup_tween.parallel().tween_property(self, "scale", BASE_SCALE * popup_peak_scale, popup_rise_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_popup_tween.tween_property(self, "scale", BASE_SCALE, popup_settle_time * duration_multiplier).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_popup_tween.tween_callback(_begin_hold)
 	_popup_tween.tween_interval(popup_hold_time * duration_multiplier)
 	_popup_tween.tween_callback(_begin_fade)
@@ -121,6 +124,7 @@ var _font: Font = null
 var content_height: float = 0.0   # 实际渲染总高（_build_layout 计算），供上层做多段间距用
 
 func _ready() -> void:
+	scale = BASE_SCALE
 	_font = load(FONT_PATH) as Font
 	if _font == null:
 		_font = load(FONT_FALLBACK) as Font

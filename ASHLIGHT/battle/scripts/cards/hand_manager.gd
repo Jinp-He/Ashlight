@@ -19,8 +19,9 @@ const COMBO_GLOSSARY_SCRIPT := preload("res://battle/scripts/cards/combo_glossar
 @export_group("Layout")
 @export var hand_scale: float = 0.42
 @export var hand_y: float = 810.0            # 手牌基准 Y
-@export var hand_offset_x: float = -40.0        # 整个手牌组水平偏移（正=右移，负=左移）
+@export var hand_offset_x: float = 0.0        # 整个手牌组水平偏移（正=右移，负=左移）
 @export var regular_spacing: float = 70.0   # 常规间距：单排相邻卡中心基准间距(px)，随张数系数与悬停放大在其上浮动
+@export var hover_bottom_margin: float = 1.0
 @export var hover_lift: float = 75.0          # 悬停时卡牌上移(px)
 @export var hover_scale: float = 1.4
 @export var hand_arc_height: float = 25.0
@@ -82,6 +83,13 @@ const COMBO_GLOSSARY_SCRIPT := preload("res://battle/scripts/cards/combo_glossar
 
 var _cards: Array[HandCard] = []
 var _hovered: HandCard = null
+@export var keyword_hover_delay: float = 1.0
+@export var keyword_side_gap: float = 15.0
+var _keyword_hover_card: HandCard
+var _keyword_hover_elapsed: float = 0.0
+var _keyword_hover_built: bool = false
+var _keyword_tip: UnitBuffTooltip
+
 
 
 ## 每张卡当前活跃的位移/缩放 tween（值为普通 Array，可同时存「位置 tween」与「缩放回弹 tween」）。
@@ -234,6 +242,101 @@ func init_decks(roles: Array[String]) -> void:
 	print("[HM] 牌库显式初始化：角色=%s | %s" % [roles, deck.debug_status()])
 
 ## 【闪回】生成临时副本：从 pool_scope 指定池(仅周周/全角色)随机取 count 张，复制出独立 CardData，
+## 调用时仍在手中的闪回属于上次出牌前已有的副本。新奖励随后生成。
+@export var flashback_dissolve_duration: float = 0.8
+
+func _dissolve_flashback(hc: HandCard, existing_visual: Node2D = null) -> void:
+	if not is_instance_valid(hc) or hc.get_meta("dissolving", false):
+		return
+	hc.set_meta("dissolving", true)
+	hc.state = HandCard.STATE_PLAYED
+	hc.clear_select_frame()
+	_kill_card_tween(hc)
+	var active: Tween = hc.get_meta("draw_active_tween") as Tween if hc.has_meta("draw_active_tween") else null
+	if is_instance_valid(active):
+		active.kill()
+	var visual := existing_visual
+	if not is_instance_valid(visual):
+		visual = hc.get_meta("draw_flip_visual") as Node2D if hc.has_meta("draw_flip_visual") else null
+	if not is_instance_valid(visual):
+		visual = preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
+		hc.add_child(visual)
+		visual.setup(hc.card)
+		visual.set_flip(0.0)
+	hc.visible = true
+	hc.modulate = Color.WHITE
+	hc.z_index = 1900
+	hc.card.modulate = Color.WHITE
+	visual.set_dissolve(0.0)
+	var tween := hc.create_tween()
+	# 离屏卡面先完成渲染，随后开始完整的0.8秒溶解。
+	tween.tween_interval(0.05)
+	tween.tween_method(visual.set_dissolve, 0.0, 1.0, flashback_dissolve_duration)
+	tween.tween_callback(hc.queue_free)
+
+func expire_flashbacks() -> void:
+	for hc in _cards.duplicate():
+		if is_instance_valid(hc) and hc.is_flashback:
+			_cards.erase(hc)
+			if _hovered == hc:
+				_hovered = null
+			_kill_card_tween(hc)
+			_dissolve_flashback(hc)
+	layout(true, false)
+
+## 只复制当前抽牌堆的匹配模板，可重复采样，不取走原牌、不洗牌。
+func generate_color_flashbacks(color: int, count: int) -> void:
+	_generate_pile_flashbacks(count, color, false)
+
+## 牌顶在数组尾部。倒序按原始索引处理，移走蓝牌不会扰乱未取走牌的顺序。
+func observe_blue_cards(count: int) -> void:
+	_ensure_decks()
+	var drawn: Array[HandCard] = []
+	var stop := maxi(0, deck.draw_pile.size() - maxi(0, count))
+	for index in range(deck.draw_pile.size() - 1, stop - 1, -1):
+		var source: CardData = deck.draw_pile[index]
+		var flashback: bool = source.uno_color != 1
+		var cd := source
+		if flashback:
+			cd = source.duplicate() as CardData
+			cd.number_spread = 0
+		else:
+			deck.draw_pile.remove_at(index)
+		var hc := _spawn_card_for_role(cd, cd.belong_to, flashback)
+		hc.position = _flyin_origin()
+		hc.scale = Vector2.ONE * hand_scale * 0.5
+		hc.flyin_lock = true
+		_cards.append(hc)
+		drawn.append(hc)
+	if not drawn.is_empty():
+		_deal_cards(drawn)
+		_refresh_inactive()
+
+func generate_attack_flashbacks(count: int) -> void:
+	_generate_pile_flashbacks(count, -1, true)
+
+func _generate_pile_flashbacks(count: int, color: int, attack_only: bool) -> void:
+	_ensure_decks()
+	var candidates: Array[CardData] = []
+	for cd in deck.draw_pile:
+		if (attack_only and cd.effects.any(func(e: CardEffect) -> bool: return e != null and e.kind == "damage")) or (not attack_only and cd.uno_color == color):
+			candidates.append(cd)
+	if candidates.is_empty():
+		return
+	var drawn: Array[HandCard] = []
+	for i in count:
+		var template: CardData = candidates.pick_random()
+		var copy := template.duplicate() as CardData
+		copy.number_spread = 0
+		var hc := _spawn_card_for_role(copy, copy.belong_to, true)
+		hc.position = _flyin_origin()
+		hc.scale = Vector2.ONE * hand_scale * 0.5
+		hc.flyin_lock = true
+		_cards.append(hc)
+		drawn.append(hc)
+	_deal_cards(drawn)
+	_refresh_inactive()
+
 func generate_flashback(owner_role: String, pool_scope: String, count: int) -> void:
 	if not ROLES.has(owner_role) or count <= 0:
 		return
@@ -257,7 +360,7 @@ func generate_flashback(owner_role: String, pool_scope: String, count: int) -> v
 		hc.flyin_lock = true
 		_cards.append(hc)
 		drawn.append(hc)
-	layout(true, true, drawn)
+	_deal_cards(drawn)
 	_refresh_inactive()
 	print("[HM-flashback] %s 生成 %d 张闪回副本(池=%s)" % [owner_role, drawn.size(), pool_scope])
 
@@ -276,6 +379,8 @@ func _spawn_card_for_role(cd: CardData, role: String, is_flashback: bool = false
 	hc.is_flashback = is_flashback         # 闪回副本标记
 	add_child(hc)            # 保留原卡牌构建和动画
 	hc.state = HandCard.STATE_HAND
+	if hc.is_flashback:
+		hc.set_select_frame(false, COLOR_SELECT_WHITE_A, COLOR_SELECT_WHITE_B)
 	return hc
 
 
@@ -314,7 +419,7 @@ func discard_random_for_role(role: String, count: int) -> void:
 func _hand_count() -> int:
 	var n := 0
 	for c in _cards:
-		if is_instance_valid(c) and c.state == HandCard.STATE_HAND:
+		if is_instance_valid(c) and c.state in [HandCard.STATE_HAND, HandCard.STATE_IDLE]:
 			n += 1
 	return n
 
@@ -331,6 +436,136 @@ func _flyin_origin() -> Vector2:
 ## 以 regular_spacing 为锚算「理想跨度」，与可用宽比较 → coeff = 可用宽 / 理想跨度。
 ## 低数量(理想跨度 ≪ 可用宽)→ coeff 被 clamp 到 max_fit_scale(>1，间距放大)；
 ## 适中(恰好放得下)→ coeff=1.0(常规间距)；高数量(放不下)→ coeff<1(间距缩小，下限 min_fit_scale)。
+@export var draw_stagger: float = 0.12
+@export var draw_flight_duration: float = 0.45
+@export var draw_arc_height: float = 100.0
+var _deal_remaining: float = 0.0
+
+func _deal_cards(cards: Array[HandCard]) -> void:
+	for index in cards.size():
+		var hc := cards[index]
+		hc.state = HandCard.STATE_IDLE
+		hc.clear_select_frame()
+		hc.visible = false
+		var delay := _deal_remaining
+		_deal_remaining += draw_stagger
+		if delay <= 0.0:
+			_begin_deal(hc, index, cards)
+		var tween := create_tween()
+		if delay > 0.0:
+			tween.tween_interval(delay)
+			tween.tween_callback(_begin_deal.bind(hc, index, cards))
+		tween.tween_interval(draw_stagger)
+		tween.tween_callback(func() -> void: _deal_remaining = maxf(0, _deal_remaining - draw_stagger))
+
+@export var draw_flip_height: float = 200.0
+@export var draw_flip_spacing: float = 20.0
+@export var draw_rise_duration: float = 0.22
+@export var draw_flip_duration: float = 0.32
+@export var draw_flip_stagger: float = 0.08
+@export var draw_insert_duration: float = 0.25
+var _draw_sequence: int = 0
+
+func _begin_deal(hc: HandCard, batch_index: int, batch: Array[HandCard]) -> void:
+	if not is_instance_valid(hc) or not _cards.has(hc):
+		_start_batch_flips(batch)
+		return
+	hc.visible = true
+	hc.position = _flyin_origin()
+	hc.rotation = 0
+	hc.scale = Vector2.ONE * hand_scale * 0.5
+	hc.flyin_lock = true
+	_draw_sequence += 1
+	hc.z_index = 1000 + batch_index
+	var visual := preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
+	hc.add_child(visual)
+	visual.setup(hc.card)
+	var flip_position := _flyin_origin() + Vector2((float(batch.size() - 1) * 0.5 - batch_index) * draw_flip_spacing, -draw_flip_height)
+	var flight := hc.create_tween()
+	hc.set_meta("draw_active_tween", flight)
+	flight.set_parallel(true)
+	flight.tween_property(hc, "position", flip_position, draw_rise_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	flight.tween_property(hc, "scale", Vector2.ONE * hand_scale, draw_rise_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	flight.chain().tween_callback(func() -> void:
+		hc.set_meta("draw_risen", true)
+		hc.set_meta("draw_flip_visual", visual)
+		_start_batch_flips(batch))
+	SfxManager.play_random_draw()
+
+## 全批背面升起到位后，从最新（最左）向最旧逐张翻面。
+func _start_batch_flips(batch: Array[HandCard]) -> void:
+	for hc in batch:
+		if is_instance_valid(hc) and hc.get_meta("draw_batch_started", false):
+			return
+	for hc in batch:
+		if is_instance_valid(hc) and _cards.has(hc) and not hc.get_meta("draw_risen", false):
+			return
+	for hc in batch:
+		if is_instance_valid(hc) and _cards.has(hc):
+			hc.set_meta("draw_batch_started", true)
+	var order := 0
+	for index in range(batch.size() - 1, -1, -1):
+		var hc := batch[index]
+		if not is_instance_valid(hc) or not _cards.has(hc):
+			continue
+		var tween := hc.create_tween()
+		if order > 0:
+			tween.tween_interval(draw_flip_stagger * order)
+		tween.tween_callback(_start_one_draw_flip.bind(hc, order))
+		var visual := hc.get_meta("draw_flip_visual") as Node2D
+		tween.tween_method(visual.set_flip, 180.0, 0.0, draw_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_callback(func() -> void:
+			hc.set_meta("draw_flip_ready", true)
+			_finish_draw_batch(batch))
+		order += 1
+
+func _start_one_draw_flip(hc: HandCard, order: int) -> void:
+	if is_instance_valid(hc):
+		hc.z_index = 2000 + order
+		hc.set_meta("draw_flip_started", true)
+
+## 整批所有有效卡牌完成翻面后，在同一帧开始入手。
+func _finish_draw_batch(batch: Array[HandCard]) -> void:
+	for hc in batch:
+		if is_instance_valid(hc) and _cards.has(hc) and not hc.get_meta("draw_flip_ready", false):
+			return
+	var entering: Array[HandCard] = []
+	for hc in batch:
+		if is_instance_valid(hc) and _cards.has(hc) and hc.state == HandCard.STATE_IDLE:
+			hc.state = HandCard.STATE_HAND
+			entering.append(hc)
+	if entering.is_empty():
+		return
+	layout(true, false, [], true)
+	for hc in entering:
+		var start := hc.position
+		var visual := hc.get_meta("draw_flip_visual") as Node2D
+		var flight := hc.create_tween()
+		hc.set_meta("draw_active_tween", flight)
+		flight.tween_method(_update_draw_flight.bind(hc, start), 0.0, 1.0, draw_insert_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		flight.tween_callback(_finish_draw_insert.bind(hc, visual))
+
+func _finish_draw_insert(hc: HandCard, visual: Node2D) -> void:
+	if not is_instance_valid(hc):
+		return
+	if is_instance_valid(visual):
+		visual.restore()
+	hc.remove_meta("draw_flip_visual")
+	hc.remove_meta("draw_flip_ready")
+	hc.remove_meta("draw_risen")
+	hc.remove_meta("draw_flip_started")
+	_unlock_flyin(hc.get_instance_id())
+	hc.clear_select_frame()
+	layout(true, false, [], true)
+
+func _update_draw_flight(progress: float, hc: HandCard, start: Vector2) -> void:
+	if not is_instance_valid(hc):
+		return
+	var dest := hc.home_pos + (Vector2(0, combo_shift_y) if not is_playable(hc) else Vector2.ZERO)
+	hc.position = start.lerp(dest, progress)
+	hc.rotation = lerp_angle(0.0, hc.home_rotation, progress)
+	hc.scale = Vector2.ONE * hand_scale
+
 func _count_fit_coeff(n: int) -> float:
 	if not auto_fit:
 		return 1.0
@@ -352,16 +587,9 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 	var vsize := get_viewport_rect().size
 	var card_w := _native_width() * hand_scale
 
-	# 排序：同角色相邻（按 ROLES 顺序），同角色内按 费用类型→费用值。
-	active.sort_custom(func(a: HandCard, b: HandCard) -> bool:
-		var ra := ROLES.find(a.owner_group)
-		var rb := ROLES.find(b.owner_group)
-		if ra != rb:
-			return ra < rb
-		if a.card.cost_type != b.card.cost_type:
-			return a.card.cost_type < b.card.cost_type
-		return a.card.cost_value < b.card.cost_value)
+	# _cards 按入手顺序追加，过滤后直接沿用该顺序。
 
+	active.reverse()
 	var n := active.size()
 	var coeff := _count_fit_coeff(n)             # 随张数变化的间距系数(低数量放大/高数量缩小)
 	var base_step: float = regular_spacing * coeff   # 常规(数量调整后)间距，保留卡清晰度仅改间距
@@ -387,7 +615,7 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 		# 战斗/HUD刷新只能更新输入状态，不能中断仍在进行的抽牌飞入。
 		if not animated and c.flyin_lock:
 			continue
-		_kill_card_tween(c)   # 杀旧 tween(含悬停抬升)，避免与本次定位 tween 抢 position
+		# 飞入中的卡仅更新排序目标，保留其飞行轨迹。
 		# 索引大=右侧；层级从右往左（右卡盖左卡，叠放时右卡在上）；悬停卡置顶。
 		c.base_z = 10 + i
 		c.z_index = 1000 if c == _hovered else c.base_z
@@ -408,10 +636,13 @@ func layout(animated: bool = true, play_sounds: bool = true, sound_cards: Array[
 		var target_rotation: float = c.home_rotation
 		# 接不上牌堆顶的牌固定下移，一眼区分可出 / 不可出；选为技能目标的牌保持抬起。
 		if c == _skill_card or c == _hovered:
-			target_pos = c.home_pos - Vector2(0, hover_lift)
+			target_pos = _hover_position(c, hand_scale * hover_scale)
 			target_rotation = 0.0
 		elif not is_playable(c):
 			target_pos = c.home_pos + Vector2(0, combo_shift_y)
+		if c.flyin_lock and not sound_cards.has(c):
+			continue
+		_kill_card_tween(c)
 		var target_scale: Vector2 = Vector2.ONE * hand_scale * (hover_scale if c == _skill_card or c == _hovered else 1.0)
 		if animated:
 			var tw := create_tween().set_parallel(true)
@@ -460,9 +691,13 @@ func _refresh_inactive() -> void:
 func recycle_card(hc: HandCard, delay: float = 0.0, fade_in: bool = false) -> void:
 	if not is_instance_valid(hc):
 		return
+	if hc.is_flashback:
+		_dissolve_flashback(hc)
+		return
 	if _hovered == hc:
 		_hovered = null
 	hc.state = HandCard.STATE_PLAYED
+	hc.clear_select_frame()
 	_kill_card_tween(hc)
 	var pile_global := _pile_center(&"discard_pile")
 	var dest: Vector2 = to_local(pile_global) if pile_global != Vector2.ZERO else Vector2(get_viewport_rect().size.x - 130.0, hand_y)
@@ -498,7 +733,14 @@ func _update_discard_flight(progress: float, card_instance_id: int, start: Vecto
 
 ## ── 悬停：每帧权威命中，仅变化时刷新（规避 mouse_exited 漏发残留）──
 func _process(_delta: float) -> void:
+	if _redrawing or _cutscene_playing or _hand_locked or is_instance_valid(_selected): _reset_keyword_hover()
 	if _redrawing or _cutscene_playing or _hand_locked:
+		return
+	if is_instance_valid(_selected) and is_instance_valid(_combo_front_disp):
+		var goal: Vector2 = to_local(get_global_mouse_position()) + held_pointer_offset
+		_combo_tray.position = goal
+		_update_held_sway(_delta, get_global_mouse_position())
+		_aim_line.hide_line()
 		return
 	_combo_spin_integrate(_delta)   # 首张伪3D快照旋转（连击刷新力度，不依赖悬停态）
 	_combo_apply_spin_to_display(_delta)  # 把翻面角 + 倾斜写入伪3D 显示层（正面/背面）
@@ -528,6 +770,8 @@ func _process(_delta: float) -> void:
 				hit = c
 	if hit != _hovered:
 		_set_hover(hit)
+	_enforce_hover_bottom()
+	_update_keyword_hover(_delta)
 
 
 func _set_hover(hc: HandCard) -> void:
@@ -577,14 +821,14 @@ func _hover_card(hc: HandCard) -> void:
 	_kill_card_tween(hc)
 	# 位置：独立 tween 平滑抬升，与缩放回弹并发。
 	var pos_tw := create_tween()
-	pos_tw.tween_property(hc, "position", hc.home_pos - Vector2(0, hover_lift), 0.18)
+	pos_tw.tween_property(hc, "position", _hover_position(hc, hand_scale * hover_scale), 0.18)
 	pos_tw.parallel().tween_property(hc, "rotation", 0.0, 0.18)
 	# 缩放：两段式手动过冲（先冲过 ~15% 再落定），纯 EASE_OUT 只过冲一次、不回振，幅度介于 BACK(10%) 与 ELASTIC(30%) 之间。
 	var scale_tw := create_tween()
 	var over_scale := Vector2.ONE * hand_scale * hover_scale * 1.15
 	var settle_scale := Vector2.ONE * hand_scale * hover_scale
-	scale_tw.tween_property(hc, "scale", over_scale, 0.14).set_ease(Tween.EASE_OUT)
-	scale_tw.tween_property(hc, "scale", settle_scale, 0.2).set_ease(Tween.EASE_OUT)
+	scale_tw.tween_method(_apply_hover_scale.bind(hc), hc.scale.x, over_scale.x, 0.14).set_ease(Tween.EASE_OUT)
+	scale_tw.tween_method(_apply_hover_scale.bind(hc), over_scale.x, settle_scale.x, 0.2).set_ease(Tween.EASE_OUT)
 	_card_tweens[hc] = [pos_tw, scale_tw]
 	hc.z_index = 1000
 
@@ -596,7 +840,7 @@ func _raise_card(hc: HandCard) -> void:
 	hc.clear_select_frame()
 	_kill_card_tween(hc)
 	var pos_tw := create_tween()
-	pos_tw.tween_property(hc, "position", hc.home_pos - Vector2(0, hover_lift), 0.18)
+	pos_tw.tween_property(hc, "position", _hover_position(hc, hand_scale * hover_scale), 0.18)
 	pos_tw.parallel().tween_property(hc, "rotation", 0.0, 0.18)
 	# 缩放：选牌不抖——平滑线性放大到设定比例（无 ELASTIC 回弹）。
 	var scale_tw := create_tween()
@@ -624,46 +868,150 @@ func _lower_card(c: HandCard) -> void:
 
 ## ── 选牌 / 选靶流程（过程层，无效果实装）──
 ## 鼠标输入：左键点已激活组卡牌=选中；选靶中左键忽略(留给 BattleRoot 点单位)；右键=取消。
+@export var held_card_scale: float = 0.5
+@export var held_pointer_offset: Vector2 = Vector2(40, 55)
+@export var held_follow_speed: float = 14.0
+@export var held_sway_max_degrees: float = 90.0
+@export var held_sway_stiffness: float = 90.0
+@export var held_sway_damping: float = 7.5
+@export var held_sway_velocity_gain: float = 0.00018
+var _held_sway_angle: float = 0.0
+var _held_sway_velocity: float = 0.0
+var _held_sway_last_pointer: Vector2
+var _held_sway_ready: bool = false
+
+@export var release_grow_duration: float = 0.15
+@export var release_flash_duration: float = 0.6
+@export var release_return_wait: float = 0.0
+var _visual_return_busy: bool = false
+@export var drag_threshold: float = 8.0
+@export var card_release_area: Rect2 = Rect2(0, 0, 1600, 650)
+var _pointer_down: bool = false
+var _pointer_dragging: bool = false
+var _pointer_origin: Vector2
+
+func _pointer_over_button() -> bool:
+	var control := get_viewport().gui_get_hovered_control()
+	while is_instance_valid(control):
+		if control is BaseButton or control is LineEdit or control is ScrollContainer:
+			return true
+		control = control.get_parent() as Control
+	return false
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed: _reset_keyword_hover()
+	var battle := _get_battle_root()
+	if battle.debug_card_browser_open or _redrawing or _cutscene_playing or _hand_locked or battle.clock_busy or battle._battle_ended:
+		return
+	if event is InputEventMouseMotion:
+		if _pointer_down and is_instance_valid(_selected) and event.position.distance_to(_pointer_origin) >= drag_threshold:
+			_pointer_dragging = true
+		return
 	if not event is InputEventMouseButton:
 		return
 	var mouse := event as InputEventMouseButton
-	if not mouse.pressed or _redrawing or _cutscene_playing or _hand_locked:
-		return
-	if mouse.button_index == MOUSE_BUTTON_RIGHT:
+	if mouse.button_index == MOUSE_BUTTON_RIGHT and mouse.pressed:
+		_pointer_down = false
+		_pointer_dragging = false
 		clear_selection()
 		return
 	if mouse.button_index != MOUSE_BUTTON_LEFT:
 		return
-	# 使用本次点击坐标，不依赖上一帧悬停缓存。
-	var point: Vector2 = get_canvas_transform().affine_inverse() * mouse.position
-	if _selected != null:
-		# 选中后点另一张牌 = 改选；一次只打一张。
-		var candidate := _pick_chain_candidate(point)
-		if is_instance_valid(candidate):
-			clear_selection()
-			select_card(candidate)
+	var point := get_canvas_transform().affine_inverse() * mouse.position
+	if not mouse.pressed:
+		var was_dragging := _pointer_dragging
+		_pointer_down = false
+		_pointer_dragging = false
+		if was_dragging and is_instance_valid(_selected):
+			if not _try_play_at(point):
+				clear_selection()
+			get_viewport().set_input_as_handled()
+		return
+	if _pointer_over_button():
 		return
 	var clicked := _pick_topmost_card(point)
-	if is_instance_valid(clicked):
-		if clicked == _skill_card:
-			clear_skill_card()
-		else:
-			select_card(clicked)
+	if is_instance_valid(clicked) and clicked != _selected and not clicked.flyin_lock:
+		clear_selection()
+		select_card(clicked)
+		_pointer_down = is_instance_valid(_selected)
+		_pointer_origin = mouse.position
+		_pointer_dragging = false
+		get_viewport().set_input_as_handled()
+	elif is_instance_valid(_selected):
+		_try_play_at(point)
+		get_viewport().set_input_as_handled()
+
+func _try_play_at(point: Vector2) -> bool:
+	var screen_point := get_canvas_transform() * point
+	var battle := _get_battle_root()
+	for control: Control in battle.find_children("*", "BaseButton", true, false):
+		if control.is_visible_in_tree() and control.get_global_rect().has_point(screen_point):
+			return false
+	if not is_instance_valid(_selected) or _pointer_over_button() or not card_release_area.has_point(point):
+		return false
+	if is_instance_valid(_pick_combo_hoverable(point)):
+		return false
+	var candidates := battle.v2_targets(_selected.data, battle._find_unit(_selected.owner_group))
+	var target: UnitRoot = null
+	if _selected.data.needs_selection():
+		for unit in candidates:
+			if unit.is_point_inside(point):
+				target = unit
+				break
+	elif not candidates.is_empty():
+		target = candidates[0]
+	if not is_instance_valid(target):
+		return false
+	# 以卡牌实际跟随到的位置开始演出，保留缓动滞后与鼠标偏移。
+	var size := Vector2(_combo_front_vp.size) * hand_scale
+	_reset_held_sway()
+	var grow := create_tween().set_parallel(true)
+	for display: TextureRect in [_combo_front_disp, _combo_back_disp]:
+		grow.tween_property(display, "rotation", 0.0, release_grow_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		grow.tween_property(display, "pivot_offset", Vector2(size.x * 0.5, 0), release_grow_duration)
+		grow.tween_property(display, "size", size, release_grow_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		grow.tween_property(display, "position", -size * 0.5, release_grow_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_selected.card.play_card_flash(release_grow_duration, release_flash_duration)
+	notify_used_on_unit(target)
+	return true
 
 ## 能否接上当前牌堆顶（同色或点数相同）。由 BattleRoot 的 ChainRules 判定。
 func is_playable(hc: HandCard) -> bool:
 	var br := _get_battle_root()
 	if not (is_instance_valid(br) and is_instance_valid(hc)):
 		return false
-	return br.rules.can_play(hc.cost_color, hc.base_number)
+	return br.rules.can_play(hc.cost_color, br.effective_number(hc))
 
 ## 刷新所有手牌的效果文字（角色倒下等），并重算可出 / 不可出。
+## 主动改色只修改本次入手的实例，不污染牌库模板或其他副本。
+func rocket_color_candidates(color: int) -> Array[HandCard]:
+	var charged: Array[HandCard] = []
+	var others: Array[HandCard] = []
+	for hc in _cards:
+		if not is_instance_valid(hc) or hc.state != HandCard.STATE_HAND or hc.cost_color == color: continue
+		if hc.data.has_charge: charged.append(hc)
+		else: others.append(hc)
+	return charged if not charged.is_empty() else others
+
+## 在合法出牌开始时记录身份；本次新入手的牌不在该集合内。
+func snapshot_charge_cards() -> Array[HandCard]:
+	var result: Array[HandCard] = []
+	for hc in _cards:
+		if is_instance_valid(hc) and hc.state == HandCard.STATE_HAND and hc.data.has_charge:
+			result.append(hc)
+	return result
+
+func grow_charge_cards(previous: Array[HandCard]) -> void:
+	for hc in previous:
+		if is_instance_valid(hc) and _cards.has(hc) and hc.state == HandCard.STATE_HAND:
+			hc.add_charge(1)
+	refresh_numbers()
+
 func refresh_numbers() -> void:
 	for c in _cards:
 		if not (is_instance_valid(c) and is_instance_valid(c.card) and is_instance_valid(c.data)):
 			continue
-		c.card.cost_value = c.base_number
+		c.card.cost_value = _get_battle_root().effective_number(c)
 		c.card._apply_cost()
 		c.card.set_effect_text(_effect_text(c))
 	if _selected == null:
@@ -672,12 +1020,14 @@ func refresh_numbers() -> void:
 
 ## 卡面效果文字：单次触发的效果值由点数决定；所属角色已倒下时注明无效果。
 func _effect_text(hc: HandCard) -> String:
-	var text: String = hc.data.effect_text(hc.base_number, _morale_bonus_for(hc.owner_group))
+	var text: String = hc.data.effect_text(hc.base_number, _morale_bonus_for(hc.owner_group), _get_battle_root().rules.combo if is_instance_valid(_get_battle_root()) else 1, _get_battle_root().recorded_damage_for(hc.data) if is_instance_valid(_get_battle_root()) else 11)
 	var br := _get_battle_root()
+	if hc.data.rocket_number > 0 and is_instance_valid(br):
+		text = hc.data.rocket_text(hc.charge_points + (br._team.get_buff_stacks("charge") if hc.data.has_charge else 0), _morale_bonus_for(hc.owner_group), br.rules.combo, int(br._team.get_shield()), hc.charge_points)
 	var owner := br._find_unit(hc.owner_group) if is_instance_valid(br) else null
 	if is_instance_valid(br) and (not is_instance_valid(owner) or owner.get_current_hp() <= 0):
 		text = "（角色已倒下，仅可接牌）"
-	return text
+	return CardData.finish_effect_text(text)
 
 ## 取鼠标全局坐标命中的「最上层」在手牌（与 _process 悬停命中同规则），供配对点击复用。
 func _pick_topmost_card(global_pos: Vector2) -> HandCard:
@@ -721,9 +1071,10 @@ func select_card(hc: HandCard) -> void:
 	_combo_chain = [hc]
 	_selected = hc
 	allow_inactive_selection = true
-	_on_card_joined_combo(hc)
+	_combo_package(hc)
 	card_selected.emit(hc)
 	var candidates := br.v2_targets(hc.data, caster)
+
 	for unit in br._get_units():
 		unit.set_dimmed(not candidates.has(unit))
 
@@ -780,10 +1131,57 @@ func notify_used_on_unit(unit: UnitRoot) -> void:
 		card.state = HandCard.STATE_PLAYED
 		_kill_card_tween(card)
 		_pending_discard.append(card)
+		if deck != null and not card.is_flashback:
+			deck.discard_card(card.owner_group, card.data)
+	_aim_line.hide_line()
+	layout(true, false)
+	_visual_return_busy = true
+	_return_played_visual(anchor)
+	await br.play_card(payload)
+
+func _return_played_visual(anchor: HandCard) -> void:
+	var br := _get_battle_root()
+	await get_tree().create_timer(release_grow_duration + release_flash_duration + release_return_wait).timeout
+	if not is_instance_valid(anchor):
+		return
+	if anchor.is_flashback and is_instance_valid(_combo_front_disp) and is_instance_valid(_combo_back_disp):
+		set_hand_locked(true)
+		set_cutscene_lock(true)
+		var dissolve := create_tween().set_parallel(true)
+		dissolve.tween_property(_combo_front_disp.material, "shader_parameter/dissolve_progress", 1.0, flashback_dissolve_duration)
+		dissolve.tween_property(_combo_back_disp.material, "shader_parameter/dissolve_progress", 1.0, flashback_dissolve_duration)
+		await dissolve.finished
+		anchor.set_meta("snapshot_recycle_finished", true)
+
+	if not anchor.is_flashback and is_instance_valid(_combo_front_disp) and is_instance_valid(_combo_back_disp):
+		set_hand_locked(true)
+		set_cutscene_lock(true)
+		var flip := create_tween().set_parallel(true)
+		flip.tween_property(_combo_front_disp.material, "shader_parameter/y_rot", 180.0, discard_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		flip.tween_property(_combo_back_disp.material, "shader_parameter/y_rot", 0.0, discard_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		flip.tween_property(_combo_front_disp.material, "shader_parameter/x_rot", 0.0, discard_flip_duration)
+		flip.tween_property(_combo_back_disp.material, "shader_parameter/x_rot", 0.0, discard_flip_duration)
+		await flip.finished
+		var travel := create_tween().set_parallel(true)
+		var pile_center := _pile_center(&"discard_pile")
+		var target_center := _combo_tray.to_local(pile_center)
+		var original_scale: float = _combo_front_disp.size.x / float(_combo_front_vp.size.x)
+		var shrink: float = hand_scale * 0.3 / original_scale
+		for display: TextureRect in [_combo_front_disp, _combo_back_disp]:
+			display.pivot_offset = display.size * 0.5
+			travel.tween_property(display, "position", target_center - display.size * 0.5, discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+			travel.tween_property(display, "scale", Vector2.ONE * shrink, discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		await travel.finished
+		anchor.set_meta("snapshot_recycle_finished", true)
+
+	if is_instance_valid(_combo_front_disp) and is_instance_valid(_combo_front_vp):
+		anchor.set_meta("discard_snapshot_scale", _combo_front_disp.size.x / float(_combo_front_vp.size.x))
 	clear_selection(true)
 	_flush_pending_discard()
+	_visual_return_busy = false
+	set_cutscene_lock(br.clock_busy)
+	set_hand_locked(br.clock_busy or br._battle_ended)
 	layout(true, false)
-	await br.play_card(payload)
 
 var _cutscene_playing: bool = false
 ## 锁定期禁止选牌 / 加链 / 悬停检视，从根本上杜绝「单位演出动画期间被快速选中并二次打出」。
@@ -799,25 +1197,69 @@ var _pending_discard: Array[HandCard] = []
 
 ## 打出后的组合卡：飞入弃牌库（与回收动画 recycle_card 一致），而非静默 free。
 ## 演出期间组合卡被隐藏(visible=false)，飞入前先恢复可见，否则看不到飞行动画。
+@export var discard_flip_duration: float = 0.3
+
+func _recycle_snapshot_card(hc: HandCard, delay: float) -> void:
+	hc.state = HandCard.STATE_PLAYED
+	hc.clear_select_frame()
+	_kill_card_tween(hc)
+	hc.rotation = 0.0
+	hc.scale = Vector2.ONE * float(hc.get_meta("discard_snapshot_scale", combo_snap_scale / COMBO_VP_SCALE))
+	hc.modulate = Color.WHITE
+	hc.z_index = 1900
+	var visual := preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
+	hc.add_child(visual)
+	visual.setup(hc.card)
+	visual.set_flip(0.0)
+	if hc.is_flashback:
+		_dissolve_flashback(hc, visual)
+		return
+	var pile := _pile_center(&"discard_pile")
+	var destination := to_local(pile)
+	var tween := hc.create_tween()
+	if delay > 0:
+		tween.tween_interval(delay)
+	if hc.get_meta("snapshot_already_back", false):
+		visual.set_flip(180.0)
+	else:
+		tween.tween_method(visual.set_flip, 0.0, 180.0, discard_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(true)
+	tween.chain().tween_property(hc, "position", destination, discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(hc, "scale", Vector2.ONE * hand_scale * 0.3, discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(hc.queue_free)
+	_card_tweens[hc] = [tween]
+
 func _flush_pending_discard() -> void:
 	var tray := _last_combo_tray_center_global()
 	var i := 0
 	for c in _pending_discard:
 		if is_instance_valid(c):
+			if c.get_meta("snapshot_recycle_finished", false):
+				c.queue_free()
+				continue
 			# 非闪回卡：进对应角色弃牌堆（供洗回抽牌堆循环）；闪回副本直接销毁，不污染牌库。
-			if deck != null and not c.is_flashback and is_instance_valid(c.data):
-				deck.discard_card(c.owner_group, c.data)
 			c.visible = true
 			if is_instance_valid(c.card):
 				c.card.visible = true
 			# 从「快照原位」起步飞弃牌（非手牌原位）：快照销毁后卡牌在此处无缝接飞，消除「消失又闪现」。
 			c.global_position = tray
-			recycle_card(c, float(i) * 0.05, true)   # fade_in=true：在托盘原位淡入后飞走，比硬显形更顺
+			_recycle_snapshot_card(c, float(i) * 0.05)   # fade_in=true：在托盘原位淡入后飞走，比硬显形更顺
 		i += 1
 	_pending_discard = []
 
 ## 牌库版·打空补抽：本次打出后手牌被打空(0 张在手)时，从【当前玩家角色牌库】补抽 empty_hand_draw 张。
 ## 取代旧「公共池爆抽」——现在手牌来源统一为各角色牌库，避免从全局池无限注入。
+
+## 调试加入普通手牌，不推进战斗行动、不修改初始牌库资源。
+func debug_add_card(cd: CardData) -> HandCard:
+	var hc := _spawn_card_for_role(cd, cd.belong_to)
+	hc.position = _flyin_origin()
+	hc.scale = Vector2.ONE * hand_scale * 0.5
+	hc.flyin_lock = true
+	_cards.append(hc)
+	_deal_cards([hc])
+	_refresh_inactive()
+	return hc
 
 func _draw_common_pool(count: int) -> void:
 	if count <= 0:
@@ -831,7 +1273,7 @@ func _draw_common_pool(count: int) -> void:
 		hc.flyin_lock = true
 		_cards.append(hc)
 		drawn.append(hc)
-	layout(true, true, drawn)
+	_deal_cards(drawn)
 	_refresh_inactive()
 
 
@@ -841,6 +1283,8 @@ func _draw_common_pool(count: int) -> void:
 
 ## committed=true 表示「成功打出后清选」（保留已扣 🔥）；committed=false 表示右键取消（退回已花在链环上的 🔥）。
 func clear_selection(committed: bool = false) -> void:
+	_pointer_down = false
+	_pointer_dragging = false
 	clear_skill_card()
 	if _selected == null:
 		return
@@ -891,6 +1335,7 @@ func _on_card_joined_combo(hc: HandCard) -> void:
 ## 首张伪3D 封装(复用 cardtest 封装3D)：活卡 CardRoot 渲进 front_viewport，卡背渲进 back_viewport，
 ## 正面/背面各一个 fake3d 显示层叠放(背面 y_rot 偏移 -180°，cull_back 自动剔除背对面)；从原卡位置滑入托盘并淡入。
 func _combo_package(hc: HandCard) -> void:
+	_reset_held_sway()
 	_combo_anchor = hc
 	_combo_ring_count = 0          # 新链起始：仅锚点，无链环
 	_combo_pending_boost = false   # 新链起始：无待替换提升
@@ -944,30 +1389,26 @@ func _combo_package(hc: HandCard) -> void:
 	_combo_front_disp.mouse_exited.connect(_on_combo_display_exited)
 	_combo_tray.add_child(_combo_front_disp)
 
-	# 快照右侧词条解释面板：锚点卡进入托盘即构建（卡面【...】关键词 → KeywordGlossary 取词条，自上而下堆叠）。
-	_build_combo_glossary(hc)
-
-	# 滑入：从原卡手牌位置 → 托盘中心；并淡入（正面/背面同帧）
-	var from_local := _combo_tray.to_local(from_global)
-	_combo_front_disp.position = from_local
-	_combo_back_disp.position = from_local
-	_combo_front_disp.modulate.a = 0.0
-	_combo_back_disp.modulate.a = 0.0
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_combo_front_disp, "position", center_local, combo_move_dur).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_combo_back_disp, "position", center_local, combo_move_dur).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_combo_front_disp, "modulate:a", 1.0, combo_fade_dur)
-	tw.tween_property(_combo_back_disp, "modulate:a", 1.0, combo_fade_dur)
-
-	# 原 HandCard 外壳（子卡已移出）隐藏；首张不自动旋转，等 +1 触发
+	_combo_front_disp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combo_back_disp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var held_size := Vector2(_combo_front_vp.size) * hand_scale * held_card_scale
+	for display: TextureRect in [_combo_front_disp, _combo_back_disp]:
+		display.resized.connect(func() -> void: display.material.set_shader_parameter("rect_size", display.size))
+		display.size = held_size
+		display.material.set_shader_parameter("rect_size", display.size)
+		display.position = -held_size * 0.5
+	_combo_tray.global_position = hc.global_position
 	hc.visible = false
 	_spin_theta = 0.0
 	_spin_omega = 0.0
 	_spin_state = _ComboSpin.IDLE
-	_combo_pointer_inside = false
-	_combo_cur_x = combo_tilt_base   # 常驻微倾斜：封装瞬间即从该角度插值，保证 3D 立即可见
+	_combo_cur_x = 0.0
 	_combo_cur_y = 0.0
-
+	_combo_front_disp.material.set_shader_parameter("x_rot", 0.0)
+	_combo_front_disp.material.set_shader_parameter("y_rot", 0.0)
+	_combo_back_disp.material.set_shader_parameter("x_rot", 0.0)
+	_combo_back_disp.material.set_shader_parameter("y_rot", -180.0)
+	layout(true, false)
 
 ## 构建快照右侧词条解释面板（首张锚点卡进入托盘时调用）。
 ## 词条来源 = 锚点卡卡面效果文字 card_effect（含【...】标签）；面板尺寸对齐快照显示层。
@@ -1069,6 +1510,7 @@ func _make_combo_fake3d_material() -> ShaderMaterial:
 	mat.set_shader_parameter("inset", 0.0)
 	mat.set_shader_parameter("x_rot", 0.0)
 	mat.set_shader_parameter("y_rot", 0.0)
+	mat.set_shader_parameter("dissolve_progress", 0.0)
 	return mat
 
 
@@ -1094,10 +1536,16 @@ func _build_combo_card_back() -> Node2D:
 		root.add_child(ph)
 		return root
 	var tr := TextureRect.new()
-	tr.texture = tex
+	var cropped := AtlasTexture.new()
+	cropped.atlas = tex
+	var back_image := cropped.atlas.get_image()
+	if back_image.is_compressed():
+		back_image.decompress()
+	cropped.region = Rect2(back_image.get_used_rect())
+	tr.texture = cropped
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.size = Vector2(COMBO_CARD_W, COMBO_CARD_H)
-	tr.position = -Vector2(COMBO_CARD_W, COMBO_CARD_H) * 0.5
+	tr.size = Vector2(350, 555)
+	tr.position = Vector2(25, 14) - Vector2(COMBO_CARD_W, COMBO_CARD_H) * 0.5
 	root.add_child(tr)
 	return root
 
@@ -1131,7 +1579,7 @@ func _apply_combo_boost() -> void:
 	if not (is_instance_valid(_combo_anchor) and is_instance_valid(_combo_anchor.card) and is_instance_valid(_combo_anchor.data)):
 		return
 	var bonus: int = _morale_bonus_for(_combo_anchor.owner_group)
-	_combo_anchor.card.set_effect_text(_combo_anchor.data.effect_text(_combo_anchor.base_number, bonus))
+	_combo_anchor.card.set_effect_text(_effect_text(_combo_anchor))
 
 
 ## 每帧积分首张伪3D快照旋转（复用 cardtest 旋转物理）：SPINNING 段角速度指数衰减；跌破阈值切弹簧回正(SETTLING)；
@@ -1208,6 +1656,7 @@ func _on_combo_display_exited() -> void:
 
 ## 清空组合视觉：撤销伪3D 封装(首张卡移回 HandCard) + 释放所有渲染资源 + 复位旋转态。取消选靶 / 打出后调用。
 func _clear_combo_visuals() -> void:
+	_reset_held_sway()
 	_combo_unpackage()
 
 
@@ -1268,12 +1717,12 @@ func _get_battle_root() -> BattleRoot:
 ## 供 BattleRoot 在「执行卡挂起效果演出」期间锁定/解锁出牌输入（与玩家卡演出共用 _cutscene_playing 闸门）。
 func set_cutscene_lock(b: bool) -> void:
 	# 仅拦截输入；抽牌、弃牌、重排Tween继续独立播放。
-	_cutscene_playing = b
+	_cutscene_playing = b or _visual_return_busy
 
 
 ## 锁定期禁止选牌/加链/悬停检视；置位时同步刷新压暗，给出明确「手牌锁定」视觉。
 func set_hand_locked(b: bool) -> void:
-	_hand_locked = b
+	_hand_locked = b or _visual_return_busy
 	_refresh_inactive()
 
 
@@ -1282,3 +1731,140 @@ func _native_width() -> float:
 		if is_instance_valid(c):
 			return c.get_native_width()
 	return 256.0
+
+func _reset_keyword_hover() -> void:
+	_keyword_hover_card = null
+	_keyword_hover_elapsed = 0.0
+	_keyword_hover_built = false
+	if is_instance_valid(_keyword_tip): _keyword_tip.hide_tooltip()
+
+func _card_keyword_sections(data: CardData) -> Array[Dictionary]:
+	var names: Array[String] = []
+	for name in data.keyword_names():
+		if name not in ["伤害", "护盾", "血量"] and not names.has(name): names.append(name)
+	var pattern := RegEx.new()
+	pattern.compile("【([^】]+)】")
+	for item in pattern.search_all(data.effect_text()):
+		var name: String = item.get_string(1)
+		if name not in ["伤害", "护盾", "血量"] and not names.has(name): names.append(name)
+	if data.blue_counter_flashback or data.blue_status_counter or data.rocket_number == 13 or data.effects.any(func(e: CardEffect) -> bool: return e.kind == "counter"):
+		if not names.has("反制"): names.append("反制")
+	var result: Array[Dictionary] = []
+	var seen: Array[String] = []
+	for original in names:
+		var name: String = {"手影狐": "狐", "手影鹿": "鹿", "手影蛇": "蛇"}.get(original, original)
+		if seen.has(name): continue
+		var lookup: String = {"狐": "手影狐", "鹿": "手影鹿", "蛇": "手影蛇"}.get(name, name)
+		var description: String = KeywordGlossary.ENTRIES.get(lookup, "")
+		if name in ["狐", "鹿", "蛇"]:
+			var battle := _get_battle_root()
+			var combo: int = battle.rules.combo if is_instance_valid(battle) else 1
+			var morale: int = _morale_bonus_for(data.belong_to) if is_instance_valid(battle) else 0
+			for atom in data.effects:
+				if atom.kind in ["summon_fox", "summon_deer", "summon_snake"] and KeywordGlossary.name_of(atom.kind) == lookup:
+					description = KeywordGlossary.summon_description(atom.kind, atom.summon_damage(morale, combo), 2 if atom.kind == "summon_deer" else 3)
+					break
+
+		if description.is_empty(): continue
+		result.append({"title": name, "description": description})
+		seen.append(name)
+		if name in ["狐", "鹿", "蛇"] and not seen.has("召唤物"):
+			result.append({"title": "召唤物", "description": KeywordGlossary.ENTRIES["召唤物"]})
+			seen.append("召唤物")
+		if name == "蛇" and not seen.has("中毒"):
+			result.append({"title": "中毒", "description": KeywordGlossary.desc_of("poison")})
+			seen.append("中毒")
+	return result
+
+func _update_keyword_hover(delta: float) -> void:
+	var battle := _get_battle_root()
+	if not is_instance_valid(_hovered) or _hovered.flyin_lock or is_instance_valid(_selected) or is_instance_valid(_skill_card) or battle.clock_busy or battle.debug_card_browser_open or battle._battle_ended:
+		_reset_keyword_hover()
+		return
+	if _keyword_hover_card != _hovered:
+		_reset_keyword_hover()
+		_keyword_hover_card = _hovered
+	_keyword_hover_elapsed += delta
+	if _keyword_hover_elapsed < keyword_hover_delay: return
+	if _keyword_hover_built: return
+	_keyword_hover_built = true
+	var sections := _card_keyword_sections(_hovered.data)
+	if sections.is_empty(): return
+	if not is_instance_valid(_keyword_tip):
+		_keyword_tip = UnitBuffTooltip.new()
+		_keyword_tip.name = "HandKeywordTooltip"
+		_keyword_tip.z_as_relative = false
+		_keyword_tip.z_index = 3000
+		add_child(_keyword_tip)
+	var half := Vector2(_hovered.get_native_width(), _hovered.get_native_height()) * 0.5
+	var bounds := Rect2(_hovered.to_global(-half), Vector2.ZERO)
+	for corner in [Vector2(half.x, -half.y), half, Vector2(-half.x, half.y)]:
+		bounds = bounds.expand(_hovered.to_global(corner))
+	var canvas := get_canvas_transform()
+	var right := canvas * Vector2(bounds.end.x, bounds.position.y)
+	var x: float = bounds.end.x + keyword_side_gap
+	if right.x + keyword_side_gap + _keyword_tip.box_size.x > 1600:
+		x = bounds.position.x - keyword_side_gap - _keyword_tip.box_size.x
+	_keyword_tip.show_sections(sections, to_local(Vector2(x, bounds.position.y)))
+
+## 悬停高度由画面底边确定，不使用扇形 home_pos.y。
+func _hover_position(card: HandCard, scale_value: float) -> Vector2:
+	var bottom := get_canvas_transform().affine_inverse() * Vector2(0, get_viewport_rect().size.y - hover_bottom_margin)
+	var local_bottom := to_local(bottom)
+	var lower_edge := card.get_native_height() * 0.5
+	var base := card.card.get_node_or_null("VisualGroup/Base") as TextureRect
+	if is_instance_valid(base):
+		var rect := base.get_rect()
+		lower_edge = -INF
+		for point in [rect.position, Vector2(rect.end.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)]:
+			lower_edge = maxf(lower_edge, card.to_local(base.get_parent().to_global(point)).y)
+	return Vector2(card.home_pos.x, local_bottom.y - lower_edge * scale_value)
+
+func _enforce_hover_bottom() -> void:
+	if not is_instance_valid(_hovered) or is_instance_valid(_selected) or _hovered.flyin_lock: return
+	var base := _hovered.card.get_node_or_null("VisualGroup/Base") as TextureRect
+	if not is_instance_valid(base): return
+	var rect := base.get_rect()
+	var transform: Transform2D = base.get_parent().get_global_transform_with_canvas()
+	var bottom := -INF
+	for point in [rect.position, Vector2(rect.end.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)]:
+		bottom = maxf(bottom, (transform * point).y)
+	var correction := get_viewport_rect().size.y - hover_bottom_margin - bottom
+	var inverse := get_global_transform_with_canvas().affine_inverse()
+	_hovered.position += inverse.basis_xform(Vector2(0, correction))
+
+func _apply_hover_scale(value: float, card: HandCard) -> void:
+	if not is_instance_valid(card): return
+	card.scale = Vector2.ONE * value
+	# 放大过冲时也同步调整中心高度，避免底边被缩放带出画面。
+	card.position.y = _hover_position(card, value).y
+
+func _reset_held_sway() -> void:
+	_held_sway_angle = 0.0
+	_held_sway_velocity = 0.0
+	_held_sway_ready = false
+
+## 阻尼弹簧由鼠标横向速度驱动；正角度让卡牌下端向左滞后。
+func _update_held_sway(delta: float, pointer: Vector2) -> void:
+	if delta <= 0: return
+	if not _held_sway_ready:
+		_held_sway_last_pointer = pointer
+		_held_sway_ready = true
+	var speed: float = (pointer.x - _held_sway_last_pointer.x) / delta
+	_held_sway_last_pointer = pointer
+	var limit: float = deg_to_rad(held_sway_max_degrees)
+	var target: float = clampf(speed * held_sway_velocity_gain, -limit, limit)
+	# 小步积分保持不同帧率及偶发卡顿下稳定；不让长帧积累夸张惯性。
+	var remaining: float = minf(delta, 0.1)
+	while remaining > 0:
+		var step: float = minf(remaining, 1.0 / 120.0)
+		_held_sway_velocity += ((target - _held_sway_angle) * held_sway_stiffness - _held_sway_velocity * held_sway_damping) * step
+		_held_sway_angle += _held_sway_velocity * step
+		if absf(_held_sway_angle) > limit:
+			_held_sway_angle = clampf(_held_sway_angle, -limit, limit)
+			if signf(_held_sway_velocity) == signf(_held_sway_angle): _held_sway_velocity = 0
+		remaining -= step
+	for display: TextureRect in [_combo_front_disp, _combo_back_disp]:
+		if not is_instance_valid(display): continue
+		display.pivot_offset = Vector2(display.size.x * 0.5, 0)
+		display.rotation = _held_sway_angle

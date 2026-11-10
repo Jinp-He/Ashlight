@@ -2,14 +2,12 @@
 
 [ext_resource type="Script" uid="uid://puw1l6wwxln4" path="res://battle/scripts/cards/starting_deck_data.gd" id="1_deck"]
 [ext_resource type="Script" uid="uid://dehd7xpifydeu" path="res://battle/scripts/cards/card_data.gd" id="2_card"]
-[ext_resource type="Resource" uid="uid://brpmrxcn46xl3" path="res://data/cards/Rocket/rocket_01.tres" id="card_1"]
-[ext_resource type="Resource" uid="uid://cg3kmfd8vyokf" path="res://data/cards/Rocket/rocket_02.tres" id="card_2"]
-[ext_resource type="Resource" uid="uid://hdggcts6ca7y" path="res://data/cards/Rocket/rocket_03.tres" id="card_3"]
-[ext_resource type="Resource" uid="uid://denu70wlww3ty" path="res://data/cards/Rocket/rocket_04.tres" id="card_4"]
-[ext_resource type="Resource" uid="uid://uw0tplasnkyw" path="res://data/cards/Rocket/rocket_05.tres" id="card_5"]
+
+[ext_resource type="Resource" path="res://data/cards/Rocket/rocket_11.tres" id="first"]
+[ext_resource type="Resource" path="res://data/cards/Rocket/rocket_13.tres" id="second"]
 
 [resource]
 script = ExtResource("1_deck")
 role_id = "Rocket"
 deck_name = "火炮初始卡组"
-cards = Array[ExtResource("2_card")]([ExtResource("card_1"), ExtResource("card_2"), ExtResource("card_3"), ExtResource("card_4"), ExtResource("card_5")])
+cards = Array[ExtResource("2_card")]([ExtResource("first"), ExtResource("first"), ExtResource("second")])

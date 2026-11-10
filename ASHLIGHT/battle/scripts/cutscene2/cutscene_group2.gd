@@ -20,6 +20,7 @@ var _end_at: float = 0.0
 var _returned: bool = false
 var _playing: bool = false
 var _kind: int = 0
+var _blocked: bool = false
 var _hits: int = 1
 var _chain: int = 1
 var _caster: UnitRoot
@@ -36,7 +37,11 @@ func play(effect: Dictionary) -> void:
 	_rng.randomize()
 	_caster = effect.caster
 	_kind = int(effect.get("kind", 0 if effect.stat == "damage" else (2 if effect.stat == "shield" else 1)))
+	_blocked = bool(effect.get("blocked", false))
 	_hits = maxi(1, int(effect.get("hits", 1)))
+	if _hits > 10:
+		hit_stagger = minf(hit_stagger, 1.0 / _hits)
+		flash_duration = minf(flash_duration, 0.1)
 	_chain = maxi(1, int(effect.get("chain", 1)))
 	var hostile: bool = false
 	for unit in effect.targets:
@@ -61,11 +66,12 @@ func play(effect: Dictionary) -> void:
 			angles.append(angle if random_hit_rotation else 0.0)
 		item["angles"] = angles
 		_targets.append(item)
-		_show_effect_text(unit, effect)
+		if unit == effect.get("number_target", unit):
+			_show_effect_text(unit, effect)
 		if opposing and unit != _caster:
 			_actors.append(item)
 			_switch(item, UnitRoot.UnitArtState.HIT, Color.BLACK)
-			if _kind == 0:
+			if _kind == 0 and not _blocked:
 				item["flash"] = _make_ghost(item.sprite, Color.BLACK, 1)
 	var caster_item := _capture(_caster, false)
 	_actors.append(caster_item)
@@ -75,14 +81,14 @@ func play(effect: Dictionary) -> void:
 	elif _kind == 2:
 		active_state = UnitRoot.UnitArtState.CHARGE
 	_switch(caster_item, active_state, Color.WHITE)
-	_return_at = flash_duration + 0.1 * (_hits - 1) + hit_hold if hostile and _kind == 0 else (hit_hold if hostile else friendly_wait)
+	_return_at = flash_duration + minf(0.1, hit_stagger) * (_hits - 1) + hit_hold if hostile and _kind == 0 else (hit_hold if hostile else friendly_wait)
 	var fx_end: float = (_hits - 1) * hit_stagger + 0.25
 	if _kind == 1:
 		fx_end = 1.15
-	elif _kind == 2:
+	elif _kind == 2 or _blocked:
 		fx_end = 0.8625 + defense_fade
 	_end_at = maxf(maxf(_return_at + transition_duration, fx_end), _numbers_end)
-	if _kind == 0:
+	if _kind == 0 and not _blocked:
 		for i in 5:
 			_frames.append(load("res://assets/vfx/group2/hit_%02d.png" % i) as Texture2D)
 	_playing = true
@@ -107,7 +113,13 @@ func _show_effect_text(unit: UnitRoot, effect: Dictionary) -> void:
 			number.spawn({"type": "normal" if stat == "damage" else stat,
 				"value": value, "invalid_amount": invalid, "is_crit": bool(effect.get("is_crit", false))})
 			var delay: float = segment * hit_stagger * duration_multiplier if stat == "damage" else 0.0
-			number.play_on_unit(unit, delay)
+			var anchor := effect.get("number_anchor") as Node2D
+			if is_instance_valid(anchor):
+				var number_layer := number.get_parent() as Node2D
+				var anchor_canvas := anchor.get_global_transform_with_canvas().origin
+				number.play_popup(number_layer.get_global_transform_with_canvas().affine_inverse() * anchor_canvas, delay)
+			else:
+				number.play_on_unit(unit, delay)
 			_number_nodes.append(number)
 			_numbers_end = maxf(_numbers_end, (delay + number.blocking_duration()) / duration_multiplier)
 
@@ -154,13 +166,13 @@ func _process(delta: float) -> void:
 	if not _playing:
 		return
 	_elapsed += delta / duration_multiplier
-	var flash_end: float = flash_duration + 0.1 * (_hits - 1)
+	var flash_end: float = flash_duration + minf(0.1, hit_stagger) * (_hits - 1)
 	for item in _targets:
 		if not is_instance_valid(item.unit) or not is_instance_valid(item.sprite):
 			continue
 		if item.has("flash") and is_instance_valid(item.flash):
 			item.flash.visible = _elapsed < flash_end
-		if item.hostile and _kind == 0:
+		if item.hostile and _kind == 0 and not _blocked:
 			var shake_end: float = minf(flash_end + 0.15, _return_at)
 			var offset: float = 0.0
 			if _elapsed < shake_end:
@@ -204,7 +216,7 @@ func _draw() -> void:
 		if not is_instance_valid(item.unit):
 			continue
 		var center: Vector2 = to_local(item.unit.get_art_center_global())
-		if _kind == 0:
+		if _kind == 0 and not _blocked:
 			_draw_hits(center, item.angles)
 		else:
 			_draw_ring(center, item.particles)
@@ -221,7 +233,7 @@ func _draw_hits(center: Vector2, angles: Array) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _draw_ring(center: Vector2, particles: Array) -> void:
-	var defense: bool = _kind == 2
+	var defense: bool = _kind == 2 or _blocked
 	var u: float = clampf(_elapsed / 0.5, 0, 1)
 	var radius: float
 	var width: float

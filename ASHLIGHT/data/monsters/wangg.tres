@@ -9,7 +9,8 @@
 [resource]
 script = ExtResource("1_monster")
 id = "Wangg"
-monster_name = "Wangg"
-max_hp = 30.0
-countdown = 4
+monster_name = "狼牙棒头目"
+max_hp = 60.0
+speed_tier = 2
+countdown = 5
 intents = Array[ExtResource("2_intent")]([ExtResource("intent_0"), ExtResource("intent_1"), ExtResource("intent_2")])

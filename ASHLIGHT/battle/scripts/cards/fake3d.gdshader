@@ -8,6 +8,19 @@ uniform float y_rot : hint_range(-180, 180) = 0.0; // 绕Y轴（左右倾斜）
 uniform float x_rot : hint_range(-180, 180) = 0.0; // 绕X轴（上下倾斜）
 uniform float inset : hint_range(0, 1) = 0.0;      // 0=不缩放；>0=整体缩放留出旋转过扫边距，防裁边
 
+uniform vec2 rect_size = vec2(0.0);
+uniform float dissolve_progress : hint_range(0, 1) = 0.0;
+uniform float dissolve_mix : hint_range(0, 1) = 0.1;
+float hash_noise(vec2 point) {
+	return fract(sin(dot(point, vec2(127.1, 311.7))) * 43758.5453);
+}
+float smooth_noise(vec2 point) {
+	vec2 cell = floor(point);
+	vec2 f = fract(point);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash_noise(cell), hash_noise(cell + vec2(1, 0)), f.x),
+		mix(hash_noise(cell + vec2(0, 1)), hash_noise(cell + vec2(1, 1)), f.x), f.y);
+}
 varying flat vec2 o;
 varying vec3 p;
 
@@ -37,7 +50,8 @@ void vertex() {
 	p.xy *= v * inv_rot_mat[2].z;
 	o = v * inv_rot_mat[2].xy;
 
-	VERTEX += (UV - 0.5) / TEXTURE_PIXEL_SIZE * t * (1.0 - inset);
+	vec2 canvas_size = rect_size.x > 0.0 && rect_size.y > 0.0 ? rect_size : 1.0 / TEXTURE_PIXEL_SIZE;
+	VERTEX += (UV - 0.5) * canvas_size * t * (1.0 - inset);
 }
 
 void fragment() {
@@ -46,6 +60,10 @@ void fragment() {
 	// 把 3D 投影坐标反算回 UV 采样
 	vec2 uv = (p.xy / p.z).xy - o;
 	COLOR = texture(TEXTURE, uv + 0.5);
+	vec2 sample_uv = uv + 0.5;
+	float noise_value = mix(smooth_noise(sample_uv * vec2(12.0, 17.28)),
+		hash_noise(floor(sample_uv * vec2(400.0, 576.0))), dissolve_mix);
+	COLOR.a *= dissolve_progress >= 1.0 ? 0.0 : step(dissolve_progress, noise_value);
 	// 仅在卡牌原始 [−0.5,0.5] 范围内绘制，避免越界采样/平铺
 	COLOR.a *= step(max(abs(uv.x), abs(uv.y)), 0.5);
 }

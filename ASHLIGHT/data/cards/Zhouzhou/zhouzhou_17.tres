@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+
+[sub_resource type="Resource" id="Effect"]
+script = ExtResource("2")
+kind = "observe_blue"
+target = "自身"
+amount = 3
+scales_with_number = false
+combo_cautious_growth = true
+
+[resource]
+script = ExtResource("1")
+id = "zhouzhou_17"
+card_name = "仙人观棋"
+belong_to = "Zhouzhou"
+rarity = 2
+card_type = 1
+art_path = "res://assets/cards/faces/Zhouzhou006.png"
+uno_color = 1
+base_number = 5
+number_spread = 0
+execute_once = true
+effects = Array[ExtResource("2")]([SubResource("Effect")])
+effect_display_template = "抽取牌库{0}张牌，蓝色牌加入手牌，其他颜色牌生成【闪回】副本加入手牌。"

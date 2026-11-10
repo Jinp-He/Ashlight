@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=5 format=3]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2")
+kind = "summon_exhaust"
+target = "自身"
+amount = 1
+scales_with_number = false
+[sub_resource type="Resource" id="Effect1"]
+script = ExtResource("2")
+kind = "shield"
+target = "自身"
+amount = 11
+scales_with_number = false
+combo_shield_compensation = true
+[resource]
+script = ExtResource("1")
+id = "irene_19"
+card_name = "过劳死"
+belong_to = "Irene"
+rarity = 3
+card_type = 1
+art_path = "res://assets/cards/faces/Irene008.png"
+uno_color = 1
+base_number = 3
+number_spread = 0
+execute_once = true
+effects = Array[ExtResource("2")]([SubResource("Effect0"), SubResource("Effect1")])

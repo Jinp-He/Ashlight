@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+[sub_resource type="Resource" id="Effect"]
+script = ExtResource("2")
+kind = "shield"
+target = "自身"
+amount = 0
+scales_with_number = false
+[resource]
+script = ExtResource("1")
+id = "rocket_14"
+card_name = "热能利用"
+belong_to = "Rocket"
+card_type = 1
+rarity = 1
+rocket_number = 14
+has_charge = true
+execute_once = true
+art_path = "res://assets/cards/faces/Rocket004.png"
+uno_color = 3
+base_number = 2
+number_spread = 0
+effects = Array[ExtResource("2")]([SubResource("Effect")])

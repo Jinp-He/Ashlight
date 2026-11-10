@@ -28,7 +28,7 @@ const COST_COLORS: Array[Color] = [
 const OUTLINE_BLACK: Color = Color(0.0, 0.0, 0.0, 1.0)
 const COST_OUTLINE_SIZE: float = 3.6   # 黑边 = 4 * 0.9（费用组整体 90%）
 const COST_SIZE: float = 63.0   # 费用方块边长（px，旋转 45° 后为菱形）= 70 * 0.9
-const FONT_PATH: String = "res://assets/fonts/ashlight-cu.ttf"
+const FONT_PATH: String = "res://assets/fonts/SucaijishiAeroCut.ttf"
 
 ## 文字字体与颜色常量
 const FONT_NAME_PATH: String = "res://assets/fonts/DouyinSansBold.otf"   # 名字/效果/说明
@@ -172,6 +172,8 @@ const FLASH_MAX_ALPHA: float = 0.92       # 白光峰值不透明度（1.0=纯�
 @export var cost_offset: Vector2 = Vector2(10.0, 10.0)    # 费用组相对卡牌右上角的偏移
 @export var name_offset: Vector2 = Vector2(0.0, 50.0)      # 名字（向下 40 → 50）
 @export var type_offset: Vector2 = Vector2(0.0, 82.0)      # 类型（原 80，向下 2 → 82）
+@export var effect_min_height: float = 60.0
+@export var effect_top_y: float = 102.0
 @export var effect_offset: Vector2 = Vector2(0.0, 132.0)   # 效果（127，再向下 5 → 132）
 @export var desc_offset: Vector2 = Vector2(0.0, 240.0)     # 说明（原 250，向上 10 → 240）
 @export var face_offset: Vector2 = Vector2(0.0, -90.0)     # 卡面相对居中位置的偏移（累计 -70-60+30+10 = 向上 90px）
@@ -186,6 +188,8 @@ var _rarity_imgs: Array[TextureRect] = []
 var _cost_node: Node2D
 var _cost_bg: ColorRect          # 黑色描边底板（比费用方块大 2*outline，旋转 45° 仅作描边）
 var _cost_rect: ColorRect         # 费用方块填充（蓝/橙，70x70 旋转 45°，纯代码绘制）
+var _base_cost_value: int = 1
+var _cost_change: Label
 var _cost_label: Label
 var _text_group: Node2D
 var _name_label: Label
@@ -370,12 +374,18 @@ func _build() -> void:
 	_cost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var ls := LabelSettings.new()
 	ls.font = _font
-	ls.font_size = 54   # 60 * 0.9（费用组整体 90%）
+	ls.font_size = 80
 	ls.font_color = Color(1.0, 1.0, 1.0, 1.0)
-	ls.outline_size = 0
+	ls.outline_size = 10
 	ls.outline_color = OUTLINE_BLACK
 	_cost_label.label_settings = ls
 	_cost_node.add_child(_cost_label)
+	_cost_change = Label.new()
+	_cost_change.add_theme_font_override("font", _font_name)
+	_cost_change.add_theme_font_size_override("font_size", 22)
+	_cost_change.position = Vector2(32, -17)
+	_cost_change.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cost_node.add_child(_cost_change)
 
 	# 文字组（名字/类型/效果/说明）：均为卡牌组子节点，受卡牌整体 scale 影响，X 轴居中于卡牌
 	_text_group = Node2D.new()
@@ -417,7 +427,7 @@ func _build() -> void:
 	_effect_label.scroll_active = false
 	_effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_effect_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_effect_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_effect_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_effect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Inspector 会继承编辑器的深色 RichTextLabel 底板；始终透出卡牌自带的浅色文字区。
 	_effect_label.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
@@ -532,7 +542,7 @@ func _on_flow_finished() -> void:
 ## 实现：先等 FLASH_SWEEP_DELAY → 显示 → Tween 把进度 0→1（驱动 r_in/r_out）→ 结束隐藏复位。
 ## 调参：形状由 _set_flash_progress 驱动；扩散圆心改 FLASH_CENTER_UV、白波宽度改 FLASH_R_IN_MAX/FLASH_R_OUT_MAX/
 ##       FLASH_R_OUT_EXP、边缘柔化改 FLASH_SOFT、纯白/半透明白改 FLASH_MAX_ALPHA、时长改 FLASH_SWEEP_DURATION、延迟改 FLASH_SWEEP_DELAY。
-func play_card_flash() -> void:
+func play_card_flash(delay: float = FLASH_SWEEP_DELAY, duration: float = FLASH_SWEEP_DURATION) -> void:
 	if not is_instance_valid(_flash_overlay) or _flash_mat == null:
 		return
 	if is_instance_valid(_flash_sweep_tween):
@@ -541,13 +551,13 @@ func play_card_flash() -> void:
 	_flash_mat.set_shader_parameter("u_alpha", 0.0)
 	_flash_overlay.visible = false
 	_flash_sweep_tween = create_tween()
-	_flash_sweep_tween.tween_interval(FLASH_SWEEP_DELAY)   # 先等 0.4s（旋转输入后延迟起播，与边框流光错开）
+	_flash_sweep_tween.tween_interval(delay)   # 先等 0.4s（旋转输入后延迟起播，与边框流光错开）
 	_flash_sweep_tween.tween_callback(func() -> void:
 		if is_instance_valid(_flash_overlay):
 			_flash_overlay.visible = true
 	)
 	# 弧形白波从「左下角外」向左上扩散：弧边滑入 → 斜铺过卡面 → 从右上角滑出，退出卡外。
-	_flash_sweep_tween.tween_method(_set_flash_progress, 0.0, 1.0, FLASH_SWEEP_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	_flash_sweep_tween.tween_method(_set_flash_progress, 0.0, 1.0, duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	_flash_sweep_tween.finished.connect(_on_flash_finished)
 
 ## 驱动白光斜扫进度 t∈[0,1]：内半径 r_in=t²×峰值（早期近乎 0 → 先从左下角长出一块白），
@@ -676,6 +686,9 @@ func _apply_rarity() -> void:
 func _apply_cost() -> void:
 	if is_instance_valid(_cost_label):
 		_cost_label.text = str(cost_value)
+	if is_instance_valid(_cost_change):
+		_cost_change.text = "▲" if cost_value > _base_cost_value else ("▼" if cost_value < _base_cost_value else "")
+		_cost_change.add_theme_color_override("font_color", Color(EffectTextFormat.ARROW_UP_COLOR if cost_value > _base_cost_value else EffectTextFormat.ARROW_DOWN_COLOR))
 	if is_instance_valid(_cost_rect):
 		var fg := Vector2(COST_SIZE, COST_SIZE)
 		var bg := fg + Vector2(COST_OUTLINE_SIZE * 2.0, COST_OUTLINE_SIZE * 2.0)
@@ -805,34 +818,25 @@ func _position_text(ctrl: Control, offset: Vector2, card_w: float, size: Vector2
 func _position_effect(offset: Vector2, card_w: float) -> void:
 	if not is_instance_valid(_effect_label):
 		return
-	var w := card_w - 2.0 * _effect_inset()
-	_effect_label.custom_minimum_size = Vector2(w, 0.0)
-	_effect_label.size.x = w
-	# 先用当前 size.y 给一个近似位置；精确居中由 _on_effect_resized 在尺寸刷新后完成。
-	_effect_label.position = Vector2(-w * 0.5 + offset.x, _effect_center_y() - _effect_label.size.y * 0.5)
+	var width := card_w - 2.0 * wrap_inset
+	_effect_label.custom_minimum_size = Vector2(width, effect_min_height)
+	_effect_label.size.x = width
+	_effect_label.position = Vector2(-width * 0.5 + offset.x, effect_top_y)
+	_on_effect_resized()
 
-## 引擎刷新效果文字换行高度(size.y)后回调：用最新尺寸重新垂直居中（消除异步导致的偏移）。
-## 连接于 _build（_effect_label.resized）；触发条件：初始布局 / 改文字 / 窗口/换行重算等 size 变化时。
+## 顶边和宽度固定，内容只向下增加高度。
 func _on_effect_resized() -> void:
 	if not is_instance_valid(_effect_label):
 		return
-	var multi: bool = card_effect.contains("\n")
-	var available: float = desc_offset.y - type_offset.y - 38.0
-	if multi and _effect_label.get_content_height() > available and _effect_font_size > 12:
-		_effect_font_size -= 1
-		_update_effect_fonts()
-	var w := _card_w - 2.0 * _effect_inset()
-	_effect_label.size.y = maxf(1.0, float(_effect_label.get_content_height()))
-	_effect_label.position = Vector2(-w * 0.5 + effect_offset.x, _effect_center_y() - _effect_label.size.y * 0.5)
-
-func _effect_inset() -> float:
-	return 30.0 if card_effect.contains("\n") else wrap_inset
-
-func _effect_center_y() -> float:
-	return (type_offset.y + 24.0 + desc_offset.y - 14.0) * 0.5 if card_effect.contains("\n") else effect_offset.y
+	var width := _card_w - 2.0 * wrap_inset
+	var height := maxf(effect_min_height, float(_effect_label.get_content_height()))
+	var desired_size := Vector2(width, height)
+	if not _effect_label.size.is_equal_approx(desired_size):
+		_effect_label.size = desired_size
+	_effect_label.position = Vector2(-width * 0.5 + effect_offset.x, effect_top_y)
 
 func _render_effect_text() -> void:
-	_effect_font_size = 18 if card_effect.contains("\n") else 23
+	_effect_font_size = 23
 	_update_effect_fonts()
 
 func _update_effect_fonts() -> void:
@@ -909,6 +913,7 @@ func copy_state_from(src: CardRoot) -> void:
 	rarity = src.rarity
 	cost_type = src.cost_type
 	cost_value = src.cost_value
+	_base_cost_value = src._base_cost_value
 	card_type = src.card_type
 	card_name = src.card_name
 	card_effect = src.card_effect
@@ -978,10 +983,11 @@ func apply_data(data: CardData, number: int, morale_bonus: int = 0) -> void:
 	card_type = data.card_type
 	cost_color = data.uno_color
 	cost_value = number
+	_base_cost_value = number
 	rarity = data.rarity
 	enhanced = data.enhanced
 	card_effect = data.effect_text(number, morale_bonus)
-	card_desc = data.description if not data.description.is_empty() else data.rules_text()
+	card_desc = data.description
 	card_face = load(data.art_path) as Texture2D if ResourceLoader.exists(data.art_path) else null
 	if is_node_ready():
 		_face.texture = card_face

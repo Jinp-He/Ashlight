@@ -33,3 +33,7 @@ static func key_number(num: String, arrow: String, font_size: int) -> String:
 	var col: String = ARROW_UP_COLOR if arrow == "▲" else ARROW_DOWN_COLOR
 	var arrow_bb: String = "[font=%s][font_size=%d][color=%s]%s[/color][/font_size][/font]" % [DOUYIN_PATH, font_size, col, arrow]
 	return num_bb + arrow_bb
+
+## 纯文本数值标记，由卡面格式化器为三角形染色。
+static func changed_value(value: int, baseline: int) -> String:
+	return str(value) + ("▲" if value > baseline else ("▼" if value < baseline else ""))

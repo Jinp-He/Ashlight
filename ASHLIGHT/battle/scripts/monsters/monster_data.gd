@@ -7,6 +7,11 @@ extends Resource
 @export var monster_name: String = ""
 @export_range(1, 99999) var max_hp: float = 30.0
 @export_range(1, 99) var countdown: int = 3
+@export_enum("沿用旧配置:0", "快:1", "中:2", "慢:3") var speed_tier: int = 0
+@export_group("马匪试玩配置")
+## 首轮试玩值；生命暂定100，后续通过试玩调整。
+@export var balance_provisional: bool = false
+@export_range(0, 99) var envenomed_poison_per_attack: int = 2
 @export var intents: Array[EnemyIntentData] = []
 
 func intent_at(action_count: int) -> EnemyIntentData:

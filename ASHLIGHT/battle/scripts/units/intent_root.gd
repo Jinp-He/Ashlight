@@ -211,7 +211,9 @@ func _build_card_badge() -> void:
 	_card_badge_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_card_badge_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card_badge_number.add_theme_font_override("font", preload(CardRoot.FONT_PATH))
-	_card_badge_number.add_theme_font_size_override("font_size", 54)
+	_card_badge_number.add_theme_font_size_override("font_size", 75)
+	_card_badge_number.add_theme_color_override("font_outline_color", Color.BLACK)
+	_card_badge_number.add_theme_constant_override("outline_size", 10)
 	_card_badge.add_child(_card_badge_number)
 
 func _build_hover_panel() -> void:
@@ -325,6 +327,8 @@ func _refresh_telegraph() -> void:
 	if not is_instance_valid(br) or not is_instance_valid(caster):
 		return
 	var card: Dictionary = br._v2_intents.get(caster.unit_id, {})
+	if caster.unit_faction == "enemy" and card.get("stat") == "damage":
+		return
 	var target: UnitRoot = br._find_unit(str(card.get("target", "")))
 	if not is_instance_valid(target) or target == caster or target.get_current_hp() <= 0.0:
 		return

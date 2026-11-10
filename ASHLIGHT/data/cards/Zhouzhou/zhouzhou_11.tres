@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+
+[sub_resource type="Resource" id="Effect"]
+script = ExtResource("2")
+kind = "damage"
+target = "选中敌人"
+amount = 2
+scales_with_number = false
+hits = 2
+
+[resource]
+script = ExtResource("1")
+id = "zhouzhou_11"
+card_name = "崩拳"
+belong_to = "Zhouzhou"
+rarity = 1
+card_type = 0
+art_path = "res://assets/cards/faces/Zhouzhou001.png"
+uno_color = 1
+base_number = 3
+number_spread = 0
+combo_damage_growth = true
+effects = Array[ExtResource("2")]([SubResource("Effect")])
+effect_display_template = "对一个敌人造成2次{0}点伤害。"

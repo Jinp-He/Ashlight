@@ -14,9 +14,9 @@ var _frame: int = 0
 var _transition_time: float = 0.0
 var _transition_active: bool = false
 var _initialized: bool = false
-var current_tint := Color(0.3, 0.3, 0.3)
-var target_tint := Color(0.3, 0.3, 0.3)
-var _pending_tint := Color(0.3, 0.3, 0.3)
+var current_tint := Color.BLACK
+var target_tint := Color.BLACK
+var _pending_tint := Color.BLACK
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -43,7 +43,7 @@ func _make_layer(layer_name: String) -> Sprite2D:
 func set_color_index(index: int) -> void:
 	# 不维护第二份颜色表；卡牌修改/增加颜色后随该表自动更新。
 	if index < 0 or CardRoot.COST_COLORS.is_empty():
-		set_tint(Color(0.3, 0.3, 0.3))
+		set_tint(Color.BLACK)
 	else:
 		set_tint(CardRoot.COST_COLORS[clampi(index, 0, CardRoot.COST_COLORS.size() - 1)])
 

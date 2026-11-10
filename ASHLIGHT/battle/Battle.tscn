@@ -14,6 +14,8 @@
 
 [ext_resource type="Script" path="res://battle/scripts/ui/pile_flame.gd" id="pile_flame_script"]
 
+[ext_resource type="Script" path="res://battle/scripts/ui/card_debug_browser.gd" id="card_browser"]
+
 [node name="BattleRoot" type="Node2D" unique_id=1472562332]
 script = ExtResource("1_battle")
 
@@ -87,7 +89,7 @@ unit_faction = "enemy"
 [node name="Hand" type="Node2D" parent="." unique_id=1440115904]
 z_index = 50
 script = ExtResource("hand_mgr")
-hand_offset_x = -80.0
+hand_offset_x = 0.0
 combo_snap_offset = Vector2(-180, -20)
 
 [node name="RedrawButton" type="Button" parent="Hand" unique_id=1846627660]
@@ -98,7 +100,8 @@ offset_bottom = 68.0
 text = "重新发牌"
 script = ExtResource("redraw_btn")
 
-[node name="PileButtons" type="Node2D" parent="." unique_id=811226996]
+[node name="PileButtons" type="CanvasLayer" parent="." unique_id=811226996]
+layer = 101
 
 [node name="DeckButton" parent="PileButtons" unique_id=1088742986 instance=ExtResource("deck_scene")]
 offset_left = 110.0
@@ -146,6 +149,27 @@ text = "?"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="ComboDebugButtons" type="HBoxContainer" parent="HUD"]
+offset_left = 20.0
+offset_top = 105.0
+offset_right = 360.0
+offset_bottom = 142.0
+theme_override_constants/separation = 6
+
+[node name="AddOne" type="Button" parent="HUD/ComboDebugButtons"]
+layout_mode = 2
+focus_mode = 0
+text = "+1 连击"
+
+[node name="AddFive" type="Button" parent="HUD/ComboDebugButtons"]
+layout_mode = 2
+focus_mode = 0
+text = "+5 连击"
+
+[node name="Clear" type="Button" parent="HUD/ComboDebugButtons"]
+layout_mode = 2
+focus_mode = 0
+text = "清空连击"
 [node name="InfoPanel" type="VBoxContainer" parent="HUD" unique_id=1630272104]
 offset_left = 20.0
 offset_top = 150.0
@@ -177,3 +201,11 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 18
 text = "动作：0 次"
+
+[node name="TeamDamageAnchor" type="Marker2D" parent="."]
+position = Vector2(480, 199)
+
+[node name="TeamHUD" type="Node2D" parent="HUD"]
+
+[node name="CardDebugBrowser" type="CanvasLayer" parent="."]
+script = ExtResource("card_browser")

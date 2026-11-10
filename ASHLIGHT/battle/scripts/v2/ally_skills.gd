@@ -1,43 +1,20 @@
 class_name AllySkills
 extends RefCounted
 
-## 友方角色技能：放入一张当前接不上的手牌来启动，改写这张牌的颜色或点数。
+## 友方角色技能：点击角色查看，再次点击使用；无需选择手牌。
 ## 使用技能不算动作（不推进敌人倒计时、不影响 Combo），之后进入冷却，冷却按玩家动作递减。
-## 占位数值，正式数据表到位后替换。
+## 冷却由有效出牌或摸牌按钮推进，卡牌效果抽牌不推进。
 const SKILLS: Dictionary = {
-	"Zhouzhou": {"name": "变色", "desc": "随机换成另一种颜色", "cooldown": 4},
-	"Irene": {"name": "削减", "desc": "点数 -1", "cooldown": 3},
-	"Rocket": {"name": "增幅", "desc": "点数 +1", "cooldown": 3},
+	"Zhouzhou": {"name": "行云", "passive": "避柳", "desc": "将战场颜色改为蓝色，保留当前点数。", "cooldown": 4},
+	"Irene": {"name": "灌注", "passive": "幽灵诡计", "desc": "获得1张与战场颜色相同的卡牌【闪回】。", "cooldown": 3},
+	"Rocket": {"name": "反应堆", "passive": "退火", "desc": "随机将1张手牌改为战场颜色，优先选择具有【充能】词条的异色牌。", "cooldown": 3},
 }
-const NUMBER_MIN: int = 1
-## 增幅允许超过卡表上限 5，用来接敌人 6、7 点的牌。
-const NUMBER_MAX: int = 9
-
 static func get_skill(uid: String) -> Dictionary:
 	return SKILLS.get(uid, {})
 
-## 技能能否作用在这张牌上（不考虑冷却与可出判定）。
-static func can_apply(uid: String, hc: HandCard) -> bool:
-	match uid:
-		"Irene":
-			return hc.base_number > NUMBER_MIN
-		"Rocket":
-			return hc.base_number < NUMBER_MAX
-		"Zhouzhou":
-			return true
+## 旧的指定手牌技能接口保留为空操作，避免旧调用恢复点数增幅。
+static func can_apply(_uid: String, _hc: HandCard) -> bool:
 	return false
 
-## 改写这张牌并刷新卡面。调用方负责先检查 can_apply。
-static func apply(uid: String, hc: HandCard) -> void:
-	match uid:
-		"Zhouzhou":
-			var colors: Array[int] = []
-			for color in ChainRules.COLOR_NAMES.size():
-				if color != hc.cost_color:
-					colors.append(color)
-			hc.cost_color = colors.pick_random()
-			hc.card.cost_color = hc.cost_color
-		"Irene":
-			hc.base_number -= 1
-		"Rocket":
-			hc.base_number += 1
+static func apply(_uid: String, _hc: HandCard) -> void:
+	pass

@@ -212,7 +212,7 @@ func run() -> void:
 	await play(make_card("重拳", 0, 3), "Grey")
 	check(rules.top.source == "enemy" and rules.top.uid == "Remy", "enemy at zero plays its card onto the pile top")
 	check(target.get_current_hp() == before - intent.value, "enemy attack lands immediately when its countdown hits 0")
-	check(rules.combo == 3, "actual HP damage reduces combo from ×4 to ×3 after the play")
+	check(rules.combo == 1, "actual HP damage resets combo from ×4 to ×1 after the play")
 	check(rules.enemies.Remy == 3 and br._countdown_labels.Remy.text == "3", "countdown restarts in full right after acting")
 
 	# --- 护盾完全吸收不清空 Combo ---
@@ -350,32 +350,283 @@ func run() -> void:
 	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
 	rules.combo = 4
 	await br._enemy_play("Remy")
-	check(victim.get_current_hp() == victim_hp - 1 and rules.combo == 3, "partially absorbed enemy attack still lowers combo by exactly one")
+	check(victim.get_current_hp() == victim_hp - 1 and rules.combo == 1 and victim.get_shield() == 0, "partially absorbed enemy attack consumes shield once and resets combo")
 	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
 	await br._enemy_play("Remy")
-	check(rules.combo == 2, "successive damaging enemy attacks each lower combo once")
+	check(rules.combo == 1, "successive damaging enemy attacks leave combo at one")
 	rules.combo = 1
 	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
 	await br._enemy_play("Remy")
 	check(rules.combo == 1, "actual enemy attack cannot lower combo below ×1")
 
-	# --- 角色倒下：牌仍可接，没有效果 ---
+	var browser := br.get_node("CardDebugBrowser")
+	var tab := InputEventKey.new()
+	tab.keycode = KEY_TAB
+	tab.pressed = true
+	browser._input(tab)
+	check(br.debug_card_browser_open and browser._panel.visible, "TAB opens card browser")
+	browser._role.select(0)
+	browser._search.text = ""
+	browser._refresh()
+	check(browser._list.get_child_count() == 10, "Zhouzhou debug list contains 11 through 20")
+	browser._search.text = "zhouzhou_11"
+	browser._refresh()
+	check(browser._list.get_child_count() == 1, "browser searches selected role by card ID")
+	var browser_before := hm._hand_count()
+	var browser_card := load("res://data/cards/Zhouzhou/zhouzhou_20.tres") as CardData
+	browser._add_card(browser_card)
+	browser._add_card(browser_card)
+	check(hm._hand_count() == browser_before + 2, "browser can add repeated ordinary cards")
+	br.clock_busy = true
+	browser._add_card(browser_card)
+	check(hm._hand_count() == browser_before + 2, "browser cannot add during resolution")
+	br.clock_busy = false
+	browser._input(tab)
+	check(not br.debug_card_browser_open and not browser._panel.visible, "TAB closes browser and restores battle input")
+	check((load("res://data/starting_decks/zhouzhou.tres") as StartingDeckData).cards[0].id == "zhouzhou_11"
+		and (load("res://data/starting_decks/zhouzhou.tres") as StartingDeckData).cards[4].id == "zhouzhou_15",
+		"Zhouzhou starter uses 11 through 15")
+	var qianjun := load("res://data/cards/Zhouzhou/zhouzhou_16.tres") as CardData
+	for tier in range(1, 5):
+		rules.counters.clear()
+		br._team.remove_buff("morale")
+		br._team.add_buff("morale", 1)
+		remy.set_max_hp(500)
+		remy.reduce_shield(remy.get_shield())
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": qianjun}, 3, tier)
+		check(rules.counters.size() == 1 and br._team.get_buff_stacks("morale") == 1, "Qianjun arms one counter without consuming morale")
+		br._team.add_buff("morale", 2)
+		var matched := rules.take_counters({"stat": "shield", "color": 1, "behavior_type": 2})
+		await br._counter_attack(remy, matched)
+		check(remy.get_current_hp() == 500 - 10 * tier and br._team.get_buff_stacks("morale") == 0,
+			"Qianjun reads success-time morale and saved Combo")
+	br._team.add_buff("morale", 2)
+	await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": qianjun}, 3, 3)
+	check(rules.take_counters({"stat": "damage", "color": 1, "behavior_type": 0}).is_empty()
+		and br._team.get_buff_stacks("morale") == 2, "blue attack does not match state counter or consume morale")
+	br._team.remove_buff("morale")
+	var shibu := load("res://data/cards/Zhouzhou/zhouzhou_20.tres") as CardData
+	remy.set_max_hp(500)
+	remy.reduce_shield(remy.get_shield())
+	remy.gain_shield(20)
+	br._team.remove_buff("morale")
+	br._team.add_buff("morale", 3)
+	await br._v2_play_effect({"uid": "Zhouzhou", "selected": "Remy", "cd": shibu}, 5, 2)
+	check(remy.get_current_hp() == 492 and br.recorded_damage_for(shibu) == 28
+		and br._team.get_buff_stacks("morale") == 0, "Shibu records shield absorption plus HP damage and consumes morale")
+	var shibu_copy := shibu.duplicate() as CardData
+	check(br.recorded_damage_for(shibu_copy) == 28 and shibu.effect_text(5, 2, 3, 28).contains("90"),
+		"Shibu copies share battle record and preview includes record morale and Combo")
+	remy.damage(491)
+	await br._v2_play_effect({"uid": "Zhouzhou", "selected": "Remy", "cd": shibu_copy}, 5, 4)
+	check(br.recorded_damage_for(shibu) == 112, "Shibu record retains overkill without truncation")
+	remy.set_max_hp(500)
+	br.damage_records.clear()
+	var qianli := load("res://data/cards/Zhouzhou/zhouzhou_19.tres") as CardData
+	var qianli_intents := br._v2_intents.duplicate(true)
+	var qianli_timers := rules.enemies.duplicate()
+	check(qianli.rarity == 3 and qianli.roll_number() == 2 and qianli.uno_color == 1, "Qianli is epic fixed blue 2")
+	for tier in range(1, 5):
+		for uid in br._v2_intents:
+			br._v2_intents[uid].color = 0
+		var qianli_before := br._v2_intents.duplicate(true)
+		var qianli_shield := br._team.get_shield()
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": qianli}, 2, tier)
+		for uid in br._v2_intents:
+			var expected_intent: Dictionary = qianli_before[uid].duplicate()
+			expected_intent.color = 1
+			check(br._v2_intents[uid] == expected_intent, "Qianli changes only current intent color")
+		check(rules.enemies == qianli_timers and br._team.get_shield() == qianli_shield + [0, 3, 7, 11][tier - 1],
+			"Qianli preserves countdowns and grants 0/3/7/11 shield once")
+		check(qianli.effect_text(2, 0, tier).contains("护盾") == (tier > 1), "Qianli hides zero shield sentence")
+	br._v2_intents = qianli_intents
+	var yanluo := load("res://data/cards/Zhouzhou/zhouzhou_18.tres") as CardData
+	var yanluo_intents := br._v2_intents.duplicate(true)
+	for tier in range(1, 5):
+		var ids: Array[String] = ["Remy", "Wangg", "Grey"]
+		for index in ids.size():
+			var enemy := br._find_unit(ids[index])
+			enemy.set_max_hp(500)
+			enemy.reduce_shield(enemy.get_shield())
+			br._v2_intents[ids[index]].color = index
+			rules.enemies[ids[index]] = 10
+		br._team.remove_buff("morale")
+		br._team.add_buff("morale", 3)
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": "", "cd": yanluo}, 3, tier)
+		for index in ids.size():
+			check(br._find_unit(ids[index]).get_current_hp() == 500 - 5 * tier
+				and rules.enemies[ids[index]] == (10 if index == 1 else 11),
+				"Yanluo damages each enemy once; only nonblue intents delay")
+		check(br._team.get_buff_stacks("morale") == 0 and yanluo.effect_text(3, 3, tier).contains(str(5 * tier)),
+			"Yanluo preview matches morale-scaled damage and consumes morale")
+	br._v2_intents = yanluo_intents
+	var guanqi := load("res://data/cards/Zhouzhou/zhouzhou_17.tres") as CardData
+	var observe_saved := hm.deck.draw_pile.duplicate()
+	var blue_card := load("res://data/cards/Zhouzhou/zhouzhou_11.tres") as CardData
+	var green_card := load("res://data/cards/Zhouzhou/zhouzhou_12.tres") as CardData
+	for tier in range(1, 5):
+		hm.deck.draw_pile.assign([blue_card, green_card, blue_card, green_card])
+		var count_before := hm._hand_count()
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": guanqi}, 4, tier)
+		var viewed: int = 4 if tier == 4 else 3
+		check(hm._hand_count() == count_before + viewed and guanqi.effect_text(4, 0, tier).contains(str(viewed)),
+			"Guanqi views 3/3/3/4 once with matching preview")
+		check(hm.deck.draw_pile == ([green_card, green_card] if tier == 4 else [blue_card, green_card, green_card]),
+			"Guanqi moves only viewed blue originals and preserves nonblue order")
+		hm.expire_flashbacks()
+	hm.deck.draw_pile.assign([green_card])
+	var short_before := hm._hand_count()
+	hm.observe_blue_cards(4)
+	check(hm._hand_count() == short_before + 1 and hm.deck.draw_pile == [green_card], "short observation copies existing cards without reshuffling")
+	hm.expire_flashbacks()
+	hm.deck.draw_pile.clear()
+	hm.observe_blue_cards(4)
+	check(hm.deck.draw_pile.is_empty(), "empty observation does not reshuffle")
+	hm.deck.draw_pile.assign(observe_saved)
+	var tuna := load("res://data/cards/Zhouzhou/zhouzhou_15.tres") as CardData
+	check(tuna.rarity == 2 and tuna.roll_number() == 3 and tuna.uno_color == 1, "Tuna is rare fixed blue 3")
+	for tier in range(1, 5):
+		br._team.remove_buff("morale")
+		br._team.add_buff("morale", 2)
+		var gain: int = [7, 7, 8, 8][tier - 1]
+		check(tuna.effect_text(3, 0, tier).contains(str(gain)), "Tuna previews 7/7/8/8 morale")
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": tuna}, 3, tier)
+		check(br._team.get_buff_stacks("morale") == 2 + gain, "Tuna adds team morale once and preserves existing stacks")
+	br._team.remove_buff("morale")
+	var wenyun := load("res://data/cards/Zhouzhou/zhouzhou_14.tres") as CardData
+	var intent_saved: Dictionary = br._v2_intents.Remy.duplicate()
+	var countdown_saved: int = rules.enemies.Remy
+	var action_saved: int = remy.ai_memory.get("v2_actions", 0)
+	for tier in range(1, 5):
+		br._v2_intents.Remy = {"uid": "Remy", "name": "染色验收", "color": 0, "number": 4, "stat": "damage", "value": 2, "target": br._team.unit_id}
+		rules.enemies.Remy = 1
+		var wenyun_shield_before := br._team.get_shield()
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": "Remy", "cd": wenyun}, 3, tier)
+		check(br._v2_intents.Remy.color == 1 and br._v2_intents.Remy.number == 4 and br._v2_intents.Remy.value == 2
+			and br._v2_intents.Remy.stat == "damage" and rules.enemies.Remy == 0, "Wenyun dyes current intent blue and decrements countdown once")
+		check(br._team.get_shield() == wenyun_shield_before + [0, 1, 3, 5][tier - 1],
+			"Wenyun grants 0/1/3/5 team shield once")
+		check(wenyun.effect_text(3, 0, tier).contains("护盾") == (tier > 1), "zero compensation is hidden from card preview")
+	br._team.gain_shield(10)
+	await br._enemy_play("Remy")
+	check(rules.top.color == 1 and rules.top.number == 4, "zero-countdown enemy plays the dyed card to the central pile")
+	br._v2_intents.Remy = intent_saved
+	rules.enemies.Remy = countdown_saved
+	remy.ai_memory["v2_actions"] = action_saved
+	var tage := load("res://data/cards/Zhouzhou/zhouzhou_13.tres") as CardData
+	var tage_pile := hm.deck.draw_pile.duplicate()
+	var compound := load("res://tests/fixtures/composite_card.tres") as CardData
+	hm.deck.draw_pile.assign([compound])
+	for tier in range(1, 5):
+		var hand_before := hm._hand_count()
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": tage}, 2, tier)
+		var reward := 2 + floori(float(tier - 1) / 2.0)
+		check(hm._hand_count() == hand_before + reward and tage.effect_text(2, 0, tier).contains(str(reward)),
+			"Tage copies 2/2/3/3 compound attacks and previews reward")
+		check(hm.deck.draw_pile == [compound], "Tage leaves source pile intact")
+		hm.expire_flashbacks()
+		check(hm._hand_count() == hand_before, "Tage copies expire on next play boundary")
+	hm.deck.draw_pile.assign([load("res://data/cards/Zhouzhou/zhouzhou_12.tres") as CardData])
+	var no_attack_before := hm._hand_count()
+	hm.generate_attack_flashbacks(3)
+	check(hm._hand_count() == no_attack_before and hm.deck.draw_pile.size() == 1, "non-damage cards excluded without reshuffle")
+	hm.deck.draw_pile.assign(tage_pile)
+	var youshen := load("res://data/cards/Zhouzhou/zhouzhou_12.tres") as CardData
+	var saved_draw := hm.deck.draw_pile.duplicate()
+	var blue_template := load("res://data/cards/Zhouzhou/zhouzhou_11.tres") as CardData
+	hm.deck.draw_pile.assign([blue_template])
+	for combo in range(1, 5):
+		rules.counters.clear()
+		var before_count := hm._hand_count()
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": br._team.unit_id, "cd": youshen}, 2, combo)
+		check(rules.counters.size() == 1 and hm._hand_count() == before_count, "Youshen arms exactly once without immediate reward")
+		var armed := rules.take_counters({"stat": "damage", "color": 1})
+		await br._counter_attack(remy, armed)
+		var expected := 1 + floori(float(combo - 1) / 2.0)
+		check(hm._hand_count() == before_count + expected and hm.deck.draw_pile == [blue_template], "Youshen copies blue templates with replacement and recorded Combo")
+		var flash_copies: Array[HandCard] = []
+		for hc in hm._cards:
+			if hc.is_flashback: flash_copies.append(hc)
+		check(flash_copies.size() == expected and flash_copies.all(func(hc: HandCard) -> bool: return hc.cost_color == 1 and hc.base_number == 3), "flashbacks retain template color and fixed number")
+		hm.expire_flashbacks()
+		check(hm._hand_count() == before_count, "unused flashbacks expire without entering piles")
+	hm.deck.draw_pile.clear()
+	hm.generate_color_flashbacks(1, 2)
+	check(hm.deck.draw_pile.is_empty(), "no blue candidates do not trigger reshuffle")
+	rules.counters = [{"uid": "Zhouzhou", "color": 1, "value": 0, "blue_flashback": 2}]
+	check(rules.take_counters({"stat": "shield", "color": 1}).is_empty() and rules.counters.is_empty(), "nonattack consumes Youshen without matching")
+	hm.deck.draw_pile.assign(saved_draw)
+	var bengquan := load("res://data/cards/Zhouzhou/zhouzhou_11.tres") as CardData
+	check(bengquan.roll_number() == 3 and bengquan.uno_color == 1 and bengquan.rarity == 1, "Bengquan has fixed blue 3 and common rarity")
+	for combo in range(1, 5):
+		remy.set_max_hp(500)
+		remy.reduce_shield(remy.get_shield())
+		var source := br._find_unit("Zhouzhou")
+		source.remove_buff("morale")
+		source.add_buff("morale", 3)
+		var hits: Array[float] = []
+		var capture := func(current: float, _maximum: float) -> void: hits.append(current)
+		remy._hp_component.hp_changed.connect(capture)
+		check(bengquan.effect_text(3, 3, combo).contains(str(5 * combo)), "Bengquan preview includes morale and Combo")
+		await br._v2_play_effect({"uid": "Zhouzhou", "selected": "Remy", "cd": bengquan}, 3, combo)
+		remy._hp_component.hp_changed.disconnect(capture)
+		check(hits.size() == 2 and remy.get_current_hp() == 500 - 10 * combo and source.get_buff_stacks("morale") == 0, "Bengquan resolves two scaled hits and consumes morale")
+	var team := br._team
+	var support := CardData.new()
+	support.belong_to = "Rocket"
+	support.card_name = "队伍验收"
+	var defense := CardEffect.new()
+	defense.kind = "shield"
+	defense.target = "全体友方"
+	defense.amount = 2
+	defense.scales_with_number = false
+	defense.hits = 2
+	support.effects = [defense]
+	check(br.v2_targets(support, br._find_unit("Rocket")) == [team], "team-only card confirms one canonical target")
+	var team_before := team.get_shield()
+	await br._v2_play_effect({"uid": "Rocket", "selected": team.unit_id, "cd": support}, 1, 2)
+	check(team.get_shield() == team_before + 8, "party defense preserves hits and Combo without triple application")
+	var strike := CardEffect.new()
+	strike.kind = "damage"
+	strike.amount = 1
+	strike.scales_with_number = false
+	defense.target = "选中友方"
+	support.effects = [strike, defense]
+	check(br.v2_targets(support, br._find_unit("Rocket")).all(
+		func(unit: UnitRoot) -> bool: return unit.unit_faction == "enemy"), "mixed card selects enemy only")
+	team.remove_buff("morale")
+	team.add_buff("morale", 3)
+	var enemy_before := remy.get_current_hp()
+	team_before = team.get_shield()
+	await br._v2_play_effect({"uid": "Rocket", "selected": "Remy", "cd": support}, 1, 2)
+	check(remy.get_current_hp() == enemy_before - 8 and team.get_buff_stacks("morale") == 0,
+		"one morale snapshot boosts both Combo repetitions then consumes once")
+	check(team.get_shield() == team_before + 8, "mixed card automatically resolves selected-friendly defense to team")
+	team.add_buff("morale", 3)
+	support.effects = [defense]
+	await br._v2_play_effect({"uid": "Rocket", "selected": team.unit_id, "cd": support}, 1, 1)
+	check(team.get_buff_stacks("morale") == 3, "support card preserves morale")
+	team.remove_buff("morale")
 	var rocket := br._find_unit("Rocket")
-	rocket.damage(10000)
-	rocket.die()
-	await get_tree().process_frame
+	var team_hp := rocket.get_current_hp()
+	rocket.reduce_shield(rocket.get_shield())
+	rocket.gain_shield(2)
+	check(victim.get_shield() == 2, "allies share shield")
+	victim.damage(3)
+	check(rocket.get_current_hp() == team_hp - 1, "allies share HP")
+	rocket.add_buff("team_test", 2)
+	check(victim.get_buff_stacks("team_test") == 2, "allies share buffs")
+	victim.remove_buff("team_test")
+	for role in ["Zhouzhou", "Irene", "Rocket"]:
+		check(br._find_unit(role).get_current_hp() > 0, role + " remains alive after team damage")
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
 	set_top(0, 3)
 	rules.combo = 1
-	var blank := make_card("重拳", 0, 4)
+	var punch := make_card("重拳", 0, 4)
 	hp = remy.get_current_hp()
-	ticks = rules.ticks
-	check(br.v2_targets(blank.data, rocket).size() > 0, "dead character's card can target any living unit")
-	rules.skill_cooldowns.Rocket = 0
-	check(not br.skill_ready("Rocket", make_card("速射", 1, 1)), "a fallen character cannot use their skill")
-	await play(blank, "Remy")
-	check(remy.get_current_hp() == hp and rules.ticks > ticks and rules.combo == 2, "dead character's card links and ticks but has no effect")
+	await play(punch, "Remy")
+	check(remy.get_current_hp() < hp, "Rocket card resolves while team is alive")
 
 	# --- 牌库循环 ---
 	var deck := DeckManager.new()
@@ -394,7 +645,20 @@ func run() -> void:
 	ticks = rules.ticks
 	await br.draw_action()
 	check(br._battle_ended and rules.ticks == ticks, "victory stops actions")
-	print("BATTLE_V2_TESTS checks=%d failures=%d" % [checks, failures])
 	br.queue_free()
 	await get_tree().process_frame
+	br = scene.instantiate() as BattleRoot
+	get_tree().root.add_child(br)
+	var ally := br._find_unit("Irene")
+	check(ally.get_current_hp() == br.team_max_hp and not br._battle_ended, "new battle resets team HP and outcome")
+	ally.damage(br.team_max_hp + ally.get_shield())
+	check(br._battle_ended and br._find_unit("Rocket").get_current_hp() == 0, "zero team HP immediately ends battle for all allies")
+	br.queue_free()
+	await get_tree().process_frame
+	br = scene.instantiate() as BattleRoot
+	get_tree().root.add_child(br)
+	check(br._find_unit("Rocket").get_current_hp() == br.team_max_hp and not br._battle_ended, "reentry after defeat restores team")
+	br.queue_free()
+	await get_tree().process_frame
+	print("BATTLE_V2_TESTS checks=%d failures=%d" % [checks, failures])
 	get_tree().quit(1 if failures else 0)

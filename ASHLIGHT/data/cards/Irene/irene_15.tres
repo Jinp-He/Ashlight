@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2")
+kind = "summon_deer"
+target = "自身"
+amount = 7
+scales_with_number = false
+[resource]
+script = ExtResource("1")
+id = "irene_15"
+card_name = "手影：鹿"
+belong_to = "Irene"
+rarity = 2
+card_type = 0
+art_path = "res://assets/cards/faces/Irene006.png"
+uno_color = 0
+base_number = 4
+number_spread = 0
+execute_once = true
+effects = Array[ExtResource("2")]([SubResource("Effect0")])

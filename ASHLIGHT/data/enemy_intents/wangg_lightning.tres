@@ -5,9 +5,10 @@
 [resource]
 script = ExtResource("1_intent")
 id = "wangg_lightning"
-intent_name = "雷击"
-color = 2
-number = 6
-stat = "damage"
-value = 9
+intent_name = "塞赃"
+color = 3
+number = 3
+stat = "loot"
+value = 2
 delay = 0
+behavior_type = 2

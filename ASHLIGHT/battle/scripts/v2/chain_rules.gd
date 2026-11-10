@@ -5,7 +5,6 @@ extends RefCounted
 ## 只有玩家动作（出牌 / 摸牌 / 补牌）调用 tick。动画不推进时间。
 const COLOR_NAMES: Array[String] = ["红", "蓝", "黄", "绿"]
 const ANY_COLOR: int = -1
-const MAX_COMBO: int = 4
 const HAND_START: int = 5
 const DRAW_TICKS: int = 1
 
@@ -13,7 +12,7 @@ const DRAW_TICKS: int = 1
 var combo: int = 1
 var ticks: int = 0
 ## 牌堆顶：{color, number, source("player"/"enemy"), uid, name}。空字典表示任意牌可接。
-var top: Dictionary = {}
+var top: Dictionary = {"color": ANY_COLOR, "number": 0, "source": "opening", "uid": "", "name": "开局"}
 ## 敌人 uid → 剩余倒计时。归零时当场出牌。
 var enemies: Dictionary = {}
 ## 友方 uid → 技能剩余冷却（0 = 就绪）。
@@ -22,7 +21,7 @@ var skill_cooldowns: Dictionary = {}
 var counters: Array[Dictionary] = []
 
 func can_play(color: int, base_number: int) -> bool:
-	if top.is_empty():
+	if top.is_empty() or int(top.color) == ANY_COLOR or int(top.number) == 0:
 		return true
 	return color == int(top.color) or base_number == int(top.number)
 
@@ -33,7 +32,7 @@ func place_enemy_card(card: Dictionary, uid: String) -> void:
 	top = {"color": card.color, "number": card.number, "source": "enemy", "uid": uid, "name": card.name}
 
 func combo_up() -> void:
-	combo = mini(combo + 1, MAX_COMBO)
+	combo += 1
 
 func reset_combo() -> void:
 	combo = 1
@@ -58,11 +57,11 @@ func ready_enemies() -> Array[String]:
 	return out
 
 ## 敌人的下一个动作到来：取出全部待命反制，返回其中能反制这张牌的。
-## 只有攻击牌能被反制；不匹配的反制同样被消耗。
+## 按行为类型匹配，不匹配的反制也在下一次敌方行动时消耗。
 func take_counters(card: Dictionary) -> Array[Dictionary]:
 	var hits: Array[Dictionary] = []
 	for counter in counters:
-		if card.stat == "damage" and (int(counter.color) == ANY_COLOR or int(counter.color) == int(card.color)):
+		if int(card.get("behavior_type", 0 if card.stat == "damage" else 1)) == int(counter.get("behavior_type", 0)):
 			hits.append(counter)
 	counters.clear()
 	return hits

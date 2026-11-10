@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2")
+kind = "mourn"
+target = "全体敌人"
+amount = 4
+scales_with_number = false
+[resource]
+script = ExtResource("1")
+id = "irene_20"
+card_name = "哀悼曲"
+belong_to = "Irene"
+rarity = 3
+card_type = 0
+art_path = "res://assets/cards/faces/Irene012.png"
+uno_color = 3
+base_number = 5
+number_spread = 0
+execute_once = true
+combo_damage_growth = true
+effects = Array[ExtResource("2")]([SubResource("Effect0")])

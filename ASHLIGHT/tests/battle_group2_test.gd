@@ -35,6 +35,23 @@ func run() -> void:
 	await get_tree().create_timer(0.9).timeout
 	check(is_instance_valid(group) and group._playing, "defense remains active during final fade")
 	await group.finished
+	for shield in [2, 1]:
+		ally.reduce_shield(ally.get_shield())
+		ally.gain_shield(shield)
+		var team_hp := ally.get_current_hp()
+		br._enemy_attack(target, {"value": 2, "target": "missing"})
+		group = br.get_node("演出组2") as CutsceneGroup2
+		check(group._targets.size() == 3 and group._targets.all(
+			func(item: Dictionary) -> bool: return item.unit.current_art_state == UnitRoot.UnitArtState.HIT),
+			"all allies enter HIT in the same frame")
+		check(group._blocked == (shield == 2), "full absorption selects block feedback")
+		check(group._number_nodes.size() == 1 and group._number_nodes[0].popup_anchor.is_equal_approx(
+			br.to_local(br.get_node("HUD/TeamHUD/TeamDamageAnchor").global_position) + Vector2(0, 50)), "one number at team anchor")
+		await group.finished
+		check(ally.get_shield() == 0 and ally.get_current_hp() == team_hp - (2 - shield),
+			"team shield and HP change once")
+		await get_tree().process_frame
+	ally.heal(1)
 	for uid in br.rules.enemies:
 		br.rules.enemies[uid] = 1
 	for uid in ["Remy", "Wangg", "Grey"]:

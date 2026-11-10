@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyIntentData" format=3]
+[ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = "mafe_blade"
+intent_name = "毒刃"
+behavior_type = 0
+color = 1
+number = 2
+stat = "damage"
+value = 4
+hits = 2
+loot_on_attack = 0
+delay = 0

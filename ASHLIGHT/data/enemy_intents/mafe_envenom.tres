@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyIntentData" format=3]
+[ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="1"]
+[resource]
+script = ExtResource("1")
+id = "mafe_envenom"
+intent_name = "淬毒"
+behavior_type = 2
+color = 3
+number = 4
+stat = "envenom"
+value = 2
+hits = 1
+loot_on_attack = 0
+delay = 0

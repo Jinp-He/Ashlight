@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+
+[sub_resource type="Resource" id="Color"]
+script = ExtResource("2")
+kind = "intent_color"
+target = "全体敌人"
+amount = 1
+scales_with_number = false
+
+[sub_resource type="Resource" id="Shield"]
+script = ExtResource("2")
+kind = "shield"
+target = "自身"
+amount = 11
+scales_with_number = false
+combo_shield_compensation = true
+
+[resource]
+script = ExtResource("1")
+id = "zhouzhou_19"
+card_name = "千里不留行"
+belong_to = "Zhouzhou"
+rarity = 3
+card_type = 1
+art_path = "res://assets/cards/faces/Zhouzhou012.png"
+uno_color = 3
+base_number = 2
+number_spread = 0
+execute_once = true
+effects = Array[ExtResource("2")]([SubResource("Color"), SubResource("Shield")])

@@ -7,6 +7,7 @@ extends Node2D
 
 ## buff 集合变化信号（add/remove/clear 后 emit），供 UnitRoot 转发 → BattleRoot 实时刷新手牌士气数值等。
 signal buffs_changed
+signal buff_fully_removed
 
 const BUFF_ICON_DIR: String = "res://assets/Unit UI/buffs/icons/"
 ## buff_id（语义，如 poison/loot/up_poison）→ 美术文件名（美术组按 buff{nnn} 编号产出）。
@@ -52,7 +53,7 @@ const FONT_PATH: String = "res://assets/fonts/DouyinSansBold.otf"
 @export var toast_offset_y: float = -120.0
 
 ## 【调试】虚线框：标出 buff 框体占位范围（未绑定 buff 时也可见）。正式上线前关掉。
-@export var debug_show_frame: bool = true :
+@export var debug_show_frame: bool = false :
 	set(value):
 		debug_show_frame = value
 		queue_redraw()
@@ -134,6 +135,8 @@ func add_buff(buff_id: String, stack: int, tone: int, display_name: String = "",
 		return
 	var resolved_name := display_name if display_name != "" else KeywordGlossary.name_of(buff_id)
 	var resolved_desc := description if description != "" else KeywordGlossary.desc_of(buff_id)
+	if buff_id == "charge" and description.is_empty():
+		resolved_desc = "下一张充能牌消耗所有充能层数。"
 	for e in _entries:
 		if e.buff_id == buff_id:
 			e.stack += maxi(stack, 1)
@@ -163,7 +166,10 @@ func add_buff(buff_id: String, stack: int, tone: int, display_name: String = "",
 func remove_buff(buff_id: String) -> void:
 	for i in _entries.size():
 		if _entries[i].buff_id == buff_id:
+			var qualifies: bool = _entries[i].tone in [1, 2]
 			_entries.remove_at(i)
+			if qualifies:
+				buff_fully_removed.emit()
 			break
 	_rebuild()
 	buffs_changed.emit()
@@ -171,21 +177,46 @@ func remove_buff(buff_id: String) -> void:
 ## 减少指定 buff_id 的层数（最小 0）；归零则从框内移除该条目。
 ## 供【出血】每次队列推进 -1 层 /【中毒】护盾 1:1 抵消层数 使用。
 func remove_buff_stacks(buff_id: String, amount: int) -> void:
+	if amount <= 0:
+		return
 	for i in _entries.size():
 		if _entries[i].buff_id == buff_id:
 			_entries[i].stack -= amount
 			if _entries[i].stack <= 0:
+				var qualifies: bool = _entries[i].tone in [1, 2]
 				_entries.remove_at(i)
+				if qualifies:
+					buff_fully_removed.emit()
 			_rebuild()
 			buffs_changed.emit()
 			return
 
 func clear_buffs() -> void:
+	var qualifies := _entries.any(func(entry: BuffInstance) -> bool: return entry.tone in [1, 2])
 	_entries.clear()
+	if qualifies:
+		buff_fully_removed.emit()
 	_rebuild()
 	buffs_changed.emit()
 
 ## 返回指定 buff_id 的当前总层数（无该 buff 则返回 0）。供士气等关键数值加成读取。
+func update_buff_details(buff_id: String, stacks: int, description: String) -> void:
+	for entry in _entries:
+		if entry.buff_id == buff_id:
+			entry.stack = stacks
+			entry.description = description
+			_rebuild()
+			buffs_changed.emit()
+			return
+
+## 返回独立快照，允许调用方在施加状态时安全遍历原有减益。
+func debuff_snapshot() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for entry in _entries:
+		if entry.tone == 2 and entry.stack > 0:
+			result.append({"id": entry.buff_id, "stack": entry.stack, "name": entry.display_name, "description": entry.description})
+	return result
+
 func get_buff_stacks(buff_id: String) -> int:
 	for e in _entries:
 		if e.buff_id == buff_id:

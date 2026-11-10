@@ -34,6 +34,9 @@ signal shield_changed(new_value: float)
 		hp_outline_size = value
 		_refresh_label_font()
 
+## 九宫格固定边缘像素，顺序为左、上、右、下。
+@export var bar_stretch_margins: Vector4i = Vector4i(20, 14, 20, 14)
+
 var _bar_bg: TextureProgressBar      # 底部（HP底部）：始终满铺，作为损失后露出的暗轨
 var _bar_white: TextureProgressBar   # 纯白填充：位于 HP 彩色填充之下，掉血闪白残影层
 var _bar: TextureProgressBar         # 彩色填充 + 边框（texture_over 边框置于最上层）
@@ -165,6 +168,27 @@ func _build() -> void:
 	else:
 		push_warning("UnitHp: 护盾图标缺失 %s" % HP_SHIELD_PATH)
 
+	set_width_multiplier(1.0)
+
+## 只加宽血条图形与文字布局框，字体和护盾叠层保持原始比例。
+func set_width_multiplier(multiplier: float) -> void:
+	if not is_instance_valid(_bar) or _bar.texture_progress == null:
+		return
+	var factor := maxf(multiplier, 0.1)
+	_bar_size.x = _bar.texture_progress.get_width() * factor
+	for bar: TextureProgressBar in [_bar_bg, _bar_white, _bar]:
+		if is_instance_valid(bar):
+			bar.scale = Vector2.ONE
+			bar.nine_patch_stretch = true
+			bar.stretch_margin_left = bar_stretch_margins.x
+			bar.stretch_margin_top = bar_stretch_margins.y
+			bar.stretch_margin_right = bar_stretch_margins.z
+			bar.stretch_margin_bottom = bar_stretch_margins.w
+			bar.size = _bar_size
+			bar.position.x = -_bar_size.x * 0.5
+	if is_instance_valid(_hp_text):
+		_hp_text.size.x = _bar_size.x
+		_hp_text.position.x = -_bar_size.x * 0.5
 	_refresh_shield_position()
 
 func setup_stats(max_v: float, cur_v: float, shield_v: float) -> void:

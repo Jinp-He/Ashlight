@@ -347,6 +347,13 @@ func remove_buff(buff_id: String) -> void:
 		_buff_component.remove_buff(buff_id)
 
 ## 设置最大生命并回满（数据驱动初始化用，如 MonsterDatabase.max_hp）；_ready 后调用也会同步刷新 HpRoot。
+func share_combat_state(source: UnitRoot) -> void:
+	_hp_component.queue_free()
+	_buff_component.queue_free()
+	_hp_component = source._hp_component
+	_buff_component = source._buff_component
+	_buff_component.buffs_changed.connect(_on_buffs_changed)
+
 func set_max_hp(value: float) -> void:
 	max_hp = value
 	current_hp = value
@@ -357,7 +364,15 @@ func set_max_hp(value: float) -> void:
 ## 返回本次【实际扣除的血量】，护盾吸收部分不计入（供中毒/出血飘字显示真实掉血）。
 func damage(amount: float) -> float:
 	if is_instance_valid(_hp_component):
-		return _hp_component.apply_damage(amount)
+		var lost: float = _hp_component.apply_damage(amount)
+		var vulnerable: int = get_buff_stacks("vulnerable")
+		if lost > 0 and vulnerable > 0:
+			var absorbed: int = mini(vulnerable, int(get_shield()))
+			var extra: float = _hp_component.apply_damage(vulnerable)
+			remove_buff_stacks("vulnerable", vulnerable - floori(float(vulnerable) / 2.0))
+			if extra > 0 or absorbed > 0:
+				spawn_tick_damage("易伤", int(extra), absorbed)
+		return lost
 	return 0.0
 
 ## 获得 amount 点护盾（委托给 HpRoot，实时刷新护盾叠层）。
@@ -426,7 +441,7 @@ func _on_buffs_changed() -> void:
 ## 死亡演出：美术盖黑幕并保持，整组（含黑幕 / 血条 / 意图）在 death_fade_time 内逐渐淡出，
 ## 默认 0.2s 淡出（用户要求）；_dead 守卫防止重复触发。
 func die(death_fade_time: float = 0.2) -> void:
-	if _dead:
+	if _dead or unit_faction == "player":
 		return
 	_dead = true
 	_reset_breathing_transform()
@@ -596,6 +611,7 @@ func set_dimmed(on: bool) -> void:
 	if _dead:
 		return
 	_dimmed = on
+	_refresh_materials()
 	if not is_instance_valid(_dim_overlay):
 		return
 	# 杀掉可能在跑的淡入/淡出，防止与本次动画争抢 modulate.a 导致闪烁。
@@ -626,7 +642,7 @@ func _refresh_materials() -> void:
 	if not is_instance_valid(_art_sprite):
 		return
 	var mask_on := is_back_row and is_instance_valid(_back_row_material)
-	var out_on := (_hovering or _externally_highlighted) and is_instance_valid(_outline_material)
+	var out_on := not _dimmed and (_hovering or _externally_highlighted) and is_instance_valid(_outline_material)
 	if is_instance_valid(_outline_material):
 		_outline_material.next_pass = null
 	if is_instance_valid(_back_row_material):
@@ -647,7 +663,7 @@ func _apply_layout() -> void:
 	# 关键：血条位置不再依赖美术高度 art_h，因此不同美术尺寸的单位组放到同一场景 Y 时，血条严格对齐（敌我同步）。
 	var bar_top_y := visual_offset_y + hp_offset_y
 	var hud_top_y: float = bar_top_y + unit_hud_shift_y
-	if is_instance_valid(_hp_component):
+	if is_instance_valid(_hp_component) and _hp_component.get_parent() == self:
 		_hp_component.position = Vector2(0.0, hud_top_y + hp_group_offset_y)
 	if is_instance_valid(_xp_component):
 		_xp_component.position = Vector2(0.0, hud_top_y + hp_group_offset_y)
@@ -656,7 +672,7 @@ func _apply_layout() -> void:
 	if is_instance_valid(_body):
 		# 美术整体置于血条上方：美术中心 = 锚点 - (art_h/2 + 间隙)，使美术底边悬于血条顶之上、互不重叠。
 		_body.position = Vector2(0.0, bar_top_y - ART_BAR_GAP - art_h * 0.5 + 20.0)  # 美术下移20px，更靠近血条组
-	if is_instance_valid(_buff_component):
+	if is_instance_valid(_buff_component) and _buff_component.get_parent() == self:
 		# Buff 框体排在血条正下方（BAR_HEIGHT 为整条高度，旧 30.0 半条近似已替换）。
 		_buff_component.position = Vector2(0.0, hud_top_y + BAR_HEIGHT + buff_offset_y - 15.0)
 		_buff_component.set_toast_layout_compensation(unit_hud_shift_y)
@@ -698,7 +714,7 @@ func add_xp(amount: float) -> void:
 
 ## 切换血条/经验条显示（互斥：显一个隐另一个）。
 func toggle_bar_display(show_xp: bool) -> void:
-	if is_instance_valid(_hp_component):
+	if is_instance_valid(_hp_component) and _hp_component.get_parent() == self:
 		_hp_component.visible = not show_xp
 	if is_instance_valid(_xp_component):
 		_xp_component.visible = show_xp
@@ -726,3 +742,17 @@ func _build_lvup_frames() -> SpriteFrames:
 		else:
 			push_warning("UnitRoot: 升级序列帧缺失 %s（检查 res://assets/Unit UI/_lvup/ 是否导入）" % path)
 	return sf
+
+var _cooldown_feedback_tween: Tween
+var _cooldown_feedback_origin_x: float = 0.0
+
+func play_cooldown_feedback() -> void:
+	if not is_instance_valid(_body):
+		return
+	if is_instance_valid(_cooldown_feedback_tween) and _cooldown_feedback_tween.is_running():
+		_cooldown_feedback_tween.kill()
+		_body.position.x = _cooldown_feedback_origin_x
+	_cooldown_feedback_origin_x = _body.position.x
+	_cooldown_feedback_tween = create_tween()
+	for offset in [-6.0, 6.0, -4.0, 4.0, -2.0, 0.0]:
+		_cooldown_feedback_tween.tween_property(_body, "position:x", _cooldown_feedback_origin_x + offset, 0.04)

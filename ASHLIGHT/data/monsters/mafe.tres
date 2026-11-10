@@ -2,14 +2,17 @@
 
 [ext_resource type="Script" path="res://battle/scripts/monsters/monster_data.gd" id="1_monster"]
 [ext_resource type="Script" path="res://battle/scripts/monsters/enemy_intent_data.gd" id="2_intent"]
-[ext_resource type="Resource" path="res://data/enemy_intents/heavy_hammer.tres" id="intent_0"]
-[ext_resource type="Resource" path="res://data/enemy_intents/heavy_smash.tres" id="intent_1"]
-[ext_resource type="Resource" path="res://data/enemy_intents/heavy_armor.tres" id="intent_2"]
+[ext_resource type="Resource" path="res://data/enemy_intents/mafe_raid.tres" id="intent_0"]
+[ext_resource type="Resource" path="res://data/enemy_intents/mafe_blade.tres" id="intent_1"]
+[ext_resource type="Resource" path="res://data/enemy_intents/mafe_envenom.tres" id="intent_2"]
 
 [resource]
 script = ExtResource("1_monster")
 id = "Mafe"
-monster_name = "Mafe"
-max_hp = 99.0
-countdown = 3
+monster_name = "马匪"
+max_hp = 100.0
+balance_provisional = true
+envenomed_poison_per_attack = 2
+speed_tier = 2
+countdown = 5
 intents = Array[ExtResource("2_intent")]([ExtResource("intent_0"), ExtResource("intent_1"), ExtResource("intent_2")])

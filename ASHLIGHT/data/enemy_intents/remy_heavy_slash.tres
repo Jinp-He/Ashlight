@@ -5,9 +5,10 @@
 [resource]
 script = ExtResource("1_intent")
 id = "remy_heavy_slash"
-intent_name = "重斩"
-color = 0
-number = 5
-stat = "damage"
-value = 8
+intent_name = "蜷身"
+behavior_type = 1
+color = 3
+number = 2
+stat = "shield"
+value = 5
 delay = 0

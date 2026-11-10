@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2")
+kind = "damage"
+target = "全体敌人"
+amount = 2
+scales_with_number = false
+
+[sub_resource type="Resource" id="Delay"]
+script = ExtResource("2")
+kind = "slow"
+target = "全体敌人"
+amount = 1
+scales_with_number = false
+excluded_intent_color = 1
+
+[resource]
+script = ExtResource("1")
+id = "zhouzhou_18"
+card_name = "雁落京门"
+belong_to = "Zhouzhou"
+rarity = 2
+card_type = 0
+art_path = "res://assets/cards/faces/Zhouzhou010.png"
+uno_color = 0
+base_number = 3
+number_spread = 0
+execute_once = true
+combo_damage_growth = true
+effects = Array[ExtResource("2")]([SubResource("Damage"), SubResource("Delay")])
+effect_display_template = "对全体敌人造成{0}点伤害，使意图非蓝色敌人倒计时加{1}。"

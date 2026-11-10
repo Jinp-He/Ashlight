@@ -77,3 +77,5 @@ crashlytics-build.properties
 # Claude Code local git worktrees (never commit — full repo copies)
 .claude/worktrees/
 __pycache__/
+
+/ASHLIGHT/AgentScripts/

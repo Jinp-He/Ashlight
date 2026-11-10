@@ -21,6 +21,13 @@ var order: int = 0
 ## 关联的卡牌静态数据（由 HandManager 从 CardDatabase 填充），打出时依次执行原子效果。
 var data: CardData = null
 var is_flashback: bool = false
+## 每个手牌实例独立；普通抽牌和新闪回均从 0 开始，不写回 CardData。
+var charge_points: int = 0
+
+func add_charge(amount: int) -> void:
+	if is_instance_valid(data) and data.has_charge:
+		charge_points = maxi(0, charge_points + amount)
+
 ## 布局还原用：base_z=常态层级（layout 写入），home_pos=常态位置（layout 写入）。
 ## 悬停时临时抬升 z/位移，离开后恢复到这两个值。
 var base_z: int = 0
@@ -70,7 +77,7 @@ func _cache_native() -> void:
 		return
 	_native_cached = true
 	if is_instance_valid(card):
-		var base := card.get_node_or_null("Base") as TextureRect
+		var base := card.get_node_or_null("VisualGroup/Base") as TextureRect
 		if is_instance_valid(base) and is_instance_valid(base.texture):
 			_native_size = base.texture.get_size()
 	if _native_size == Vector2.ZERO:
@@ -147,5 +154,8 @@ func set_select_frame(_dashed: bool, color_a: Color, _color_b: Color) -> void:
 
 ## 取消/打出/切换配对卡时停止呼吸灯（在途的扩散环会自然淡出销毁）。
 func clear_select_frame() -> void:
+	if is_flashback and state == STATE_HAND and not flyin_lock:
+		set_select_frame(false, Color.WHITE, Color.WHITE)
+		return
 	if is_instance_valid(_breathing):
 		_breathing.stop_pulsing()

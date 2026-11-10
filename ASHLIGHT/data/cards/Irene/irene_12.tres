@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=5 format=3]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2")
+kind = "apply_status"
+target = "选中敌人"
+amount = 7
+scales_with_number = false
+status_id = "poison"
+combo_slow_growth = true
+[sub_resource type="Resource" id="Effect1"]
+script = ExtResource("2")
+kind = "apply_status"
+target = "自身"
+amount = 2
+scales_with_number = false
+status_id = "poison"
+[resource]
+script = ExtResource("1")
+id = "irene_12"
+card_name = "恶毒宣誓"
+belong_to = "Irene"
+rarity = 1
+card_type = 1
+art_path = "res://assets/cards/faces/Irene004.png"
+uno_color = 0
+base_number = 2
+number_spread = 0
+execute_once = true
+effects = Array[ExtResource("2")]([SubResource("Effect0"), SubResource("Effect1")])

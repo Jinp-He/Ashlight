@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://battle/scripts/cards/card_data.gd" id="1"]
+[ext_resource type="Script" path="res://battle/scripts/cards/card_effect.gd" id="2"]
+
+[sub_resource type="Resource" id="Damage"]
+script = ExtResource("2")
+kind = "damage"
+target = "选中敌人"
+amount = 11
+scales_with_number = false
+
+[resource]
+script = ExtResource("1")
+id = "zhouzhou_20"
+card_name = "十步杀一人"
+belong_to = "Zhouzhou"
+rarity = 3
+card_type = 0
+art_path = "res://assets/cards/faces/Zhouzhou013.png"
+uno_color = 1
+base_number = 5
+number_spread = 0
+execute_once = true
+combo_damage_growth = true
+records_damage = true
+effects = Array[ExtResource("2")]([SubResource("Damage")])
+effect_display_template = "对敌人造成{0}点伤害，伤害随本场战斗同名卡最高伤害更新。"

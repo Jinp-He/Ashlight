@@ -54,7 +54,7 @@ func run() -> void:
 	await run_card(sample, "Remy", 2)
 	check(remy.get_current_hp() == 488 and rocket.get_shield() == 6, "Combo repeats selected damage and self shield independently")
 	check(remy.get_buff_stacks("poison") == 2 and hm._hand_count() == 2, "Combo repeats status and draw effects")
-	check(irene.get_shield() == 0, "self shield does not leak onto other allies")
+	check(irene.get_shield() == 6, "self shield updates shared team shield")
 	# Order is observable because healing is capped at max HP.
 	var ordered := CardData.new()
 	ordered.effects = [atom("heal", "自身", 5), atom("damage", "自身", 5)]
@@ -75,7 +75,7 @@ func run() -> void:
 	shield_atom.exclude_self = true
 	area.effects = [shield_atom]
 	await run_card(area, "Remy")
-	check(rocket.get_shield() == 0 and irene.get_shield() == 2, "allied area effect can exclude caster")
+	check(rocket.get_shield() == 2 and irene.get_shield() == 2, "legacy exclude-self area effect resolves once to shared team")
 	var timer := CardData.new()
 	timer.effects = [atom("haste", "选中敌人", 2), atom("slow", "选中敌人", 5)]
 	br.rules.enemies.Remy = 10
@@ -89,7 +89,7 @@ func run() -> void:
 	check(remy.get_current_hp() == 0 and rocket.get_shield() == before_shield + 6, "dead target skips its effects; self effects continue across Combo")
 	var bad := CardData.new()
 	bad.effects = [atom("damage", "选中敌人", 1), atom("shield", "选中友方", 1)]
-	check(not bad.validation_errors().is_empty(), "incompatible manual targets produce validation errors")
+	check(bad.validation_errors().is_empty(), "enemy selection with automatic team defense is valid")
 	bad.effects = [atom("invalid", "自身", 1)]
 	check(not bad.validation_errors().is_empty(), "unknown effect cannot default to damage")
 	bad.effects = [null]
