@@ -27,6 +27,7 @@ func _ready() -> void:
 		_visual.add_child(_card)
 		_flip = preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
 		_visual.add_child(_flip); _flip.setup(_card); _flip.set_flip(0)
+		_flip._front.material.shader=preload("res://battle/scripts/rewards/reward_card.gdshader")
 		for side in [_flip._front,_flip._back]:
 			side.material.set_shader_parameter("x_rot",0.0)
 			side.material.set_shader_parameter("rect_size",Vector2(400,576))
@@ -58,7 +59,7 @@ func _build_aspect() -> void:
 func set_hover(value: bool) -> void:
 	if chosen: value=false
 	hovered=value; _outline.visible=false
-	if is_instance_valid(_flip):_flip._front.material.next_pass=_hover_outline if chosen or hovered else null
+	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("selection_outline",chosen or hovered)
 	elif is_instance_valid(_aspect_flag):_aspect_flag.material=_hover_outline if chosen else null
 	_target_pos=Vector2.UP*config.hover_lift if value and card_data!=null else Vector2.ZERO
 	_target_scale=config.hover_scale if value and card_data!=null else 1.0
@@ -71,6 +72,7 @@ func select(value: bool) -> void:
 	if value and is_instance_valid(_card): _card.play_card_flash(0,0.4)
 func _process(delta: float) -> void:
 	_clock+=delta
+	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("outline_pixels",config.choice_outline_pixels/maxf(absf(global_scale.x*_visual.scale.x),0.001))
 	if not is_instance_valid(_visual): return
 	_visual.position=_visual.position.lerp(_target_pos,1-exp(-14*delta))
 	_visual.scale=_visual.scale.lerp(Vector2.ONE*_target_scale,1-exp(-14*delta))
@@ -87,6 +89,7 @@ func contains(point: Vector2) -> bool:
 	return Rect2(-size/2,size).has_point(to_local(point))
 func depart(selected: bool, destination: Vector2) -> void:
 	ready_input=false;set_hover(false)
+	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("selection_outline",false)
 	# Tween 绑定候选节点，退出场景时随节点释放，不保留等待 finished 的协程。
 	var tween:=create_tween()
 	if card_data!=null:
