@@ -18,6 +18,7 @@ var _clock := 0.0
 var _phase := randf()*TAU
 var _white_material: ShaderMaterial
 var _hover_outline: ShaderMaterial
+var _dim_tween: Tween
 var _aspect_flag: Sprite2D
 func _ready() -> void:
 	_visual = Node2D.new(); add_child(_visual)
@@ -28,6 +29,7 @@ func _ready() -> void:
 		_flip = preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
 		_visual.add_child(_flip); _flip.setup(_card); _flip.set_flip(0)
 		_flip._front.material.shader=preload("res://battle/scripts/rewards/reward_card.gdshader")
+		_flip._front.material.set_shader_parameter("hover_dim",config.choice_hover_dim_alpha)
 		for side in [_flip._front,_flip._back]:
 			side.material.set_shader_parameter("x_rot",0.0)
 			side.material.set_shader_parameter("rect_size",Vector2(400,576))
@@ -65,7 +67,11 @@ func set_hover(value: bool) -> void:
 	_target_scale=config.hover_scale if value and card_data!=null else 1.0
 	if is_instance_valid(_ghost): _ghost.visible=value
 func set_hover_dimming(dimmed: bool) -> void:
-	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("hover_dim",config.choice_hover_dim_alpha if dimmed else 0.0)
+	if not is_instance_valid(_flip):return
+	if is_instance_valid(_dim_tween):_dim_tween.kill()
+	var material:ShaderMaterial=_flip._front.material
+	_dim_tween=create_tween()
+	_dim_tween.tween_property(material,"shader_parameter/hover_dim",config.choice_hover_dim_alpha if dimmed else 0.0,config.choice_dim_fade_in if dimmed else config.choice_dim_fade_out)
 
 func select(value: bool) -> void:
 	chosen=value; set_hover(false); _outline.visible=false

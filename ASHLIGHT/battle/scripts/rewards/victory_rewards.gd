@@ -180,7 +180,7 @@ func _process(_delta:float) -> void:
 	_hover_index=hit;_tip.hide_tooltip()
 	for i in candidates.size():
 		candidates[i].set_hover(i==hit and i!=selected_index)
-		candidates[i].set_hover_dimming(phase=="cards" and hit>=0 and i!=hit)
+		candidates[i].set_hover_dimming(phase=="cards" and i!=hit)
 	if hit>=0 and hit!=selected_index:
 		var candidate:=candidates[hit]
 		var sections:Array[Dictionary]=[]
