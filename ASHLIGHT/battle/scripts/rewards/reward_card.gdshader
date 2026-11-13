@@ -2,6 +2,7 @@ shader_type canvas_item;
 
 // 仅伪3D「透视形变」：把整张贴图当作刚性平面，按 x_rot/y_rot 做透视投影倾斜。
 // 不含任何光效/阴影/抠色逻辑——纯几何扭曲。鼠标跟随 ±15° 即为卡牌倾斜效果。
+uniform float hover_dim : hint_range(0.0, 1.0) = 0.0;
 uniform bool selection_outline = false;
 uniform float outline_pixels = 5.0;
 uniform float fov : hint_range(1, 179) = 90.0;     // 相机视场角（越小透视越夸张）
@@ -62,6 +63,7 @@ void fragment() {
 	// 把 3D 投影坐标反算回 UV 采样
 	vec2 uv = (p.xy / p.z).xy - o;
 	COLOR = texture(TEXTURE, uv + 0.5);
+	COLOR.rgb *= 1.0 - hover_dim;
 	if (selection_outline) {
 		vec2 center = uv + 0.5;
 		vec2 step_uv = TEXTURE_PIXEL_SIZE * outline_pixels;

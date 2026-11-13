@@ -59,11 +59,14 @@ func _build_aspect() -> void:
 func set_hover(value: bool) -> void:
 	if chosen: value=false
 	hovered=value; _outline.visible=false
-	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("selection_outline",chosen or hovered)
+	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("selection_outline",chosen)
 	elif is_instance_valid(_aspect_flag):_aspect_flag.material=_hover_outline if chosen else null
 	_target_pos=Vector2.UP*config.hover_lift if value and card_data!=null else Vector2.ZERO
 	_target_scale=config.hover_scale if value and card_data!=null else 1.0
 	if is_instance_valid(_ghost): _ghost.visible=value
+func set_hover_dimming(dimmed: bool) -> void:
+	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("hover_dim",config.choice_hover_dim_alpha if dimmed else 0.0)
+
 func select(value: bool) -> void:
 	chosen=value; set_hover(false); _outline.visible=false
 	_visual.position=Vector2.ZERO;_visual.scale=Vector2.ONE
@@ -88,7 +91,7 @@ func contains(point: Vector2) -> bool:
 	var size:=Vector2(400,576) if card_data!=null else Vector2(238,341)
 	return Rect2(-size/2,size).has_point(to_local(point))
 func depart(selected: bool, destination: Vector2) -> void:
-	ready_input=false;set_hover(false)
+	ready_input=false;set_hover(false);set_hover_dimming(false)
 	if is_instance_valid(_flip):_flip._front.material.set_shader_parameter("selection_outline",false)
 	# Tween 绑定候选节点，退出场景时随节点释放，不保留等待 finished 的协程。
 	var tween:=create_tween()

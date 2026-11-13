@@ -178,7 +178,9 @@ func _process(_delta:float) -> void:
 		if candidates[i].ready_input and candidates[i].contains(point):hit=i
 	if hit==_hover_index:return
 	_hover_index=hit;_tip.hide_tooltip()
-	for i in candidates.size():candidates[i].set_hover(i==hit and i!=selected_index)
+	for i in candidates.size():
+		candidates[i].set_hover(i==hit and i!=selected_index)
+		candidates[i].set_hover_dimming(phase=="cards" and hit>=0 and i!=hit)
 	if hit>=0 and hit!=selected_index:
 		var candidate:=candidates[hit]
 		var sections:Array[Dictionary]=[]

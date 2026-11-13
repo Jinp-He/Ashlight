@@ -19,6 +19,7 @@ extends Resource
 @export var xp_hover_scale: float = 1.4
 @export var xp_hover_bottom_margin: float = 1.0
 @export var choice_outline_pixels: float = 5.0
+@export var choice_hover_dim_alpha: float = 0.3
 @export var shade_fade_duration: float = 0.2
 @export var shade_fade_in_duration: float = 0.2
 @export var xp_expand_duration: float = 0.1
