@@ -6,7 +6,7 @@
 [ext_resource type="FontFile" path="res://assets/fonts/DouyinSansBold.otf" id="5"]
 [ext_resource type="Script" path="res://battle/tests/aspect_component_test.gd" id="6"]
 [sub_resource type="StyleBoxFlat" id="WhiteCircle"]
-bg_color = Color(1, 1, 1, 1)
+bg_color = Color(0, 0, 0, 1)
 corner_radius_top_left = 19
 corner_radius_top_right = 19
 corner_radius_bottom_left = 19
@@ -22,7 +22,7 @@ mouse_filter = 2
 theme_override_styles/panel = SubResource("Background")
 [node name="AspectGroup" type="Node2D" parent="."]
 position = Vector2(800, 450)
-scale = Vector2(1.4, 1.4)
+scale = Vector2(1, 1)
 [node name="Flag" type="Sprite2D" parent="AspectGroup"]
 texture = ExtResource("2")
 [node name="Base" type="Sprite2D" parent="AspectGroup"]
