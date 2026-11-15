@@ -48,16 +48,17 @@ func set_top(color: int, number: int) -> void:
 	br.rules.place_player_card(color, number, "", "测试")
 
 func test_monster_resources() -> void:
-	var expected: Dictionary = {"Remy": [30.0, 3, 2], "Wangg": [30.0, 4, 3], "Grey": [40.0, 5, 3], "Mafe": [99.0, 3, 3]}
+	var expected: Dictionary = {"Remy": [40.0, 3, 2], "Wangg": [60.0, 5, 3], "Grey": [50.0, 5, 3], "Mafe": [100.0, 5, 3]}
 	for uid in expected:
 		var data := MonsterDatabase.get_data(uid)
 		var values: Array = expected[uid]
 		check(data != null and data.validation_errors().is_empty() and data.max_hp == values[0] and data.countdown == values[1] and data.intents.size() == values[2], uid + " monster tres preserves HP, countdown and intent count")
 	var grey_config := MonsterDatabase.get_data("Grey")
-	var mafe_config := MonsterDatabase.get_data("Mafe")
-	check(grey_config.intents[1] == mafe_config.intents[1], "different monsters can share the same intent resource")
-	check(grey_config.intent_at(0).intent_name == "重锤" and grey_config.intent_at(1).intent_name == "粉碎" and grey_config.intent_at(2).stat == "shield" and grey_config.intent_at(3) == grey_config.intent_at(0), "intent array cycles in resource order")
-	var smash := grey_config.intent_at(1)
+	var shared := grey_config.duplicate() as MonsterData
+	shared.id = "GreyCopy"
+	check(shared.intents[1] == grey_config.intents[1] and shared.validation_errors().is_empty(), "different monsters can share the same intent resource")
+	check(grey_config.intent_at(0).intent_name == "架盾" and grey_config.intent_at(1).intent_name == "撞击" and grey_config.intent_at(2).intent_name == "重压" and grey_config.intent_at(3) == grey_config.intent_at(0), "intent array cycles in resource order")
+	var smash := load("res://data/enemy_intents/heavy_smash.tres") as EnemyIntentData
 	check(smash.value == 16 and smash.color == 0 and smash.number == 7 and smash.delay == 1, "smash tres retains its attack and recovery delay")
 	var first := smash.make_payload("Grey", "Irene")
 	var second := smash.make_payload("Mafe", "Rocket")
@@ -92,10 +93,10 @@ func run() -> void:
 	var starting_decks: Array[StartingDeckData] = []
 	for role in ["zhouzhou", "irene", "rocket"]:
 		var config := load("res://data/starting_decks/%s.tres" % role) as StartingDeckData
-		check(config != null and config.validation_errors().is_empty() and config.cards.size() == 5, role + " starter tres contains 5 valid cards")
+		check(config != null and config.validation_errors().is_empty() and config.cards.size() == 3, role + " starter tres contains 3 valid cards")
 		starting_decks.append(config)
 	var solo := DeckManager.new()
-	check(solo.init_decks(["Irene", "Irene"]) and solo.draw_pile.size() == 5 and not solo.has_role("Rocket"), "only present roles contribute their starting deck; duplicate roles do not double cards")
+	check(solo.init_decks(["Irene", "Irene"]) and solo.draw_pile.size() == 3 and not solo.has_role("Rocket"), "only present roles contribute their starting deck; duplicate roles do not double cards")
 	var custom := starting_decks[0].duplicate() as StartingDeckData
 	custom.cards = [starting_decks[0].cards[0], starting_decks[0].cards[0]]
 	var custom_deck := DeckManager.new()
@@ -103,8 +104,8 @@ func run() -> void:
 	var copies := custom_deck.draw_common(2)
 	check(copies.size() == 2 and copies[0] == copies[1], "repeated CardData references produce multiple drawable copies")
 	custom_deck.discard_card("Zhouzhou", copies[0])
-	check(custom.cards.size() == 2 and starting_decks[0].cards.size() == 5, "drawing and discarding never mutate starter resource arrays")
-	check(custom_deck.init_decks(["Rocket"]) and custom_deck.draw_pile.size() == 5 and custom_deck.discard_pile.is_empty() and not custom_deck.has_role("Zhouzhou"), "reinitializing replaces roles and clears old discard pile")
+	check(custom.cards.size() == 2 and starting_decks[0].cards.size() == 3, "drawing and discarding never mutate starter resource arrays")
+	check(custom_deck.init_decks(["Rocket"]) and custom_deck.draw_pile.size() == 3 and custom_deck.discard_pile.is_empty() and not custom_deck.has_role("Zhouzhou"), "reinitializing replaces roles and clears old discard pile")
 	var invalid := StartingDeckData.new()
 	check(not invalid.validation_errors().is_empty(), "empty starter config is rejected")
 	invalid.cards = [null]
@@ -119,25 +120,25 @@ func run() -> void:
 	await get_tree().create_timer(0.8).timeout
 	var rules := br.rules
 	check(hm._hand_count() == 5, "opening is exactly 5 shared cards")
-	check(hm.deck.draw_pile.size() == 9 and hm.deck.discard_pile.size() == 1, "15-card deck: 5 drawn, 1 flipped as starting top")
-	check(not rules.top.is_empty() and rules.top.source == "player", "starting top is a flipped player card")
+	check(hm.deck.draw_pile.size() == 4 and hm.deck.discard_pile.is_empty(), "9-card deck: 5 drawn, no card flipped for the opening top")
+	check(rules.top.source == "opening" and int(rules.top.color) == ChainRules.ANY_COLOR and int(rules.top.number) == 0 and rules.can_play(0, 5) and rules.can_play(3, 1), "opening top is black 0 and accepts any card")
 	check(rules.combo == 1, "combo starts at ×1")
 	var initial := rules.enemies.duplicate()
 	await get_tree().create_timer(0.2).timeout
 	check(rules.ticks == 0 and rules.enemies == initial, "idle does not advance countdowns")
-	check(initial.Remy == 3 and initial.Wangg == 4 and initial.Grey == 5, "enemy countdowns come from MonsterDatabase")
-	check(br._find_unit("Remy").get_current_hp() == 30 and br._find_unit("Grey").get_current_hp() == 40, "battle HP initializes from monster resources")
+	check(initial.Remy >= 2 and initial.Remy <= 4 and initial.Wangg >= 5 and initial.Wangg <= 7 and initial.Grey >= 5 and initial.Grey <= 7 and initial.Wangg != initial.Grey, "enemy countdowns roll from speed tier without collisions")
+	check(br._find_unit("Remy").get_current_hp() == 40 and br._find_unit("Grey").get_current_hp() == 50, "battle HP initializes from monster resources")
 	var grey_unit := br._find_unit("Grey")
 	var grey_data := MonsterDatabase.get_data("Grey")
 	grey_unit.ai_memory["v2_actions"] = 1
 	br._v2_next_intent(grey_unit)
-	var smash_snapshot: Dictionary = br._v2_intents.Grey
-	check(smash_snapshot.name == "粉碎" and smash_snapshot.value == 16 and smash_snapshot.delay == 1 and br.resolve_targets(grey_unit, "敌方").has(br._find_unit(smash_snapshot.target)), "resource intent is previewed with a locked living opponent")
-	br._end_enemy_action(smash_snapshot)
-	check(rules.enemies.Grey == 6 and br._v2_intents.Grey.stat == "shield" and br._v2_intents.Grey.target == "Grey", "finishing smash adds recovery delay and previews next self-shield intent")
+	var bash_snapshot: Dictionary = br._v2_intents.Grey
+	check(bash_snapshot.name == "撞击" and bash_snapshot.value == 6 and bash_snapshot.target == br._team.unit_id, "resource intent is previewed against the shared team")
+	br._end_enemy_action(bash_snapshot)
+	check(rules.enemies.Grey >= 5 and rules.enemies.Grey <= 7 and rules.enemies.Grey != rules.enemies.Wangg and br._v2_intents.Grey.name == "重压", "finishing an action rerolls a free tier countdown and previews the next intent")
 	br._end_enemy_action(br._v2_intents.Grey)
-	check(rules.enemies.Grey == 5 and br._v2_intents.Grey.name == "重锤", "finishing shield restores base countdown and wraps resource intent cycle")
-	check(grey_data.countdown == 5 and grey_data.intents[1].delay == 1, "battle countdowns and cycle progress do not modify monster or intent resources")
+	check(br._v2_intents.Grey.name == "架盾" and br._v2_intents.Grey.stat == "timed_shield" and br._v2_intents.Grey.target == "Grey", "intent cycle wraps to the self-targeted shield")
+	check(grey_data.countdown == 5 and grey_data.intents[1].value == 6, "battle countdowns and cycle progress do not modify monster or intent resources")
 	grey_unit.ai_memory["v2_actions"] = 0
 	br._v2_next_intent(grey_unit)
 
@@ -148,10 +149,10 @@ func run() -> void:
 	check(r.can_play(0, 1) and r.can_play(1, 3) and not r.can_play(1, 2), "legal = same color or same current number")
 	r.combo_up()
 	check(not r.can_play(2, 2) and r.can_play(2, 3), "combo does not change card numbers")
-	r.combo_up(); r.combo_up(); r.combo_up()
-	check(r.combo == ChainRules.MAX_COMBO, "combo caps at ×4")
+	r.combo_up(); r.combo_up(); r.combo_up(); r.combo_up()
+	check(r.combo == 6, "combo has no cap")
 	r.combo_down()
-	check(r.combo == 3, "damage penalty lowers combo by one")
+	check(r.combo == 5, "combo_down lowers combo by one")
 	r.combo = 1
 	r.combo_down()
 	check(r.combo == 1, "damage penalty never reduces combo below ×1")
@@ -197,11 +198,12 @@ func run() -> void:
 	await br.draw_action()
 	check(hm._hand_count() == count + 1 and rules.ticks == ticks + 1 and rules.combo == 1, "draw: +1 card, countdown -1, combo cleared")
 
-	# --- 敌人归零当场出手：攻击立即命中，掉血使 Combo -1，倒计时从头开始 ---
+	# --- 敌人归零当场出手：攻击立即命中；敌牌接得上牌堆顶则 Combo +1，掉血不扣；倒计时重新随机 ---
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
 	rules.enemies.Remy = 1
 	rules.combo = 3
+	br._v2_intents.Remy = {"uid": "Remy", "name": "接牌测试", "stat": "damage", "value": 6, "color": 0, "number": 3, "target": br._team.unit_id}
 	var intent: Dictionary = br._v2_intents.Remy
 	var target := br._find_unit(intent.target)
 	target.reduce_shield(target.get_shield())
@@ -212,73 +214,61 @@ func run() -> void:
 	await play(make_card("重拳", 0, 3), "Grey")
 	check(rules.top.source == "enemy" and rules.top.uid == "Remy", "enemy at zero plays its card onto the pile top")
 	check(target.get_current_hp() == before - intent.value, "enemy attack lands immediately when its countdown hits 0")
-	check(rules.combo == 1, "actual HP damage resets combo from ×4 to ×1 after the play")
-	check(rules.enemies.Remy == 3 and br._countdown_labels.Remy.text == "3", "countdown restarts in full right after acting")
+	check(rules.combo == 5, "linking enemy card raises combo even when its attack deals HP damage")
+	check(rules.enemies.Remy >= 2 and rules.enemies.Remy <= 4 and br._countdown_labels.Remy.text == str(rules.enemies.Remy), "countdown rerolls within the speed tier right after acting")
 
-	# --- 护盾完全吸收不清空 Combo ---
+	# --- 敌牌接不上牌堆顶：Combo 断回 ×1，即使护盾完全挡住 ---
 	rules.enemies.Remy = 1
 	rules.combo = 3
-	intent = br._v2_intents.Remy
-	br._find_unit(intent.target).gain_shield(100)
+	br._v2_intents.Remy = {"uid": "Remy", "name": "断链测试", "stat": "damage", "value": 6, "color": 3, "number": 2, "target": br._team.unit_id}
+	br._team.gain_shield(100)
+	before = br._team.get_current_hp()
 	set_top(0, 3)
 	await play(make_card("重拳", 0, 3), "Grey")
-	check(rules.combo == 4, "attack fully absorbed by shield keeps the combo")
+	check(rules.combo == 1 and br._team.get_current_hp() == before, "non-linking enemy card breaks the combo even when fully blocked")
+	br._team.reduce_shield(br._team.get_shield())
 
-	# --- 反制牌：敌人的下一个动作是指定颜色攻击 → 反制并造成伤害 ---
-	check(card_named("截击").effect_text(2).contains("红色攻击"), "counter card text names the color it counters")
+	# --- 反制牌：按敌人行为类型（攻击 / 防御 / 状态）匹配，不看颜色 ---
+	check(card_named("截击").effect_text(2).contains("【反制】攻击"), "counter card text names the behavior it counters")
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
+	br._team.heal(1000)
+	br._team.reduce_shield(br._team.get_shield())
 	rules.enemies.Remy = 2
 	rules.combo = 1
-	intent = br._v2_intents.Remy
-	check(int(intent.color) == 0 and intent.stat == "damage", "Remy's next action is a red attack")
-	target = br._find_unit(intent.target)
-	var target_hp: float = target.get_current_hp() + target.get_shield()
+	br._v2_intents.Remy = {"uid": "Remy", "name": "反制测试", "stat": "damage", "value": 6, "color": 0, "number": 3, "target": br._team.unit_id}
+	var team_total: float = br._team.get_current_hp() + br._team.get_shield()
+	remy.reduce_shield(remy.get_shield())
 	var remy_hp: float = remy.get_current_hp()
 	set_top(0, 2)
 	await play(make_card("截击", 0, 2), "Irene")
 	check(rules.counters.size() == 1 and rules.enemies.Remy == 1, "counter card waits for the enemy's next action")
-	check(br._counter_label.text == "反制：红色攻击 → 5伤", "HUD lists the waiting counter")
+	check(br._counter_label.text == "反制：攻击 → 5伤", "HUD lists the waiting counter")
 	await br.draw_action()
-	check(rules.counters.is_empty() and target.get_current_hp() + target.get_shield() == target_hp, "matching red attack is countered")
+	check(rules.counters.is_empty() and br._team.get_current_hp() + br._team.get_shield() == team_total, "enemy attack is countered")
 	check(remy.get_current_hp() == remy_hp - 5, "counter deals 5 damage to the attacker")
-	check(rules.enemies.Remy == 3, "countered enemy still restarts its countdown")
+	check(rules.enemies.Remy >= 2 and rules.enemies.Remy <= 4, "countered enemy still rerolls its countdown")
 
-	# 颜色不符：反制作废，攻击照常命中。
+	# 敌人的下一个动作是防御：攻击反制作废，护盾照常生效。
 	rules.enemies.Remy = 2
-	intent = br._v2_intents.Remy
-	target = br._find_unit(intent.target)
-	target.reduce_shield(target.get_shield())
-	before = target.get_current_hp()
+	br._v2_intents.Remy = {"uid": "Remy", "name": "防御测试", "stat": "shield", "value": 5, "color": 3, "number": 2, "target": "Remy", "behavior_type": 1}
+	remy.reduce_shield(remy.get_shield())
 	set_top(1, 3)
 	await play(make_card("盾反", 1, 3), "Zhouzhou")
 	await br.draw_action()
-	check(rules.counters.is_empty() and target.get_current_hp() == before - intent.value, "non-matching counter is consumed and the attack lands")
+	check(rules.counters.is_empty() and remy.get_shield() == 5, "attack counter is consumed by a defense action, which still resolves")
 
-	# Combo ×2：反制触发两次，伤害翻倍；任意色反制对任意攻击生效。
+	# Combo ×2：反制登记两份，伤害翻倍。
 	rules.enemies.Remy = 2
 	rules.combo = 2
+	br._v2_intents.Remy = {"uid": "Remy", "name": "反制测试", "stat": "damage", "value": 6, "color": 0, "number": 3, "target": br._team.unit_id}
+	remy.reduce_shield(remy.get_shield())
 	remy_hp = remy.get_current_hp()
 	set_top(3, 1)
 	await play(make_card("拆招", 3, 1), "Irene")
 	check(rules.counters.size() == 2, "combo ×2 arms the counter twice")
 	await br.draw_action()
-	check(remy.get_current_hp() == remy_hp - 6, "any-color counter fires on any attack, 3 × 2 damage")
-
-	# 敌人的下一个动作不是攻击：反制同样被消耗。
-	var wangg := br._find_unit("Wangg")
-	wangg.ai_memory["v2_actions"] = 2
-	br._v2_next_intent(wangg)
-	for uid in rules.enemies:
-		rules.enemies[uid] = 50
-	rules.enemies.Wangg = 2
-	set_top(3, 1)
-	await play(make_card("拆招", 3, 1), "Irene")
-	var shield_before: float = wangg.get_shield()
-	await br.draw_action()
-	check(rules.counters.is_empty() and wangg.get_shield() == shield_before + 5 and rules.top.number == 2, "enemy shield action consumes counters and resolves immediately")
-	await br.draw_action()
-	check(rules.enemies.Wangg == 3, "enemy restarts its countdown right after acting (4, then 3)")
+	check(remy.get_current_hp() == remy_hp - 6, "both armed counters fire on the attack, 3 × 2 damage")
 
 	# --- 同时归零：从左到右在同一个动作里依次出手 ---
 	rules.enemies.Remy = 1
@@ -288,29 +278,28 @@ func run() -> void:
 	await br.draw_action()
 	check(rules.top.uid == right and rules.enemies.Remy > 0 and rules.enemies.Grey > 0, "simultaneous zero: both act in the same action, left first")
 
-	# --- 友方技能：放入接不上的牌，改写颜色 / 点数；不算动作，进入冷却 ---
+	# --- 友方技能：点击角色使用，不算动作，进入冷却 ---
 	for uid in rules.enemies:
 		rules.enemies[uid] = 50
 	clear_hand()
 	set_top(0, 3)
 	rules.combo = 3
+	for uid in ["Zhouzhou", "Irene", "Rocket"]:
+		rules.skill_cooldowns[uid] = 0
 	var stuck := make_card("速射", 1, 2)
-	var linkable := make_card("重拳", 0, 4)
-	check(not br.skill_ready("Rocket", linkable), "skills only take cards that cannot be played")
 	ticks = rules.ticks
-	check(br.use_skill("Rocket", stuck) and stuck.base_number == 3 and hm.is_playable(stuck), "Rocket +1: blue 2 becomes blue 3 and can link")
-	check(stuck.card._cost_label.text == "3", "card face shows the new number")
+	check(not hm.is_playable(stuck) and br.use_rocket_skill() and stuck.cost_color == 0 and stuck.card.cost_color == 0 and hm.is_playable(stuck), "Rocket recolors a hand card to the pile color so it can link")
 	check(rules.ticks == ticks and rules.combo == 3, "using a skill is not an action: no countdown, combo kept")
-	check(rules.skill_cooldowns.Rocket == 3 and not br.use_skill("Rocket", make_card("速射", 1, 1)), "used skill goes on cooldown")
-	var high := make_card("速射", 2, 4)
-	check(br.use_skill("Irene", high) and high.base_number == 3, "Irene -1: yellow 4 becomes yellow 3")
-	check(not AllySkills.can_apply("Irene", make_card("速射", 2, 1)), "Irene cannot lower a card below 1")
-	var tint := make_card("速射", 1, 5)
-	check(br.use_skill("Zhouzhou", tint) and tint.cost_color != 1 and tint.card.cost_color == tint.cost_color, "Zhouzhou recolors the card to a different color")
+	check(rules.skill_cooldowns.Rocket == 3 and not br.use_rocket_skill(), "used skill goes on cooldown")
+	var red_template := card_named("重拳")
+	hm.deck.draw_pile.append(red_template)
+	count = hm._hand_count()
+	check(br.use_irene_skill() and hm._hand_count() == count + 1 and hm._cards.back().is_flashback and hm._cards.back().data.uno_color == 0, "Irene adds a flashback copy matching the pile color")
+	hm.deck.draw_pile.erase(red_template)
+	check(br.use_zhouzhou_skill() and int(rules.top.color) == 1 and int(rules.top.number) == 3 and rules.skill_cooldowns.Zhouzhou == 4, "Zhouzhou turns the pile blue and keeps its number")
 	await br.draw_action()
-	check(rules.skill_cooldowns.Rocket == 2 and rules.skill_cooldowns.Irene == 2, "skill cooldowns tick down once per player action")
-	check(br._intent_target_labels.Rocket.text.contains("技能") and not br._intent_target_labels.Rocket.text.contains("冷却") and br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally skill description and countdown group show separate information")
-	check(br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Irene.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally countdown group shows skill cooldown")
+	check(rules.skill_cooldowns.Rocket == 2 and rules.skill_cooldowns.Irene == 2 and rules.skill_cooldowns.Zhouzhou == 3, "skill cooldowns tick down once per player action")
+	check(br._intent_target_labels.Rocket.text.contains("技能") and br._countdown_labels.Rocket.text == "2" and br._countdown_labels.Irene.text == "2" and br._countdown_labels.Zhouzhou.text == "3", "ally labels show skill description and cooldown separately")
 
 	# --- 手牌打空：奖励补到 5，Combo 保留、护盾保留、不额外推进倒计时 ---
 	clear_hand()
@@ -342,22 +331,18 @@ func run() -> void:
 	check(br._find_unit("Irene").get_shield() == irene_shield, "drawing above ten does not clear shields")
 	check(not br._draw_button.tooltip_text.contains("重抽"), "draw button no longer advertises full-hand redraw")
 
-	# --- 每次敌人攻击按实际掉血扣一级，部分护盾仍扣，最低 ×1 ---
-	var victim := br._find_unit("Irene")
-	victim.reduce_shield(victim.get_shield())
-	victim.gain_shield(1)
-	var victim_hp: float = victim.get_current_hp()
-	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
+	# --- 掉血不再扣 Combo；Combo 只由敌牌能否接上牌堆顶决定 ---
+	br._team.heal(1000)
+	br._team.reduce_shield(br._team.get_shield())
+	var team_hp_before: float = br._team.get_current_hp()
+	set_top(0, 2)
+	br._v2_intents.Remy = {"uid": "Remy", "name": "掉血测试", "stat": "damage", "value": 2, "color": 0, "number": 5, "target": br._team.unit_id}
 	rules.combo = 4
 	await br._enemy_play("Remy")
-	check(victim.get_current_hp() == victim_hp - 1 and rules.combo == 1 and victim.get_shield() == 0, "partially absorbed enemy attack consumes shield once and resets combo")
-	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
+	check(br._team.get_current_hp() == team_hp_before - 2 and rules.combo == 5, "HP damage no longer lowers combo; a same-color enemy card links")
+	br._v2_intents.Remy = {"uid": "Remy", "name": "掉血测试", "stat": "damage", "value": 2, "color": 3, "number": 4, "target": br._team.unit_id}
 	await br._enemy_play("Remy")
-	check(rules.combo == 1, "successive damaging enemy attacks leave combo at one")
-	rules.combo = 1
-	br._v2_intents.Remy = {"uid": "Remy", "name": "扣级测试", "stat": "damage", "value": 2, "color": 0, "number": 2, "target": "Irene"}
-	await br._enemy_play("Remy")
-	check(rules.combo == 1, "actual enemy attack cannot lower combo below ×1")
+	check(rules.combo == 1, "an enemy card that cannot link resets the combo")
 
 	var browser := br.get_node("CardDebugBrowser")
 	var tab := InputEventKey.new()
@@ -383,9 +368,8 @@ func run() -> void:
 	br.clock_busy = false
 	browser._input(tab)
 	check(not br.debug_card_browser_open and not browser._panel.visible, "TAB closes browser and restores battle input")
-	check((load("res://data/starting_decks/zhouzhou.tres") as StartingDeckData).cards[0].id == "zhouzhou_11"
-		and (load("res://data/starting_decks/zhouzhou.tres") as StartingDeckData).cards[4].id == "zhouzhou_15",
-		"Zhouzhou starter uses 11 through 15")
+	var zhouzhou_starter := (load("res://data/starting_decks/zhouzhou.tres") as StartingDeckData).cards.map(func(cd: CardData) -> String: return cd.id)
+	check(zhouzhou_starter == ["zhouzhou_11", "zhouzhou_11", "zhouzhou_12"], "Zhouzhou starter is Bengquan ×2 + Youshen")
 	var qianjun := load("res://data/cards/Zhouzhou/zhouzhou_16.tres") as CardData
 	for tier in range(1, 5):
 		rules.counters.clear()
@@ -425,7 +409,7 @@ func run() -> void:
 	var qianli := load("res://data/cards/Zhouzhou/zhouzhou_19.tres") as CardData
 	var qianli_intents := br._v2_intents.duplicate(true)
 	var qianli_timers := rules.enemies.duplicate()
-	check(qianli.rarity == 3 and qianli.roll_number() == 2 and qianli.uno_color == 1, "Qianli is epic fixed blue 2")
+	check(qianli.rarity == 3 and qianli.roll_number() == 2 and qianli.uno_color == 3, "Qianli is epic fixed green 2")
 	for tier in range(1, 5):
 		for uid in br._v2_intents:
 			br._v2_intents[uid].color = 0
@@ -463,7 +447,7 @@ func run() -> void:
 	var guanqi := load("res://data/cards/Zhouzhou/zhouzhou_17.tres") as CardData
 	var observe_saved := hm.deck.draw_pile.duplicate()
 	var blue_card := load("res://data/cards/Zhouzhou/zhouzhou_11.tres") as CardData
-	var green_card := load("res://data/cards/Zhouzhou/zhouzhou_12.tres") as CardData
+	var green_card := load("res://data/cards/Irene/irene_11.tres") as CardData
 	for tier in range(1, 5):
 		hm.deck.draw_pile.assign([blue_card, green_card, blue_card, green_card])
 		var count_before := hm._hand_count()
@@ -484,7 +468,7 @@ func run() -> void:
 	check(hm.deck.draw_pile.is_empty(), "empty observation does not reshuffle")
 	hm.deck.draw_pile.assign(observe_saved)
 	var tuna := load("res://data/cards/Zhouzhou/zhouzhou_15.tres") as CardData
-	check(tuna.rarity == 2 and tuna.roll_number() == 3 and tuna.uno_color == 1, "Tuna is rare fixed blue 3")
+	check(tuna.rarity == 2 and tuna.roll_number() == 4 and tuna.uno_color == 3, "Tuna is rare fixed green 4")
 	for tier in range(1, 5):
 		br._team.remove_buff("morale")
 		br._team.add_buff("morale", 2)
@@ -582,7 +566,8 @@ func run() -> void:
 	defense.scales_with_number = false
 	defense.hits = 2
 	support.effects = [defense]
-	check(br.v2_targets(support, br._find_unit("Rocket")) == [team], "team-only card confirms one canonical target")
+	var support_targets := br.v2_targets(support, br._find_unit("Rocket"))
+	check(support_targets.has(team) and support_targets.all(func(unit: UnitRoot) -> bool: return unit.unit_faction == "player"), "team-only card can be aimed at any living ally")
 	var team_before := team.get_shield()
 	await br._v2_play_effect({"uid": "Rocket", "selected": team.unit_id, "cd": support}, 1, 2)
 	check(team.get_shield() == team_before + 8, "party defense preserves hits and Combo without triple application")
@@ -608,6 +593,7 @@ func run() -> void:
 	check(team.get_buff_stacks("morale") == 3, "support card preserves morale")
 	team.remove_buff("morale")
 	var rocket := br._find_unit("Rocket")
+	var victim := br._find_unit("Irene")
 	var team_hp := rocket.get_current_hp()
 	rocket.reduce_shield(rocket.get_shield())
 	rocket.gain_shield(2)
@@ -636,12 +622,13 @@ func run() -> void:
 	deck.discard_card("Zhouzhou", cards[0])
 	check(deck.draw_common(1)[0] == cards[0], "discard pile reshuffles into shared draw pile")
 
-	# --- 胜利后锁定 ---
-	for unit in br._get_units():
-		if unit.unit_faction == "enemy" and unit.get_current_hp() > 0:
-			unit.damage(10000)
-			unit.die()
-	await get_tree().create_timer(0.5).timeout
+	# --- 胜利后锁定：首个敌人倒下会召来马匪替补，替补也倒下才算胜利 ---
+	for wave in 2:
+		for unit in br._get_units():
+			if unit.unit_faction == "enemy" and unit.get_current_hp() > 0:
+				unit.damage(10000)
+				unit.die()
+		await get_tree().create_timer(0.5).timeout
 	ticks = rules.ticks
 	await br.draw_action()
 	check(br._battle_ended and rules.ticks == ticks, "victory stops actions")
