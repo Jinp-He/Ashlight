@@ -53,9 +53,9 @@ mouse_filter = 2
 theme_override_styles/panel = SubResource("WhiteCircle")
 [node name="Name" type="Label" parent="AspectGroup"]
 offset_left = -99.0
-offset_top = -89.5
+offset_top = -99.5
 offset_right = 99.0
-offset_bottom = -47.5
+offset_bottom = -57.5
 theme_override_fonts/font = ExtResource("4")
 theme_override_font_sizes/font_size = 47
 text = "同袍同泽"
