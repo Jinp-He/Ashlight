@@ -44,6 +44,9 @@ func _ready() -> void:
 	_outline.points=PackedVector2Array([-size/2,Vector2(size.x/2,-size.y/2),size/2,Vector2(-size.x/2,size.y/2),-size/2])
 	_outline.visible=false; _visual.add_child(_outline)
 func _build_aspect() -> void:
+	_hover_outline.shader=preload("res://battle/scripts/rewards/aspect_outline.gdshader")
+	_hover_outline.set_shader_parameter("outline_thickness",3.0)
+	_visual.modulate=Color(0.5,0.5,0.5,1.0)
 	var data:Dictionary=AspectCatalog.ITEMS[aspect_id]
 	var component:=preload("res://battle/rewards/AspectOption.tscn").instantiate()
 	_visual.add_child(component)
@@ -65,8 +68,12 @@ func set_hover(value: bool) -> void:
 	_target_scale=config.hover_scale if value and card_data!=null else 1.0
 	if is_instance_valid(_ghost): _ghost.visible=value
 func set_hover_dimming(dimmed: bool) -> void:
-	if not is_instance_valid(_flip):return
 	if is_instance_valid(_dim_tween):_dim_tween.kill()
+	if not is_instance_valid(_flip):
+		var brightness:float=1.0-config.choice_hover_dim_alpha if dimmed else 1.0
+		_dim_tween=create_tween()
+		_dim_tween.tween_property(_visual,"modulate",Color(brightness,brightness,brightness,1.0),config.choice_dim_fade_in if dimmed else config.choice_dim_fade_out)
+		return
 	var material:ShaderMaterial=_flip._front.material
 	_dim_tween=create_tween()
 	_dim_tween.tween_property(material,"shader_parameter/hover_dim",config.choice_hover_dim_alpha if dimmed else 0.0,config.choice_dim_fade_in if dimmed else config.choice_dim_fade_out)

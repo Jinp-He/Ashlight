@@ -5,5 +5,5 @@ void fragment() {
 	float aa = fwidth(radius);
 	float alpha = 1.0 - smoothstep(0.5-aa,0.5,radius);
 	float border = smoothstep(0.5-border_fraction-aa,0.5-border_fraction,radius);
-	COLOR = vec4(vec3(1.0-border),alpha);
+	COLOR = vec4(vec3(1.0-border) * COLOR.rgb,alpha * COLOR.a);
 }
