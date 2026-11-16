@@ -26,12 +26,15 @@ scale = Vector2(1, 1)
 [node name="Flag" type="Sprite2D" parent="AspectGroup"]
 texture = ExtResource("2")
 [node name="Base" type="Sprite2D" parent="AspectGroup"]
+visible = false
 texture = ExtResource("1")
 [node name="Icon" type="TextureRect" parent="AspectGroup"]
 offset_left = -19.0
 offset_top = -170.5
 offset_right = 19.0
 offset_bottom = -132.5
+scale = Vector2(2, 2)
+pivot_offset = Vector2(19, 19)
 texture = ExtResource("3")
 expand_mode = 1
 stretch_mode = 5
