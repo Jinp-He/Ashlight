@@ -45,10 +45,10 @@ mouse_filter = 2
 [node name="WhiteCircle" type="Panel" parent="AspectGroup/Icon"]
 show_behind_parent = true
 material = SubResource("IconCircleMaterial")
-offset_left = -3.0
-offset_top = -3.0
-offset_right = 88.0
-offset_bottom = 88.0
+offset_left = -2.0
+offset_top = -2.0
+offset_right = 87.0
+offset_bottom = 87.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("WhiteCircle")
 [node name="Name" type="Label" parent="AspectGroup"]

@@ -1,5 +1,5 @@
 shader_type canvas_item;
-uniform float border_fraction = 0.03296703; // 白圆85px，外加双侧3px黑边；1倍显示。
+uniform float border_fraction = 0.03370787; // 白圆83px，外加双侧3px黑边；1倍显示。
 void fragment() {
 	float radius = length(UV - vec2(0.5));
 	float aa = fwidth(radius);
