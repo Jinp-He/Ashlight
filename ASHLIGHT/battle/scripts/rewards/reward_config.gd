@@ -3,7 +3,7 @@ extends Resource
 @export var rarity_weights: Array[Vector3] = [Vector3(90,10,0), Vector3(65,30,5), Vector3(45,45,10), Vector3(30,50,20)]
 @export var candidate_positions: PackedVector2Array = PackedVector2Array([Vector2(430,480),Vector2(800,480),Vector2(1170,480)])
 @export var card_scale: float = 0.72
-@export var aspect_scale: float = 1.4
+@export var aspect_scale: float = 1.0
 @export var card_entry_duration: float = 0.5
 @export var aspect_entry_duration: float = 0.3
 @export var hover_lift: float = 24.0

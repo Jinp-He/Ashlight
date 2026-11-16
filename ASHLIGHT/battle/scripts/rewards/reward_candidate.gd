@@ -44,19 +44,17 @@ func _ready() -> void:
 	_outline.points=PackedVector2Array([-size/2,Vector2(size.x/2,-size.y/2),size/2,Vector2(-size.x/2,size.y/2),-size/2])
 	_outline.visible=false; _visual.add_child(_outline)
 func _build_aspect() -> void:
-	var data: Dictionary = AspectCatalog.ITEMS[aspect_id]
-	for file in ["aspect_base.png", "flag_%02d.png" % randi_range(1,3)]:
-		var art := Sprite2D.new(); art.texture=load("res://assets/rewards/"+file); art.centered=false; art.position=-Vector2(238,341)/2; _visual.add_child(art)
-		if file.begins_with("flag_"):_aspect_flag=art
-	var icon:=TextureRect.new(); icon.texture=load("res://assets/rewards/aspect_%03d.png" % data.icon)
-	icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.position=Vector2(100,0)-Vector2(238,341)/2; icon.size=Vector2(38,38); icon.mouse_filter=Control.MOUSE_FILTER_IGNORE; _visual.add_child(icon)
-	var heading:=Label.new();heading.text=str(data.name);heading.position=Vector2(20,81)-Vector2(238,341)/2;heading.size=Vector2(198,42)
-	heading.add_theme_font_override("font",preload("res://assets/fonts/Biantao.ttf"));heading.add_theme_font_size_override("font_size",27);heading.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;heading.mouse_filter=Control.MOUSE_FILTER_IGNORE;_visual.add_child(heading)
-	var text:=RichTextLabel.new();text.bbcode_enabled=true;text.scroll_active=false;text.fit_content=false
-	text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;text.position=Vector2(40,155)-Vector2(238,341)/2;text.size=Vector2(158,98)
-	text.add_theme_font_override("normal_font",preload("res://assets/fonts/DouyinSansBold.otf"));text.add_theme_font_size_override("normal_font_size",14)
-	text.text="[center]"+str(data.description)+"[/center]";text.mouse_filter=Control.MOUSE_FILTER_IGNORE;_visual.add_child(text)
+	var data:Dictionary=AspectCatalog.ITEMS[aspect_id]
+	var component:=preload("res://battle/rewards/AspectOption.tscn").instantiate()
+	_visual.add_child(component)
+	_aspect_flag=component.get_node("Flag") as Sprite2D
+	_aspect_flag.texture=load("res://assets/rewards/flag_%02d.png" % randi_range(1,3))
+	var icon:=component.get_node("Icon") as TextureRect
+	icon.texture=load("res://assets/rewards/aspect_%03d.png" % data.icon)
+	icon.self_modulate=CardRoot.COST_COLORS[[0,1,3].pick_random()]
+	component.get_node("Name").text=str(data.name)
+	component.get_node("Effect").text="[center]"+str(data.description)+"[/center]"
+	component.get_node("Flavor").text=""
 
 func set_hover(value: bool) -> void:
 	if chosen: value=false
