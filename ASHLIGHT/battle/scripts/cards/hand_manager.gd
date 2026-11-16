@@ -379,6 +379,11 @@ func _spawn_card_for_role(cd: CardData, role: String, is_flashback: bool = false
 	hc.is_flashback = is_flashback         # 闪回副本标记
 	add_child(hc)            # 保留原卡牌构建和动画
 	hc.state = HandCard.STATE_HAND
+	var aspect_battle := _get_battle_root()
+	if cd.has_charge and RunProgress.has_aspect("rocket_preheat") and is_instance_valid(aspect_battle):
+		var rocket:UnitRoot=aspect_battle._find_unit("Rocket")
+		if is_instance_valid(rocket):hc.add_charge(rocket.get_mastery())
+	card.set_effect_text(_effect_text(hc))
 	if hc.is_flashback:
 		hc.set_select_frame(false, COLOR_SELECT_WHITE_A, COLOR_SELECT_WHITE_B)
 	return hc
@@ -1023,7 +1028,9 @@ func _effect_text(hc: HandCard) -> String:
 	var text: String = hc.data.effect_text(hc.base_number, _morale_bonus_for(hc.owner_group), _get_battle_root().rules.combo if is_instance_valid(_get_battle_root()) else 1, _get_battle_root().recorded_damage_for(hc.data) if is_instance_valid(_get_battle_root()) else 11)
 	var br := _get_battle_root()
 	if hc.data.rocket_number > 0 and is_instance_valid(br):
-		text = hc.data.rocket_text(hc.charge_points + (br._team.get_buff_stacks("charge") if hc.data.has_charge else 0), _morale_bonus_for(hc.owner_group), br.rules.combo, int(br._team.get_shield()), hc.charge_points)
+		var preview_charge:int=hc.charge_points + (br._team.get_buff_stacks("charge") if hc.data.has_charge else 0)
+		if hc.data.has_charge and RunProgress.has_aspect("rocket_calibrate"):preview_charge+=absi(br.effective_number(hc)-hc.base_number)
+		text = hc.data.rocket_text(preview_charge, _morale_bonus_for(hc.owner_group), br.rules.combo, int(br._team.get_shield()), hc.charge_points)
 	var owner := br._find_unit(hc.owner_group) if is_instance_valid(br) else null
 	if is_instance_valid(br) and (not is_instance_valid(owner) or owner.get_current_hp() <= 0):
 		text = "（角色已倒下，仅可接牌）"
@@ -1900,3 +1907,20 @@ func collect_for_rewards() -> void:
 		_recycle_victory_card(hc)
 	_hovered=null
 	await get_tree().create_timer(maxf(discard_flip_duration+discard_flight_duration,flashback_dissolve_duration)+0.1).timeout
+
+func draw_color_original(color: int, count: int = 1) -> void:
+	_ensure_decks()
+	var drawn:Array[HandCard]=[]
+	for cd in deck.draw_filtered(count,func(data:CardData)->bool:return data.uno_color==color):
+		var hc:=_spawn_card_for_role(cd,cd.belong_to)
+		hc.position=_flyin_origin();hc.scale=Vector2.ONE*hand_scale*0.5;hc.flyin_lock=true
+		_cards.append(hc);drawn.append(hc)
+	if not drawn.is_empty():_deal_cards(drawn);_refresh_inactive()
+func generate_template_flashback(template: CardData) -> void:
+	if template==null:return
+	var copy:=template.duplicate() as CardData
+	var hc:=_spawn_card_for_role(copy,copy.belong_to,true)
+	hc.position=_flyin_origin();hc.scale=Vector2.ONE*hand_scale*0.5;hc.flyin_lock=true
+	_cards.append(hc)
+	var drawn:Array[HandCard]=[hc]
+	_deal_cards(drawn);_refresh_inactive()

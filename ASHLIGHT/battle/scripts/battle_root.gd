@@ -32,6 +32,10 @@ var rules := ChainRules.new()
 var clock_busy: bool = false
 var _irene_passive_used: int = 0
 var summon: Dictionary = {}
+var _summon_serial: int = 0
+var _aspect_team_shield_previous: float = 0.0
+var _defer_sterilize := false
+var _sterilize_pending := false
 var _skill_panels: Dictionary = {}
 var _open_skill_uid: String = ""
 var debug_card_browser_open: bool = false
@@ -138,6 +142,8 @@ func _ready() -> void:
 		if unit.unit_faction == "enemy":
 			_enemy_shield_previous[unit.unit_id] = unit.get_shield()
 			unit._hp_component.shield_changed.connect(_on_enemy_shield_changed.bind(unit))
+	_aspect_team_shield_previous=_team.get_shield()
+	_team._hp_component.shield_changed.connect(_on_aspect_team_shield_changed)
 	_setup_team_hud()
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	hm.allow_inactive_selection = true
@@ -342,9 +348,13 @@ func _tick_poison(unit: UnitRoot) -> void:
 	var shield: float = unit.get_shield()
 	var absorbed: int = mini(stacks, int(shield))
 	if absorbed > 0:
+		if unit==_team:_defer_sterilize=true
 		unit.reduce_shield(float(absorbed))          # 护盾 -absorbed
 		unit.remove_buff_stacks("poison", absorbed)   # 中毒 -absorbed（1:1 抵消层数）
-		stacks -= absorbed
+		if unit==_team:
+			_defer_sterilize=false
+			if _sterilize_pending:_sterilize_pending=false;_apply_sterilize()
+		stacks = unit.get_buff_stacks("poison")
 		print("[BR-poison] %s 中毒结算：护盾抵消 %d 层（剩余层数=%d，护盾=%d）" % [unit.unit_id, absorbed, stacks, int(shield) - absorbed])
 	var tick_dealt: int = 0
 	if stacks > 0:
@@ -415,7 +425,7 @@ func _toggle_skill_panel(uid: String) -> void:
 	if _open_skill_uid != uid:
 		_close_skill_panel()
 		_open_skill_uid = uid
-		_skill_panels[uid].show_skill(AllySkills.get_skill(uid))
+		_skill_panels[uid].show_skill(_aspect_skill_description(uid))
 		return
 	_close_skill_panel()
 	if int(rules.skill_cooldowns.get(uid, 0)) > 0:
@@ -456,10 +466,12 @@ func _on_irene_buff_removed(unit: UnitRoot) -> void:
 		return
 	if _irene_passive_used >= maxi(0, irene.get_mastery()):
 		return
+	if int(rules.skill_cooldowns.get("Irene",0))<=0:return
 	_irene_passive_used += 1
 	_spawn_card_played_prompt("Irene", str(AllySkills.get_skill("Irene").passive), "player")
 	var before: int = int(rules.skill_cooldowns.get("Irene", 0))
 	rules.skill_cooldowns["Irene"] = maxi(0, before - 1)
+	if RunProgress.has_aspect("irene_gospel"):_team.gain_shield(5)
 	if before == 1:
 		_spawn_card_played_prompt("Irene", "技能就绪", "player")
 	_v2_refresh()
@@ -476,7 +488,7 @@ func use_irene_skill() -> bool:
 		message = "技能还在冷却"
 	elif rules.top.is_empty() or int(rules.top.color) < 0 or int(rules.top.color) >= ChainRules.COLOR_NAMES.size():
 		return false
-	elif not hand.deck.draw_pile.any(func(cd: CardData) -> bool: return cd.uno_color == int(rules.top.color)):
+	elif not (hand.deck.has_filtered(func(cd:CardData)->bool:return cd.uno_color==int(rules.top.color)) if RunProgress.has_aspect("irene_chain") else hand.deck.draw_pile.any(func(cd: CardData) -> bool: return cd.uno_color == int(rules.top.color))):
 		message = "牌库中没有与战场颜色相同的卡牌"
 	if not message.is_empty():
 		if message == "技能还在冷却":
@@ -487,7 +499,8 @@ func use_irene_skill() -> bool:
 	rules.skill_cooldowns["Irene"] = 3
 	_spawn_card_played_prompt("Irene", str(AllySkills.get_skill("Irene").name), "player")
 	hand.clear_selection()
-	hand.generate_color_flashbacks(int(rules.top.color), 1)
+	if RunProgress.has_aspect("irene_chain"):hand.draw_color_original(int(rules.top.color),1)
+	else:hand.generate_color_flashbacks(int(rules.top.color), 1)
 	_v2_refresh()
 	return true
 
@@ -552,6 +565,7 @@ func use_rocket_skill() -> bool:
 	hand.clear_selection()
 	hand.clear_skill_card()
 	var target: HandCard = candidates.pick_random()
+	if target.data.has_charge and RunProgress.has_aspect("rocket_supply"):target.add_charge(2)
 	target.cost_color = int(rules.top.color)
 	target.card.cost_color = target.cost_color
 	target.card._apply_cost()
@@ -596,6 +610,9 @@ func _finish_charge_play(payload: Dictionary) -> void:
 	payload.charge = 0
 	var played = payload.get("hand_card")
 	if is_instance_valid(played): played.charge_points = 0
+	if RunProgress.has_aspect("rocket_recycle"):
+		var rocket:=_find_unit("Rocket")
+		if is_instance_valid(rocket):_team.add_buff("charge",rocket.get_mastery(),1)
 
 func _find_unit(uid: String) -> UnitRoot:
 	var units := get_node_or_null("Units") as Node2D
@@ -770,7 +787,7 @@ func _v2_apply_resolved(effect: Dictionary) -> void:
 							if unit != source and unit.unit_faction == "enemy" and unit.get_current_hp() > 0:
 								recipients.append(unit)
 					for recipient in recipients:
-						recipient.add_buff(entry.id, stacks, 2, entry.name, entry.description)
+						recipient.add_buff(entry.id, stacks + (2 if RunProgress.has_aspect("irene_rain") else 0), 2, entry.name, entry.description)
 		"observe_blue":
 			var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
 			hand.observe_blue_cards(value)
@@ -919,9 +936,11 @@ func play_card(payload: Dictionary) -> void:
 	var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	var previous_charge_cards := hand.snapshot_charge_cards()
 	hand.expire_flashbacks()
-	_begin_charge_play(payload)
 	var adjustment_cost: int = absi(int(payload.get("original_base", payload.base)) - int(payload.base))
-	if adjustment_cost > 0: _team.remove_buff_stacks("adjustment", adjustment_cost)
+	if adjustment_cost > 0:
+		_team.remove_buff_stacks("adjustment", adjustment_cost)
+		if cd.has_charge and RunProgress.has_aspect("rocket_calibrate"):payload.charge=int(payload.get("charge",0))+adjustment_cost
+	_begin_charge_play(payload)
 	var number: int = payload.base
 	var times: int = rules.combo
 	# 合法牌打出时即更新牌堆顶，使火焰和点数与演出同步。
@@ -1273,7 +1292,7 @@ func _v2_refresh(_animated: bool = true) -> void:
 					ChainRules.color_name(card.color), card.number, card.name,
 					_display_name(card.target), "护盾" if card.stat == "shield" else "伤害", card.value]
 		elif unit.get_current_hp() > 0 and rules.skill_cooldowns.has(unit.unit_id):
-			var skill := AllySkills.get_skill(unit.unit_id)
+			var skill := _aspect_skill_description(unit.unit_id)
 			var cooldown: int = rules.skill_cooldowns[unit.unit_id]
 			# 血条上方：技能冷却/就绪，与敌方行动倒计时共用图标组。
 			text = "就绪" if cooldown == 0 else str(cooldown)
@@ -1329,7 +1348,9 @@ func _set_summon(kind: String, damage: int) -> void:
 		var old_id: String = summon.kind
 		summon.clear()
 		_team.remove_buff(old_id)
-	summon = {"kind": kind, "damage": damage, "remaining": 2 if kind == "summon_deer" else 3}
+		_grant_summon_flashback(old_id)
+	_summon_serial+=1
+	summon = {"instance":_summon_serial,"kind": kind, "damage": damage, "remaining": 2 if kind == "summon_deer" else 3}
 	_team.add_buff(kind, int(summon.remaining), 1, KeywordGlossary.name_of(kind), _summon_description())
 
 func _summon_description() -> String:
@@ -1342,6 +1363,13 @@ func _summon_description() -> String:
 	return JSON.stringify(sections)
 
 func _act_summon() -> void:
+	if summon.is_empty():return
+	var instance:int=int(summon.get("instance",0))
+	for i in (2 if RunProgress.has_aspect("irene_whip") else 1):
+		if summon.is_empty() or int(summon.get("instance",0))!=instance:break
+		await _act_summon_once()
+
+func _act_summon_once() -> void:
 	if summon.is_empty() or _battle_ended:
 		return
 	if _team.get_buff_stacks(summon.kind) <= 0:
@@ -1375,6 +1403,7 @@ func _act_summon() -> void:
 		if summon.remaining <= 0:
 			summon.clear()
 			_team.remove_buff(kind)
+			_grant_summon_flashback(kind)
 		else:
 			_team._buff_component.update_buff_details(kind, int(summon.remaining), _summon_description())
 	_check_battle_end()
@@ -1412,7 +1441,7 @@ func _apply_stat(stat: String, value: int, hits: int, targets: Array[UnitRoot], 
 			"morale", "charge", "adjustment":
 				target.add_buff(stat, value * maxi(hits, 1), 1)
 			"bleed", "poison", "vulnerable":
-				target.add_buff(stat, value * maxi(hits, 1), 2)
+				target.add_buff(stat, value * maxi(hits, 1) + (2 if target.unit_faction=="enemy" and is_instance_valid(caster) and caster.unit_faction=="player" and RunProgress.has_aspect("irene_rain") else 0), 2)
 
 func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 	var cd: CardData = payload.cd
@@ -1592,3 +1621,27 @@ func _settle_attack_morale(payload: Dictionary) -> void:
 	if spent > 0 and RunProgress.has_aspect("echo"):
 		rules.skill_cooldowns.Zhouzhou = maxi(0,int(rules.skill_cooldowns.get("Zhouzhou",0))-1)
 		_v2_refresh()
+
+func _grant_summon_flashback(kind: String) -> void:
+	if not RunProgress.has_aspect("irene_link") or _battle_ended:return
+	var id:String={"summon_fox":"irene_11","summon_deer":"irene_15","summon_snake":"irene_16"}.get(kind,"")
+	for cd in CardDatabase.new().get_all():
+		if cd.id==id:
+			var hand:=get_tree().get_first_node_in_group("hand_manager") as HandManager
+			hand.generate_template_flashback(cd);return
+func _on_aspect_team_shield_changed(value: float) -> void:
+	var emptied:bool=_aspect_team_shield_previous>0 and value<=0
+	_aspect_team_shield_previous=value
+	if not emptied or _battle_ended or not RunProgress.has_aspect("rocket_sterilize"):return
+	if _defer_sterilize:_sterilize_pending=true;return
+	_apply_sterilize()
+
+func _apply_sterilize() -> void:
+	for entry in _team._buff_component.debuff_snapshot():
+		var stacks:int=int(entry.stack)
+		_team.remove_buff_stacks(str(entry.id),floori(float(stacks)/2.0))
+
+func _aspect_skill_description(uid: String) -> Dictionary:
+	var info:Dictionary=AllySkills.get_skill(uid).duplicate()
+	if uid=="Irene" and RunProgress.has_aspect("irene_chain"):info.desc="抽取1张与战场颜色相同的原牌；候选不足时按需洗入弃牌堆。"
+	return info

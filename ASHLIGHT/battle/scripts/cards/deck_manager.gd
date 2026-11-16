@@ -77,3 +77,21 @@ func discard_card(_role: String, cd: CardData) -> void:
 
 func debug_status() -> String:
 	return "公共牌库[抽%d/弃%d]" % [draw_pile.size(), discard_pile.size()]
+
+## 有条件抽牌：候选不足时只洗回一次，原抽牌堆仍保留。
+func draw_filtered(count: int, predicate: Callable) -> Array[CardData]:
+	var out:Array[CardData]=[]
+	var recycled:=false
+	while out.size()<count:
+		var candidates:Array[int]=[]
+		for i in draw_pile.size():
+			if predicate.call(draw_pile[i]):candidates.append(i)
+		if candidates.is_empty():
+			if recycled or discard_pile.is_empty():break
+			draw_pile.append_array(discard_pile);discard_pile.clear();draw_pile.shuffle();recycled=true
+			continue
+		var index:int=candidates.pick_random()
+		out.append(draw_pile[index]);draw_pile.remove_at(index)
+	return out
+func has_filtered(predicate: Callable) -> bool:
+	return draw_pile.any(predicate) or discard_pile.any(predicate)

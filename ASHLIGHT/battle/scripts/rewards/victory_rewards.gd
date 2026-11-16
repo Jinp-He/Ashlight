@@ -112,7 +112,7 @@ func _finish() -> void:
 	RunProgress.save_deck(hand)
 func _generate() -> Array:
 	if phase=="cards":return config.sample_cards(active_role,int(RunProgress.roles[active_role].level))
-	if active_role=="Zhouzhou":return AspectCatalog.sample()
+	if active_role in ["Zhouzhou","Irene","Rocket"]:return AspectCatalog.sample(3,active_role)
 	return []
 func _open_choice() -> void:
 	busy=true;selected_index=-1;_hover_index=-1;_tip.hide_tooltip();
@@ -250,7 +250,7 @@ func assign_experience(uid:String) -> bool:
 		RunProgress.battle.used_roles.append(uid)
 		RunProgress.battle.queue.append({"role":uid,"phase":"cards"})
 	for level in range(old_level+1,unit.current_level+1):
-		if uid=="Zhouzhou":RunProgress.battle.queue.append({"role":uid,"phase":"aspects"})
+		if uid in ["Zhouzhou","Irene","Rocket"]:RunProgress.battle.queue.append({"role":uid,"phase":"aspects"})
 	if unit.current_level>old_level and is_instance_valid(unit._upgrade_anim) and unit._upgrade_anim.is_playing():
 		await unit._upgrade_anim.animation_finished
 	if not is_inside_tree():return true
