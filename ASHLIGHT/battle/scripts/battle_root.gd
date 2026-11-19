@@ -877,24 +877,24 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 					if not summon.is_empty() and int(summon.remaining) >= remaining: break
 				continue
 			if effect.stat == "mourn":
-				effect.value *= maxi(1, times)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 				await _mourn(effect, times)
 				damage_resolved = true
 				continue
 			if atom.kind in ["summon_fox", "summon_deer", "summon_snake"]:
 				effect.value = atom.summon_damage(morale_bonus, times)
 			if atom.combo_linear_growth:
-				effect.value *= maxi(1, times)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 			if cd.combo_damage_growth and effect.stat == "damage":
-				effect.value *= maxi(times, 1)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 			if atom.combo_cautious_growth:
-				effect.value += floori(float(maxi(times, 1) - 1) / 3.0)
+				effect.value += ComboGrowth.increase(times,3)
 			if atom.combo_shield_compensation:
-				effect.value = floori(float(atom.amount * (maxi(times, 1) - 1)) / 3.0)
+				effect.value = ComboGrowth.increase(times,3,atom.amount)
 				if effect.value == 0:
 					continue
 			if effect.stat == "attack_flashback" or atom.combo_slow_growth:
-				effect.value += floori(float(maxi(times, 1) - 1) / 2.0)
+				effect.value += ComboGrowth.increase(times,2)
 			var presentation: CutsceneGroup2 = null
 			if trigger == 0:
 				var display := effect.duplicate()
@@ -909,7 +909,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 			elif cd.blue_counter_flashback:
 				rules.counters.append({"uid": caster.unit_id, "color": 1, "value": 0,
 					"name": cd.card_name, "combo": maxi(times, 1),
-					"blue_flashback": 1 + floori(float(maxi(times, 1) - 1) / 2.0)})
+					"blue_flashback": 1 + ComboGrowth.increase(times,2)})
 			else:
 				_v2_apply_resolved(effect)
 				if cd.records_damage and effect.stat == "damage":
@@ -1002,7 +1002,7 @@ func _counter_attack(enemy: UnitRoot, counters: Array[Dictionary]) -> void:
 	var total: int = 0
 	for counter in counters:
 		if counter.get("morale_on_success", false):
-			total += (int(counter.value) + _morale_bonus(_team)) * int(counter.combo)
+			total += ComboGrowth.scale_value(int(counter.value) + _morale_bonus(_team),int(counter.combo))
 		else:
 			total += int(counter.value)
 		if counter.has("adjustment"):
@@ -1265,7 +1265,7 @@ func _v2_refresh_hud() -> void:
 			elif counter.has("blue_flashback"):
 				lines.append("反制：%s → %d张蓝色闪回" % [behavior, counter.blue_flashback])
 			elif counter.get("morale_on_success", false):
-				lines.append("反制：%s → %d伤" % [behavior, (int(counter.value) + _morale_bonus(_team)) * int(counter.combo)])
+				lines.append("反制：%s → %d伤" % [behavior, ComboGrowth.scale_value(int(counter.value) + _morale_bonus(_team),int(counter.combo))])
 			else:
 				lines.append("反制：%s → %d伤" % [behavior, counter.value])
 		_counter_label.text = "\n".join(lines)
@@ -1456,32 +1456,32 @@ func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 	var damage := 0
 	var hits := 1
 	match n:
-		11: damage = (2 + q + morale) * combo; hits = 2
-		12: await _rocket_shield((10 if q > 3 else 5) * combo, caster)
-		13: rules.counters.append({"uid": payload.uid, "value": 0, "behavior_type": 1, "adjustment": 1 + floori(float(combo - 1) / 3), "name": cd.card_name})
+		11: damage = ComboGrowth.scale_value(2 + q + morale,combo); hits = 2
+		12: await _rocket_shield(2 * ComboGrowth.scale_value(5,combo) if q > 3 else ComboGrowth.scale_value(5,combo), caster)
+		13: rules.counters.append({"uid": payload.uid, "value": 0, "behavior_type": 1, "adjustment": 1 + ComboGrowth.increase(combo,3), "name": cd.card_name})
 		14, 17:
 			var candidates := hand.snapshot_charge_cards()
 			if n == 14 and not candidates.is_empty():
 				var target: HandCard = candidates.pick_random()
 				target.add_charge(mini(floori(float(q) / 2), 3))
 			elif n == 17 and q > 3:
-				for target in candidates: target.add_charge(2 + floori(float(combo - 1) / 2))
+				for target in candidates: target.add_charge(2 + ComboGrowth.increase(combo,2))
 		15:
 			var spent: int = mini(5, int(_team.get_shield()))
 			_team.reduce_shield(spent)
-			damage = (5 + morale) * combo + spent
-		16: damage = (7 + morale) * combo
+			damage = ComboGrowth.scale_value(5 + morale,combo) + spent
+		16: damage = ComboGrowth.scale_value(7 + morale,combo)
 		18:
 			var total := 0
 			for target in hand.snapshot_charge_cards():
 				total += target.charge_points
 				target.charge_points = 0
 			_team.add_buff("charge", floori(float(total) / 2), 1)
-			await _rocket_shield(floori(float(7 * (combo - 1)) / 3), caster)
-		19: damage = (6 + morale) * combo; hits = 1 + q
+			await _rocket_shield(ComboGrowth.increase(combo,3,7), caster)
+		19: damage = ComboGrowth.scale_value(6 + morale,combo); hits = 1 + q
 		20:
 			_team.add_buff("adjustment", 2, 1)
-			await _rocket_shield(floori(float(11 * (combo - 1)) / 3), caster)
+			await _rocket_shield(ComboGrowth.increase(combo,3,11), caster)
 	if damage > 0 and hits > 0:
 		var effect := _v2_resolve_effect(payload, cd.effects[0], int(payload.base), morale)
 		if not effect.is_empty() and not effect.targets.is_empty():

@@ -46,23 +46,23 @@ func keyword_names() -> Array[String]:
 
 func summon_damage(morale: int, combo: int) -> int:
 	if kind == "summon_snake":
-		return ceili(float(amount) * maxi(1, combo) / 3.0)
+		return ceili(float(amount * ComboGrowth.numerator(combo)) / 60.0)
 	if kind == "summon_fox":
-		return ceili(float(amount + morale) * maxi(1, combo) / 3.0)
-	return ceili((float(amount) / 3.0 + morale) * maxi(1, combo) / 2.0)
+		return ceili(float((amount + morale) * ComboGrowth.numerator(combo)) / 60.0)
+	return ceili(float((amount + 3 * morale) * ComboGrowth.numerator(combo)) / 120.0)
 
 func preview_value(number: int, morale_bonus: int = 0, damage_multiplier: int = 1, baseline_number: int = -1) -> String:
-	var n: Variant = value(number, morale_bonus) * (damage_multiplier if kind in ["damage", "mourn"] else 1)
+	var n: Variant = ComboGrowth.scale_value(value(number, morale_bonus),damage_multiplier) if kind in ["damage", "mourn"] else value(number,morale_bonus)
 	if combo_linear_growth:
-		n *= maxi(1, damage_multiplier)
+		n = ComboGrowth.scale_value(int(n),damage_multiplier)
 	if kind in ["summon_fox", "summon_deer", "summon_snake"]:
 		n = summon_damage(morale_bonus, damage_multiplier)
 	if combo_cautious_growth:
-		n += floori(float(maxi(damage_multiplier, 1) - 1) / 3.0)
+		n += ComboGrowth.increase(damage_multiplier,3)
 	if combo_shield_compensation:
-		n = floori(float(amount * (maxi(damage_multiplier, 1) - 1)) / 3.0)
+		n = ComboGrowth.increase(damage_multiplier,3,amount)
 	if kind == "attack_flashback" or combo_slow_growth:
-		n += floori(float(maxi(damage_multiplier, 1) - 1) / 2.0)
+		n += ComboGrowth.increase(damage_multiplier,2)
 	var baseline: int = 0 if combo_shield_compensation else value(number if baseline_number < 0 else baseline_number, 0)
 	if kind in ["summon_fox", "summon_deer", "summon_snake"]:
 		baseline = summon_damage(0, 1)
