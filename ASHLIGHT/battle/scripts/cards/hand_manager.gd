@@ -380,6 +380,11 @@ func _spawn_card_for_role(cd: CardData, role: String, is_flashback: bool = false
 	hc.is_flashback = is_flashback         # 闪回副本标记
 	add_child(hc)            # 保留原卡牌构建和动画
 	hc.state = HandCard.STATE_HAND
+	var aspect_battle := _get_battle_root()
+	if cd.has_charge and RunProgress.has_aspect("rocket_preheat") and is_instance_valid(aspect_battle):
+		var rocket:UnitRoot=aspect_battle._find_unit("Rocket")
+		if is_instance_valid(rocket):hc.add_charge(rocket.get_mastery())
+	card.set_effect_text(_effect_text(hc))
 	if hc.is_flashback:
 		hc.set_select_frame(false, COLOR_SELECT_WHITE_A, COLOR_SELECT_WHITE_B)
 	return hc
@@ -455,7 +460,13 @@ func _deal_cards(cards: Array[HandCard]) -> void:
 		var tween := create_tween()
 		if delay > 0.0:
 			tween.tween_interval(delay)
-			tween.tween_callback(_begin_deal.bind(hc, index, cards))
+			var card_ref: WeakRef = weakref(hc)
+			tween.tween_callback(func() -> void:
+				var live_card := card_ref.get_ref() as HandCard
+				if is_instance_valid(live_card):
+					_begin_deal(live_card, index, cards)
+				else:
+					_start_batch_flips(cards))
 		tween.tween_interval(draw_stagger)
 		tween.tween_callback(func() -> void: _deal_remaining = maxf(0, _deal_remaining - draw_stagger))
 
@@ -1025,7 +1036,9 @@ func _effect_text(hc: HandCard) -> String:
 	var text: String = hc.data.effect_text(hc.base_number, _morale_bonus_for(hc.owner_group), _get_battle_root().rules.combo if is_instance_valid(_get_battle_root()) else 1, _get_battle_root().recorded_damage_for(hc.data) if is_instance_valid(_get_battle_root()) else 11)
 	var br := _get_battle_root()
 	if hc.data.rocket_number > 0 and is_instance_valid(br):
-		text = hc.data.rocket_text(hc.charge_points + (br._team.get_buff_stacks("charge") if hc.data.has_charge else 0), _morale_bonus_for(hc.owner_group), br.rules.combo, int(br._team.get_shield()), hc.charge_points)
+		var preview_charge:int=hc.charge_points + (br._team.get_buff_stacks("charge") if hc.data.has_charge else 0)
+		if hc.data.has_charge and RunProgress.has_aspect("rocket_calibrate"):preview_charge+=absi(br.effective_number(hc)-hc.base_number)
+		text = hc.data.rocket_text(preview_charge, _morale_bonus_for(hc.owner_group), br.rules.combo, int(br._team.get_shield()), hc.charge_points)
 	var owner := br._find_unit(hc.owner_group) if is_instance_valid(br) else null
 	if is_instance_valid(br) and (not is_instance_valid(owner) or owner.get_current_hp() <= 0):
 		text = "（角色已倒下，仅可接牌）"
@@ -1870,3 +1883,53 @@ func _update_held_sway(delta: float, pointer: Vector2) -> void:
 		if not is_instance_valid(display): continue
 		display.pivot_offset = Vector2(display.size.x * 0.5, 0)
 		display.rotation = _held_sway_angle
+
+## 胜利专用：普通牌翻背后飞入牌库；内部牌堆归属保持原规则，闪回溶解。
+func _recycle_victory_card(hc: HandCard) -> void:
+	if hc.is_flashback:
+		_dissolve_flashback(hc)
+		return
+	_kill_card_tween(hc)
+	hc.state=HandCard.STATE_PLAYED;hc.clear_select_frame();hc.modulate=Color.WHITE
+	var visual:=preload("res://battle/scripts/cards/draw_flip_visual.gd").new()
+	hc.add_child(visual);visual.setup(hc.card);visual.set_flip(0.0)
+	for side in [visual._front,visual._back]:
+		side.material.set_shader_parameter("x_rot",0.0)
+		side.material.set_shader_parameter("rect_size",Vector2(400,576))
+	var tween:=hc.create_tween()
+	tween.tween_method(visual.set_flip,0.0,180.0,discard_flip_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(hc,"position",to_local(_flyin_origin()),discard_flight_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(hc,"scale",Vector2.ONE*hand_scale*0.3,discard_flight_duration)
+	tween.parallel().tween_property(hc,"rotation",0.0,discard_flight_duration)
+	tween.tween_callback(hc.queue_free)
+	_card_tweens[hc]=[tween]
+
+## 不触发出牌、抽牌或角色被动。
+func collect_for_rewards() -> void:
+	set_hand_locked(true);set_cutscene_lock(true)
+	_reset_keyword_hover();clear_selection(true)
+	for hc in _cards.duplicate():
+		if not is_instance_valid(hc):continue
+		_cards.erase(hc)
+		if not hc.is_flashback:deck.discard_card(hc.owner_group,hc.data)
+		_recycle_victory_card(hc)
+	_hovered=null
+	await get_tree().create_timer(maxf(discard_flip_duration+discard_flight_duration,flashback_dissolve_duration)+0.1).timeout
+
+func draw_color_original(color: int, count: int = 1) -> void:
+	_ensure_decks()
+	var drawn:Array[HandCard]=[]
+	for cd in deck.draw_filtered(count,func(data:CardData)->bool:return data.uno_color==color):
+		var hc:=_spawn_card_for_role(cd,cd.belong_to)
+		hc.position=_flyin_origin();hc.scale=Vector2.ONE*hand_scale*0.5;hc.flyin_lock=true
+		_cards.append(hc);drawn.append(hc)
+	if not drawn.is_empty():_deal_cards(drawn);_refresh_inactive()
+func generate_template_flashback(template: CardData) -> void:
+	if template==null:return
+	var copy:=template.duplicate() as CardData
+	var hc:=_spawn_card_for_role(copy,copy.belong_to,true)
+	hc.position=_flyin_origin();hc.scale=Vector2.ONE*hand_scale*0.5;hc.flyin_lock=true
+	_cards.append(hc)
+	var drawn:Array[HandCard]=[hc]
+	_deal_cards(drawn);_refresh_inactive()
+

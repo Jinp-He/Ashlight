@@ -55,22 +55,22 @@ func _raw_effect_text(number: int, morale_bonus: int, combo: int, recorded_damag
 			var multiplier := maxi(combo, 1) if combo_damage_growth or effect.kind == "attack_flashback" or effect.combo_shield_compensation or effect.combo_slow_growth or effect.combo_cautious_growth or effect.combo_linear_growth or effect.kind in ["summon_fox", "summon_deer", "summon_snake"] else 1
 			values.append(effect.preview_value(base_number if number < 0 else number, morale_bonus, multiplier, base_number))
 		if blue_status_counter:
-			values[0] = EffectTextFormat.changed_value((7 + morale_bonus) * maxi(combo, 1), 7)
+			values[0] = EffectTextFormat.changed_value(ComboGrowth.scale_value(7 + morale_bonus,combo), 7)
 		elif records_damage:
-			values[0] = EffectTextFormat.changed_value((recorded_damage + morale_bonus) * maxi(combo, 1), 11)
+			values[0] = EffectTextFormat.changed_value(ComboGrowth.scale_value(recorded_damage + morale_bonus,combo), 11)
 		elif blue_counter_flashback:
-			values[0] = EffectTextFormat.changed_value(1 + floori(float(maxi(combo, 1) - 1) / 2.0), 1)
+			values[0] = EffectTextFormat.changed_value(1 + ComboGrowth.increase(combo,2), 1)
 		return effect_display_template.format(values)
 	if blue_status_counter:
-		return "【反制】状态，成功时对其造成%s点【伤害】。" % EffectTextFormat.changed_value((7 + morale_bonus) * maxi(combo, 1), 7)
+		return "【反制】状态，成功时对其造成%s点【伤害】。" % EffectTextFormat.changed_value(ComboGrowth.scale_value(7 + morale_bonus,combo), 7)
 	if records_damage:
-		return "对一个敌人造成%s点【伤害】。本场最高伤害记录：%s，后续以记录作为基础伤害。" % [EffectTextFormat.changed_value((recorded_damage + morale_bonus) * maxi(combo, 1), 11), EffectTextFormat.changed_value(recorded_damage, 11)]
+		return "对一个敌人造成%s点【伤害】。本场最高伤害记录：%s，后续以记录作为基础伤害。" % [EffectTextFormat.changed_value(ComboGrowth.scale_value(recorded_damage + morale_bonus,combo), 11), EffectTextFormat.changed_value(recorded_damage, 11)]
 	if blue_counter_flashback:
-		return "【反制】攻击，成功时获得%s张蓝色牌【闪回】。" % EffectTextFormat.changed_value(1 + floori(float(maxi(combo, 1) - 1) / 2.0), 1)
+		return "【反制】攻击，成功时获得%s张蓝色牌【闪回】。" % EffectTextFormat.changed_value(1 + ComboGrowth.increase(combo,2), 1)
 	var lines := PackedStringArray()
 	for effect in effects:
 		if effect != null:
-			if effect.combo_shield_compensation and combo <= 1:
+			if effect.combo_shield_compensation and ComboGrowth.increase(combo, 3, effect.amount) == 0:
 				continue
 			lines.append(effect.text(base_number if number < 0 else number, morale_bonus, maxi(combo, 1) if combo_damage_growth or effect.kind == "attack_flashback" or effect.combo_shield_compensation or effect.combo_slow_growth or effect.combo_cautious_growth or effect.combo_linear_growth or effect.kind in ["summon_fox", "summon_deer", "summon_snake"] else 1, base_number))
 	return "；\n".join(lines)
@@ -120,17 +120,17 @@ func rocket_text(q: int, m: int, c: int, shield: int, displayed_charge: int = -1
 
 func _rocket_body(q: int, m: int, c: int, _shield: int) -> String:
 	c = maxi(1, c)
-	var extra: int = floori(float((7 if rocket_number == 18 else 11) * (c - 1)) / 3)
+	var extra: int = ComboGrowth.increase(c,3,7 if rocket_number==18 else 11)
 	var suffix := "获得%s点护盾。" % EffectTextFormat.changed_value(extra, 0) if extra > 0 else ""
 	match rocket_number:
-		11: return "对敌人造成2次%s点伤害，每层充能增加1点伤害。" % EffectTextFormat.changed_value((2 + q + m) * c, 2)
-		12: return "获得%s点护盾，【充能】大于3时，额外获得%s点护盾。" % [EffectTextFormat.changed_value(5*c, 5), EffectTextFormat.changed_value(5*c, 5)]
-		13: return "【反制】防御，成功时获得%s层【调节】。" % EffectTextFormat.changed_value(1 + floori(float(c-1)/3), 1)
+		11: return "对敌人造成2次%s点伤害，每层充能增加1点伤害。" % EffectTextFormat.changed_value(ComboGrowth.scale_value(2 + q + m,c), 2)
+		12: return "获得%s点护盾，【充能】大于3时，额外获得%s点护盾。" % [EffectTextFormat.changed_value(ComboGrowth.scale_value(5,c), 5), EffectTextFormat.changed_value(ComboGrowth.scale_value(5,c), 5)]
+		13: return "【反制】防御，成功时获得%s层【调节】。" % EffectTextFormat.changed_value(1 + ComboGrowth.increase(c,3), 1)
 		14: return "将本牌一半【充能】给随机一张非本牌的【充能】牌，最多3点。"
-		15: return "对全体敌人造成%s点伤害，并且消耗护盾，每消耗1点护盾额外造成1点伤害，最多额外消耗5点护盾。" % EffectTextFormat.changed_value((5+m)*c, 5)
-		16: return "对敌人造成%s点伤害，与战场点数相同时，获得1层【调节】。" % EffectTextFormat.changed_value((7+m)*c, 7)
-		17: return "【充能】大于3时，使所有留手的充能牌各获得%s点充能。" % EffectTextFormat.changed_value(2+floori(float(c-1)/2),2)
+		15: return "对全体敌人造成%s点伤害，并且消耗护盾，每消耗1点护盾额外造成1点伤害，最多额外消耗5点护盾。" % EffectTextFormat.changed_value(ComboGrowth.scale_value(5+m,c), 5)
+		16: return "对敌人造成%s点伤害，与战场点数相同时，获得1层【调节】。" % EffectTextFormat.changed_value(ComboGrowth.scale_value(7+m,c), 7)
+		17: return "【充能】大于3时，使所有留手的充能牌各获得%s点充能。" % EffectTextFormat.changed_value(2+ComboGrowth.increase(c,2),2)
 		18: return "清空所有手牌【充能】，转换其总量一半为【充能】buff。" + suffix
-		19: return "对敌人造成1次%s点伤害。每点【充能】额外造成一次伤害。" % EffectTextFormat.changed_value((6+m)*c,6)
+		19: return "对敌人造成1次%s点伤害。每点【充能】额外造成一次伤害。" % EffectTextFormat.changed_value(ComboGrowth.scale_value(6+m,c),6)
 		20: return "获得2层【调节】。" + suffix
 	return ""

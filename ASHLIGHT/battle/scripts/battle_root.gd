@@ -32,12 +32,20 @@ var rules := ChainRules.new()
 var clock_busy: bool = false
 var _irene_passive_used: int = 0
 var summon: Dictionary = {}
+var _summon_serial: int = 0
+var _aspect_team_shield_previous: float = 0.0
+var _defer_sterilize := false
+var _sterilize_pending := false
 var _skill_panels: Dictionary = {}
 var _open_skill_uid: String = ""
 var debug_card_browser_open: bool = false
 var skip_battle_animations: bool = false
 var _team: UnitRoot
 var _battle_ended: bool = false
+var _defeated_xp: int = 0
+var _rewarded_enemy_ids: Dictionary = {}
+var _victory_rewards: VictoryRewards
+@export var reward_config: RewardConfig = preload("res://data/rewards/default_rewards.tres")
 @export var reserve_fade_duration: float = 0.3
 var _mafe_reserve_used: bool = false
 var damage_records: Dictionary = {}
@@ -69,6 +77,7 @@ var _spot_uid: String = ""
 
 func _ready() -> void:
 	add_to_group("battle_root")
+	RunProgress.ensure()
 	_apply_layer_order()
 	_units = get_node("Units") as Node2D
 	cutscene_director = CUTSCENE_DIRECTOR_SCRIPT.new() as CutsceneDirector
@@ -89,6 +98,11 @@ func _ready() -> void:
 		unit.buffs_changed.connect(_on_unit_buffs_changed)
 		if unit.unit_faction == "player":
 			roles.append(unit.unit_id)
+			var growth: Dictionary = RunProgress.roles[unit.unit_id]
+			unit.current_level = int(growth.level)
+			unit.xp_to_next = float(unit.current_level * 2)
+			unit._xp_component.setup_stats(unit.xp_to_next, float(growth.xp), unit.current_level)
+
 			if not AllySkills.get_skill(unit.unit_id).is_empty():
 				rules.skill_cooldowns[unit.unit_id] = 0
 		else:
@@ -128,15 +142,20 @@ func _ready() -> void:
 		if unit.unit_faction == "enemy":
 			_enemy_shield_previous[unit.unit_id] = unit.get_shield()
 			unit._hp_component.shield_changed.connect(_on_enemy_shield_changed.bind(unit))
+	_aspect_team_shield_previous=_team.get_shield()
+	_team._hp_component.shield_changed.connect(_on_aspect_team_shield_changed)
 	_setup_team_hud()
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	hm.allow_inactive_selection = true
 	hm.card_selected.connect(func(_card: HandCard) -> void: _close_skill_panel())
 	hm.init_decks(roles)
 	_flip_starting_top(hm)
-	hm.draw_opening()
+	if not RunProgress.battle.claimed: hm.draw_opening()
 	_bind_hud()
 	_v2_refresh(false)
+	if RunProgress.battle.claimed:
+		_battle_ended = true
+		_start_victory_rewards()
 
 ## 开局从牌库翻一张作为牌堆顶（进入弃牌堆），与 UNO 一致。
 func _setup_team_hud() -> void:
@@ -245,6 +264,10 @@ func _assign_faction_slots(order: Array[String], slots: Array[int], animate: boo
 			unit.position = dest
 
 func _on_unit_died(uid: String) -> void:
+	if not _rewarded_enemy_ids.has(uid) and _monster_data.has(uid):
+		_rewarded_enemy_ids[uid] = true
+		var defeated: MonsterData = _monster_data[uid]
+		_defeated_xp += reward_config.normal_xp if defeated.monster_type == 1 else (reward_config.elite_xp if defeated.monster_type == 2 else reward_config.boss_xp)
 	var departing := _find_unit(uid)
 	if uid in ["Remy", "Grey", "Wangg"] and not _mafe_reserve_used and not _battle_ended and is_instance_valid(_team) and _team.get_current_hp() > 0:
 		_spawn_mafe_reserve(departing.position if is_instance_valid(departing) else Vector2(1120, 510))
@@ -277,6 +300,7 @@ func _check_battle_end() -> void:
 	if enemy_alive == 0:
 		_battle_ended = true
 		print("[Battle] 战斗胜利：敌方单位全灭。")
+		call_deferred("_start_victory_rewards")
 	elif not is_instance_valid(_team) or _team.get_current_hp() <= 0.0:
 		_battle_ended = true
 		print("[Battle] 战斗失败：玩家单位全灭。")
@@ -324,9 +348,13 @@ func _tick_poison(unit: UnitRoot) -> void:
 	var shield: float = unit.get_shield()
 	var absorbed: int = mini(stacks, int(shield))
 	if absorbed > 0:
+		if unit==_team:_defer_sterilize=true
 		unit.reduce_shield(float(absorbed))          # 护盾 -absorbed
 		unit.remove_buff_stacks("poison", absorbed)   # 中毒 -absorbed（1:1 抵消层数）
-		stacks -= absorbed
+		if unit==_team:
+			_defer_sterilize=false
+			if _sterilize_pending:_sterilize_pending=false;_apply_sterilize()
+		stacks = unit.get_buff_stacks("poison")
 		print("[BR-poison] %s 中毒结算：护盾抵消 %d 层（剩余层数=%d，护盾=%d）" % [unit.unit_id, absorbed, stacks, int(shield) - absorbed])
 	var tick_dealt: int = 0
 	if stacks > 0:
@@ -397,7 +425,7 @@ func _toggle_skill_panel(uid: String) -> void:
 	if _open_skill_uid != uid:
 		_close_skill_panel()
 		_open_skill_uid = uid
-		_skill_panels[uid].show_skill(AllySkills.get_skill(uid))
+		_skill_panels[uid].show_skill(_aspect_skill_description(uid))
 		return
 	_close_skill_panel()
 	if int(rules.skill_cooldowns.get(uid, 0)) > 0:
@@ -424,6 +452,11 @@ func _grant_player_blue_reward() -> void:
 	if is_instance_valid(unit) and is_instance_valid(_team) and _team.get_current_hp() > 0:
 		_team.add_buff("morale", unit.get_mastery(), 1)
 		_spawn_card_played_prompt("Zhouzhou", str(AllySkills.get_skill("Zhouzhou").passive), "player")
+		if RunProgress.has_aspect("comrades"):
+			var shield: int = unit.get_mastery() * 5
+			_team.gain_shield(shield)
+			var number := DamageNumber.new();number.z_index=47;add_child(number);number.spawn({"type":"shield","value":shield});number.play_on_unit(_team)
+
 
 func _on_irene_buff_removed(unit: UnitRoot) -> void:
 	var irene := _find_unit("Irene")
@@ -433,10 +466,12 @@ func _on_irene_buff_removed(unit: UnitRoot) -> void:
 		return
 	if _irene_passive_used >= maxi(0, irene.get_mastery()):
 		return
+	if int(rules.skill_cooldowns.get("Irene",0))<=0:return
 	_irene_passive_used += 1
 	_spawn_card_played_prompt("Irene", str(AllySkills.get_skill("Irene").passive), "player")
 	var before: int = int(rules.skill_cooldowns.get("Irene", 0))
 	rules.skill_cooldowns["Irene"] = maxi(0, before - 1)
+	if RunProgress.has_aspect("irene_gospel"):_team.gain_shield(5)
 	if before == 1:
 		_spawn_card_played_prompt("Irene", "技能就绪", "player")
 	_v2_refresh()
@@ -453,7 +488,7 @@ func use_irene_skill() -> bool:
 		message = "技能还在冷却"
 	elif rules.top.is_empty() or int(rules.top.color) < 0 or int(rules.top.color) >= ChainRules.COLOR_NAMES.size():
 		return false
-	elif not hand.deck.draw_pile.any(func(cd: CardData) -> bool: return cd.uno_color == int(rules.top.color)):
+	elif not (hand.deck.has_filtered(func(cd:CardData)->bool:return cd.uno_color==int(rules.top.color)) if RunProgress.has_aspect("irene_chain") else hand.deck.draw_pile.any(func(cd: CardData) -> bool: return cd.uno_color == int(rules.top.color))):
 		message = "牌库中没有与战场颜色相同的卡牌"
 	if not message.is_empty():
 		if message == "技能还在冷却":
@@ -464,7 +499,8 @@ func use_irene_skill() -> bool:
 	rules.skill_cooldowns["Irene"] = 3
 	_spawn_card_played_prompt("Irene", str(AllySkills.get_skill("Irene").name), "player")
 	hand.clear_selection()
-	hand.generate_color_flashbacks(int(rules.top.color), 1)
+	if RunProgress.has_aspect("irene_chain"):hand.draw_color_original(int(rules.top.color),1)
+	else:hand.generate_color_flashbacks(int(rules.top.color), 1)
 	_v2_refresh()
 	return true
 
@@ -489,7 +525,7 @@ func use_zhouzhou_skill() -> bool:
 	_spawn_card_played_prompt("Zhouzhou", str(AllySkills.get_skill("Zhouzhou").name), "player")
 	hand.clear_selection()
 	rules.top.color = 1
-	_grant_player_blue_reward()
+	_handle_blue_change(true)
 	_v2_refresh()
 	var unit := _find_unit("Zhouzhou")
 	if not skip_battle_animations:
@@ -529,6 +565,7 @@ func use_rocket_skill() -> bool:
 	hand.clear_selection()
 	hand.clear_skill_card()
 	var target: HandCard = candidates.pick_random()
+	if target.data.has_charge and RunProgress.has_aspect("rocket_supply"):target.add_charge(2)
 	target.cost_color = int(rules.top.color)
 	target.card.cost_color = target.cost_color
 	target.card._apply_cost()
@@ -573,6 +610,9 @@ func _finish_charge_play(payload: Dictionary) -> void:
 	payload.charge = 0
 	var played = payload.get("hand_card")
 	if is_instance_valid(played): played.charge_points = 0
+	if RunProgress.has_aspect("rocket_recycle"):
+		var rocket:=_find_unit("Rocket")
+		if is_instance_valid(rocket):_team.add_buff("charge",rocket.get_mastery(),1)
 
 func _find_unit(uid: String) -> UnitRoot:
 	var units := get_node_or_null("Units") as Node2D
@@ -707,7 +747,7 @@ func effective_number(card: HandCard) -> int:
 func v2_payload(card: HandCard, target: UnitRoot) -> Dictionary:
 	return {"uid": card.owner_group, "selected": target.unit_id if is_instance_valid(target) else "",
 		"cd": card.data, "color": card.cost_color, "base": effective_number(card), "original_base": card.base_number, "previous_number": int(rules.top.get("number", 0)),
-		"hand_card": card, "charge": card.charge_points}
+		"hand_card": card, "charge": card.charge_points, "is_flashback": card.is_flashback}
 
 func _v2_resolve_effect(payload: Dictionary, atom: CardEffect, number: int, morale_bonus: int) -> Dictionary:
 	var caster := _find_unit(payload.uid)
@@ -756,7 +796,7 @@ func _v2_apply_resolved(effect: Dictionary) -> void:
 							if unit != source and unit.unit_faction == "enemy" and unit.get_current_hp() > 0:
 								recipients.append(unit)
 					for recipient in recipients:
-						recipient.add_buff(entry.id, stacks, 2, entry.name, entry.description)
+						recipient.add_buff(entry.id, stacks + (2 if RunProgress.has_aspect("irene_rain") else 0), 2, entry.name, entry.description)
 		"observe_blue":
 			var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
 			hand.observe_blue_cards(value)
@@ -813,6 +853,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 		push_error("CardData %s：%s" % [cd.id, "；".join(errors)])
 		return
 	var morale_bonus: int = _morale_bonus(caster)
+	payload.morale_used = morale_bonus
 	if not summon.is_empty() and ((cd.card_type == 0 and summon.kind != "summon_snake") or (cd.card_type == 1 and summon.kind == "summon_snake")):
 		await _act_summon()
 	if cd.rocket_number > 0:
@@ -845,24 +886,24 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 					if not summon.is_empty() and int(summon.remaining) >= remaining: break
 				continue
 			if effect.stat == "mourn":
-				effect.value *= maxi(1, times)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 				await _mourn(effect, times)
 				damage_resolved = true
 				continue
 			if atom.kind in ["summon_fox", "summon_deer", "summon_snake"]:
 				effect.value = atom.summon_damage(morale_bonus, times)
 			if atom.combo_linear_growth:
-				effect.value *= maxi(1, times)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 			if cd.combo_damage_growth and effect.stat == "damage":
-				effect.value *= maxi(times, 1)
+				effect.value = ComboGrowth.scale_value(int(effect.value),times)
 			if atom.combo_cautious_growth:
-				effect.value += floori(float(maxi(times, 1) - 1) / 3.0)
+				effect.value += ComboGrowth.increase(times,3)
 			if atom.combo_shield_compensation:
-				effect.value = floori(float(atom.amount * (maxi(times, 1) - 1)) / 3.0)
+				effect.value = ComboGrowth.increase(times,3,atom.amount)
 				if effect.value == 0:
 					continue
 			if effect.stat == "attack_flashback" or atom.combo_slow_growth:
-				effect.value += floori(float(maxi(times, 1) - 1) / 2.0)
+				effect.value += ComboGrowth.increase(times,2)
 			var presentation: CutsceneGroup2 = null
 			if trigger == 0:
 				var display := effect.duplicate()
@@ -873,11 +914,11 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 			if cd.blue_status_counter:
 				rules.counters.append({"uid": caster.unit_id, "color": 1, "value": 7,
 					"name": cd.card_name, "combo": maxi(times, 1),
-					"behavior_type": 2, "morale_on_success": true})
+					"behavior_type": 2, "morale_on_success": true, "is_flashback": bool(payload.get("is_flashback", false))})
 			elif cd.blue_counter_flashback:
 				rules.counters.append({"uid": caster.unit_id, "color": 1, "value": 0,
 					"name": cd.card_name, "combo": maxi(times, 1),
-					"blue_flashback": 1 + floori(float(maxi(times, 1) - 1) / 2.0)})
+					"blue_flashback": 1 + ComboGrowth.increase(times,2)})
 			else:
 				_v2_apply_resolved(effect)
 				if cd.records_damage and effect.stat == "damage":
@@ -889,7 +930,7 @@ func _v2_play_effect(payload: Dictionary, number: int, times: int) -> void:
 			if is_instance_valid(presentation) and presentation._playing:
 				await presentation.finished
 	if damage_resolved:
-		caster.remove_buff("morale")
+		_settle_attack_morale(payload)
 	_tick_poison(caster)
 
 ## 出牌：接牌判定 → 卡牌效果 × Combo → Combo +1 → 倒计时 -1 → 归零敌人出牌 → 手牌打空则奖励补牌。
@@ -904,9 +945,11 @@ func play_card(payload: Dictionary) -> void:
 	var hand := get_tree().get_first_node_in_group("hand_manager") as HandManager
 	var previous_charge_cards := hand.snapshot_charge_cards()
 	hand.expire_flashbacks()
-	_begin_charge_play(payload)
 	var adjustment_cost: int = absi(int(payload.get("original_base", payload.base)) - int(payload.base))
-	if adjustment_cost > 0: _team.remove_buff_stacks("adjustment", adjustment_cost)
+	if adjustment_cost > 0:
+		_team.remove_buff_stacks("adjustment", adjustment_cost)
+		if cd.has_charge and RunProgress.has_aspect("rocket_calibrate"):payload.charge=int(payload.get("charge",0))+adjustment_cost
+	_begin_charge_play(payload)
 	var number: int = payload.base
 	var times: int = rules.combo
 	# 合法牌打出时即更新牌堆顶，使火焰和点数与演出同步。
@@ -919,7 +962,7 @@ func play_card(payload: Dictionary) -> void:
 	_finish_charge_play(payload)
 	if cd.id != "rocket_18": hand.grow_charge_cards(previous_charge_cards)
 	if switched_blue:
-		_grant_player_blue_reward()
+		_handle_blue_change(true)
 	rules.combo_up()
 	await _after_action()
 	var hm := get_tree().get_first_node_in_group("hand_manager") as HandManager
@@ -974,7 +1017,7 @@ func _counter_attack(enemy: UnitRoot, counters: Array[Dictionary]) -> void:
 		var title := str(counter.get("name", "反制牌"))
 		if not cards.has(title): cards.append(title)
 		if counter.get("morale_on_success", false):
-			total += (int(counter.value) + _morale_bonus(_team)) * int(counter.combo)
+			total += ComboGrowth.scale_value(int(counter.value) + _morale_bonus(_team),int(counter.combo))
 		else:
 			total += int(counter.value)
 		adjustment += int(counter.get("adjustment", 0))
@@ -1002,7 +1045,7 @@ func _counter_attack(enemy: UnitRoot, counters: Array[Dictionary]) -> void:
 		return
 	enemy.damage(total)
 	if counters.any(func(counter: Dictionary) -> bool: return counter.get("morale_on_success", false)):
-		_team.remove_buff("morale")
+		_settle_attack_morale({"cd": null, "morale_used": _morale_bonus(_team), "counter_flash": counters.any(func(c:Dictionary)->bool:return c.get("morale_on_success",false) and c.get("is_flashback",false))})
 	if enemy.get_current_hp() <= 0:
 		enemy.die()
 	_check_battle_end()
@@ -1109,7 +1152,9 @@ func _enemy_play(uid: String) -> void:
 		rules.combo_up()
 	else:
 		rules.reset_combo()
+	var switched_blue: bool = int(card.color) == 1 and int(rules.top.get("color", -1)) != 1
 	rules.place_enemy_card(card, uid)
+	if switched_blue: _handle_blue_change(false)
 	_v2_refresh_hud()
 	_spawn_card_played_prompt(uid, "%s %s%d" % [card.name, ChainRules.color_name(card.color), card.number], "enemy")
 	var countered := rules.take_counters(card)
@@ -1245,7 +1290,7 @@ func _v2_refresh_hud() -> void:
 			elif counter.has("blue_flashback"):
 				lines.append("反制：%s → %d张蓝色闪回" % [behavior, counter.blue_flashback])
 			elif counter.get("morale_on_success", false):
-				lines.append("反制：%s → %d伤" % [behavior, (int(counter.value) + _morale_bonus(_team)) * int(counter.combo)])
+				lines.append("反制：%s → %d伤" % [behavior, ComboGrowth.scale_value(int(counter.value) + _morale_bonus(_team),int(counter.combo))])
 			else:
 				lines.append("反制：%s → %d伤" % [behavior, counter.value])
 		_counter_label.text = "\n".join(lines)
@@ -1272,7 +1317,7 @@ func _v2_refresh(_animated: bool = true) -> void:
 					ChainRules.color_name(card.color), card.number, card.name,
 					_display_name(card.target), "护盾" if card.stat == "shield" else "伤害", card.value]
 		elif unit.get_current_hp() > 0 and rules.skill_cooldowns.has(unit.unit_id):
-			var skill := AllySkills.get_skill(unit.unit_id)
+			var skill := _aspect_skill_description(unit.unit_id)
 			var cooldown: int = rules.skill_cooldowns[unit.unit_id]
 			# 血条上方：技能冷却/就绪，与敌方行动倒计时共用图标组。
 			text = "就绪" if cooldown == 0 else str(cooldown)
@@ -1328,7 +1373,9 @@ func _set_summon(kind: String, damage: int) -> void:
 		var old_id: String = summon.kind
 		summon.clear()
 		_team.remove_buff(old_id)
-	summon = {"kind": kind, "damage": damage, "remaining": 2 if kind == "summon_deer" else 3}
+		_grant_summon_flashback(old_id)
+	_summon_serial+=1
+	summon = {"instance":_summon_serial,"kind": kind, "damage": damage, "remaining": 2 if kind == "summon_deer" else 3}
 	_team.add_buff(kind, int(summon.remaining), 1, KeywordGlossary.name_of(kind), _summon_description())
 
 func _summon_description() -> String:
@@ -1341,6 +1388,13 @@ func _summon_description() -> String:
 	return JSON.stringify(sections)
 
 func _act_summon() -> void:
+	if summon.is_empty():return
+	var instance:int=int(summon.get("instance",0))
+	for i in (2 if RunProgress.has_aspect("irene_whip") else 1):
+		if summon.is_empty() or int(summon.get("instance",0))!=instance:break
+		await _act_summon_once()
+
+func _act_summon_once() -> void:
 	if summon.is_empty() or _battle_ended:
 		return
 	if _team.get_buff_stacks(summon.kind) <= 0:
@@ -1374,6 +1428,7 @@ func _act_summon() -> void:
 		if summon.remaining <= 0:
 			summon.clear()
 			_team.remove_buff(kind)
+			_grant_summon_flashback(kind)
 		else:
 			_team._buff_component.update_buff_details(kind, int(summon.remaining), _summon_description())
 	_check_battle_end()
@@ -1411,7 +1466,7 @@ func _apply_stat(stat: String, value: int, hits: int, targets: Array[UnitRoot], 
 			"morale", "charge", "adjustment":
 				target.add_buff(stat, value * maxi(hits, 1), 1)
 			"bleed", "poison", "vulnerable":
-				target.add_buff(stat, value * maxi(hits, 1), 2)
+				target.add_buff(stat, value * maxi(hits, 1) + (2 if target.unit_faction=="enemy" and is_instance_valid(caster) and caster.unit_faction=="player" and RunProgress.has_aspect("irene_rain") else 0), 2)
 
 func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 	var cd: CardData = payload.cd
@@ -1426,32 +1481,32 @@ func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 	var damage := 0
 	var hits := 1
 	match n:
-		11: damage = (2 + q + morale) * combo; hits = 2
-		12: await _rocket_shield((10 if q > 3 else 5) * combo, caster)
-		13: rules.counters.append({"uid": payload.uid, "value": 0, "behavior_type": 1, "adjustment": 1 + floori(float(combo - 1) / 3), "name": cd.card_name})
+		11: damage = ComboGrowth.scale_value(2 + q + morale,combo); hits = 2
+		12: await _rocket_shield(2 * ComboGrowth.scale_value(5,combo) if q > 3 else ComboGrowth.scale_value(5,combo), caster)
+		13: rules.counters.append({"uid": payload.uid, "value": 0, "behavior_type": 1, "adjustment": 1 + ComboGrowth.increase(combo,3), "name": cd.card_name})
 		14, 17:
 			var candidates := hand.snapshot_charge_cards()
 			if n == 14 and not candidates.is_empty():
 				var target: HandCard = candidates.pick_random()
 				target.add_charge(mini(floori(float(q) / 2), 3))
 			elif n == 17 and q > 3:
-				for target in candidates: target.add_charge(2 + floori(float(combo - 1) / 2))
+				for target in candidates: target.add_charge(2 + ComboGrowth.increase(combo,2))
 		15:
 			var spent: int = mini(5, int(_team.get_shield()))
 			_team.reduce_shield(spent)
-			damage = (5 + morale) * combo + spent
-		16: damage = (7 + morale) * combo
+			damage = ComboGrowth.scale_value(5 + morale,combo) + spent
+		16: damage = ComboGrowth.scale_value(7 + morale,combo)
 		18:
 			var total := 0
 			for target in hand.snapshot_charge_cards():
 				total += target.charge_points
 				target.charge_points = 0
 			_team.add_buff("charge", floori(float(total) / 2), 1)
-			await _rocket_shield(floori(float(7 * (combo - 1)) / 3), caster)
-		19: damage = (6 + morale) * combo; hits = 1 + q
+			await _rocket_shield(ComboGrowth.increase(combo,3,7), caster)
+		19: damage = ComboGrowth.scale_value(6 + morale,combo); hits = 1 + q
 		20:
 			_team.add_buff("adjustment", 2, 1)
-			await _rocket_shield(floori(float(11 * (combo - 1)) / 3), caster)
+			await _rocket_shield(ComboGrowth.increase(combo,3,11), caster)
 	if damage > 0 and hits > 0:
 		var effect := _v2_resolve_effect(payload, cd.effects[0], int(payload.base), morale)
 		if not effect.is_empty() and not effect.targets.is_empty():
@@ -1461,7 +1516,7 @@ func _play_rocket(payload: Dictionary, combo: int, morale: int) -> void:
 			var presentation := _v2_start_animation(effect)
 			_v2_apply_resolved(effect)
 			if is_instance_valid(presentation) and presentation._playing: await presentation.finished
-			_team.remove_buff("morale")
+			_settle_attack_morale(payload)
 	if is_instance_valid(status_presentation) and status_presentation._playing: await status_presentation.finished
 	if n == 16 and int(payload.base) == int(payload.get("previous_number", -1)):
 		_team.add_buff("adjustment", 1, 1)
@@ -1565,3 +1620,53 @@ func _spawn_mafe_reserve(spawn_position: Vector2) -> void:
 		unit.set_dimmed(not v2_targets(selected.data, _find_unit(selected.owner_group)).has(unit))
 	var fade := unit.create_tween()
 	fade.tween_property(unit, "modulate:a", 1.0, reserve_fade_duration)
+
+func _start_victory_rewards() -> void:
+	if is_instance_valid(_victory_rewards): return
+	_victory_rewards = VictoryRewards.new()
+	_victory_rewards.battle_root=self;_victory_rewards.config=reward_config
+	add_child(_victory_rewards)
+	_victory_rewards.begin()
+
+func _handle_blue_change(player_event: bool) -> void:
+	if player_event or RunProgress.has_aspect("borrow"): _grant_player_blue_reward()
+	if not RunProgress.has_aspect("sleeve"):return
+	var hand:=get_tree().get_first_node_in_group("hand_manager") as HandManager
+	if hand._cards.any(func(hc:HandCard)->bool:return is_instance_valid(hc) and hc.cost_color==1):return
+	hand.generate_color_flashbacks(1,1)
+
+func _settle_attack_morale(payload: Dictionary) -> void:
+	var before: int = _team.get_buff_stacks("morale")
+	var cd: CardData = payload.get("cd") as CardData
+	var flash_attack: bool = bool(payload.get("counter_flash", false)) or (cd != null and cd.card_type == 0 and bool(payload.get("is_flashback", false)))
+	var retained: int = floori(float(int(payload.get("morale_used", before))) / 2.0) if flash_attack and RunProgress.has_aspect("flash_return") else 0
+	var spent: int = maxi(0, before - mini(before,retained))
+	if retained > 0: _team.remove_buff_stacks("morale",spent)
+	else: _team.remove_buff("morale")
+	if spent > 0 and RunProgress.has_aspect("echo"):
+		rules.skill_cooldowns.Zhouzhou = maxi(0,int(rules.skill_cooldowns.get("Zhouzhou",0))-1)
+		_v2_refresh()
+
+func _grant_summon_flashback(kind: String) -> void:
+	if not RunProgress.has_aspect("irene_link") or _battle_ended:return
+	var id:String={"summon_fox":"irene_11","summon_deer":"irene_15","summon_snake":"irene_16"}.get(kind,"")
+	for cd in CardDatabase.new().get_all():
+		if cd.id==id:
+			var hand:=get_tree().get_first_node_in_group("hand_manager") as HandManager
+			hand.generate_template_flashback(cd);return
+func _on_aspect_team_shield_changed(value: float) -> void:
+	var emptied:bool=_aspect_team_shield_previous>0 and value<=0
+	_aspect_team_shield_previous=value
+	if not emptied or _battle_ended or not RunProgress.has_aspect("rocket_sterilize"):return
+	if _defer_sterilize:_sterilize_pending=true;return
+	_apply_sterilize()
+
+func _apply_sterilize() -> void:
+	for entry in _team._buff_component.debuff_snapshot():
+		var stacks:int=int(entry.stack)
+		_team.remove_buff_stacks(str(entry.id),floori(float(stacks)/2.0))
+
+func _aspect_skill_description(uid: String) -> Dictionary:
+	var info:Dictionary=AllySkills.get_skill(uid).duplicate()
+	if uid=="Irene" and RunProgress.has_aspect("irene_chain"):info.desc="抽取1张与战场颜色相同的原牌；候选不足时按需洗入弃牌堆。"
+	return info

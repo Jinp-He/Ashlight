@@ -23,7 +23,13 @@ func init_decks(roles: Array[String]) -> bool:
 			push_error("DeckManager: 初始卡组类型或角色ID不匹配：" + path)
 			return false
 		configs.append(config)
-	return init_from_starting_decks(configs)
+	var initialized := init_from_starting_decks(configs)
+	RunProgress.ensure()
+	if initialized and not RunProgress.cards.is_empty():
+		draw_pile.assign(RunProgress.cards);discard_pile.clear();draw_pile.shuffle()
+	elif initialized:
+		RunProgress.cards.assign(draw_pile)
+	return initialized
 
 ## 支持自定义战斗传入卡组资源；验证完成后再替换运行时牌堆，不修改原始资源。
 func init_from_starting_decks(configs: Array[StartingDeckData]) -> bool:
@@ -71,3 +77,21 @@ func discard_card(_role: String, cd: CardData) -> void:
 
 func debug_status() -> String:
 	return "公共牌库[抽%d/弃%d]" % [draw_pile.size(), discard_pile.size()]
+
+## 有条件抽牌：候选不足时只洗回一次，原抽牌堆仍保留。
+func draw_filtered(count: int, predicate: Callable) -> Array[CardData]:
+	var out:Array[CardData]=[]
+	var recycled:=false
+	while out.size()<count:
+		var candidates:Array[int]=[]
+		for i in draw_pile.size():
+			if predicate.call(draw_pile[i]):candidates.append(i)
+		if candidates.is_empty():
+			if recycled or discard_pile.is_empty():break
+			draw_pile.append_array(discard_pile);discard_pile.clear();draw_pile.shuffle();recycled=true
+			continue
+		var index:int=candidates.pick_random()
+		out.append(draw_pile[index]);draw_pile.remove_at(index)
+	return out
+func has_filtered(predicate: Callable) -> bool:
+	return draw_pile.any(predicate) or discard_pile.any(predicate)
