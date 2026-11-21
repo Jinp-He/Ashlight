@@ -54,7 +54,7 @@ func _build_aspect() -> void:
 	_aspect_flag.texture=load("res://assets/rewards/flag_%02d.png" % randi_range(1,3))
 	var icon:=component.get_node("Icon") as TextureRect
 	icon.texture=load("res://assets/rewards/aspect_%03d.png" % data.icon)
-	icon.self_modulate=CardRoot.COST_COLORS[[0,1,3].pick_random()]
+	icon.self_modulate=CardRoot.COST_COLORS[[0,1,2,3].pick_random()]
 	component.get_node("Name").text=str(data.name)
 	component.get_node("Effect").text="[center]"+str(data.description)+"[/center]"
 	component.get_node("Flavor").text=""

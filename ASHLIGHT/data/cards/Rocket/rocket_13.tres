@@ -19,6 +19,6 @@ has_charge = false
 execute_once = true
 art_path = "res://assets/cards/faces/Rocket009.png"
 uno_color = 1
-base_number = 4
+base_number = 3
 number_spread = 0
 effects = Array[ExtResource("2")]([SubResource("Effect")])

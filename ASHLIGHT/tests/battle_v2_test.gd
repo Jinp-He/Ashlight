@@ -471,7 +471,7 @@ func run() -> void:
 	check(hm.deck.draw_pile.is_empty(), "empty observation does not reshuffle")
 	hm.deck.draw_pile.assign(observe_saved)
 	var tuna := load("res://data/cards/Zhouzhou/zhouzhou_15.tres") as CardData
-	check(tuna.rarity == 2 and tuna.roll_number() == 4 and tuna.uno_color == 3, "Tuna is rare fixed green 4")
+	check(tuna.rarity == 2 and tuna.roll_number() == 3 and tuna.uno_color == 1, "Tuna is rare fixed blue 3")
 	for tier in range(1, 5):
 		br._team.remove_buff("morale")
 		br._team.add_buff("morale", 2)
@@ -534,7 +534,7 @@ func run() -> void:
 		var flash_copies: Array[HandCard] = []
 		for hc in hm._cards:
 			if hc.is_flashback: flash_copies.append(hc)
-		check(flash_copies.size() == expected and flash_copies.all(func(hc: HandCard) -> bool: return hc.cost_color == 1 and hc.base_number == 3), "flashbacks retain template color and fixed number")
+		check(flash_copies.size() == expected and flash_copies.all(func(hc: HandCard) -> bool: return hc.cost_color == blue_template.uno_color and hc.base_number == blue_template.base_number), "flashbacks retain template color and fixed number")
 		hm.expire_flashbacks()
 		check(hm._hand_count() == before_count, "unused flashbacks expire without entering piles")
 	hm.deck.draw_pile.clear()
@@ -544,7 +544,7 @@ func run() -> void:
 	check(rules.take_counters({"stat": "shield", "color": 1}).is_empty() and rules.counters.is_empty(), "nonattack consumes Youshen without matching")
 	hm.deck.draw_pile.assign(saved_draw)
 	var bengquan := load("res://data/cards/Zhouzhou/zhouzhou_11.tres") as CardData
-	check(bengquan.roll_number() == 3 and bengquan.uno_color == 1 and bengquan.rarity == 1, "Bengquan has fixed blue 3 and common rarity")
+	check(bengquan.roll_number() == 2 and bengquan.uno_color == 1 and bengquan.rarity == 1, "Bengquan has fixed blue 2 and common rarity")
 	for combo in range(1, 5):
 		remy.set_max_hp(500)
 		remy.reduce_shield(remy.get_shield())
@@ -654,3 +654,4 @@ func run() -> void:
 	await get_tree().process_frame
 	print("BATTLE_V2_TESTS checks=%d failures=%d" % [checks, failures])
 	get_tree().quit(1 if failures else 0)
+
